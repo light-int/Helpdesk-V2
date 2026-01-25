@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
       categories: stats.categoryData,
       impacts: stats.impactData
     });
-    setAiReport(report || null);
+    setAiReport(report ?? null);
     setIsGenerating(false);
   };
 

@@ -19,11 +19,11 @@ const LoginPage: React.FC = () => {
     setError(null);
     
     try {
-      // 1. Récupération de tous les utilisateurs depuis la DB Cloud
+      // 1. Récupération de tous les utilisateurs depuis la DB Cloud avec typage explicite
       const users: UserProfile[] = await ApiService.users.getAll();
       
       // 2. Recherche d'une correspondance (Email ou Nom)
-      const user = users.find(u => 
+      const user = users.find((u: UserProfile) => 
         (u.email?.toLowerCase() === username.toLowerCase() || u.name.toLowerCase() === username.toLowerCase()) && 
         u.password === password
       );
