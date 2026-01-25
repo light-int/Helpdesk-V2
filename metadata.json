@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Royal Plaza Helpdesk",
+  "description": "A comprehensive customer service and ticket management platform for Royal Plaza, specialized in home and office equipment. Features unified inbox, SAV tracking, AI-powered support, and performance analytics.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

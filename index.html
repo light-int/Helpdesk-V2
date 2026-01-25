@@ -1,0 +1,188 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Royal Plaza - Horizon</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Playfair+Display:wght@700&family=Lora:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --google-blue: #1a73e8;
+        --google-blue-hover: #174ea6;
+        --google-grey: #5f6368;
+        --google-border: #dadce0;
+        --google-bg: #f8f9fa;
+        --google-surface: #ffffff;
+      }
+      body {
+        font-family: 'Roboto', sans-serif;
+        background-color: var(--google-bg);
+        color: #3c4043;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #bdc1c6;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #9aa0a6;
+      }
+
+      .google-card {
+        background: var(--google-surface);
+        border: 1px solid var(--google-border);
+        border-radius: 8px;
+        transition: box-shadow 0.2s ease;
+      }
+      .google-card:hover {
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
+      }
+
+      .btn-google-primary {
+        background-color: var(--google-blue);
+        color: white !important;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-google-primary:hover {
+        background-color: var(--google-blue-hover);
+        box-shadow: 0 1px 2px 0 rgba(66,133,244,.3), 0 1px 3px 1px rgba(66,133,244,.15);
+      }
+      
+      .btn-google-outlined {
+        background-color: transparent;
+        color: var(--google-blue) !important;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--google-border);
+        transition: background-color 0.2s;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .btn-google-outlined:hover {
+        background-color: rgba(26,115,232,0.04);
+        border-color: var(--google-blue);
+      }
+
+      input, select, textarea {
+        background-color: #ffffff !important;
+        color: #202124 !important;
+        border: 1px solid var(--google-border) !important;
+        border-radius: 4px !important;
+        padding: 0.6rem 0.8rem !important;
+        font-size: 14px !important;
+        width: 100%;
+      }
+
+      @media print {
+        .no-print { display: none !important; }
+      }
+
+      .office-report-content {
+        font-family: 'Lora', serif;
+        color: #1e293b;
+        line-height: 1.6;
+      }
+      .office-report-content h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: 28pt;
+        color: #0f172a;
+        margin-top: 0;
+        margin-bottom: 24pt;
+        border-bottom: 2px solid #3b82f6;
+        padding-bottom: 12pt;
+        letter-spacing: normal !important;
+      }
+      .office-report-content h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: 18pt;
+        color: #1e3a8a;
+        margin-top: 30pt;
+        margin-bottom: 12pt;
+        font-weight: 700;
+        letter-spacing: normal !important;
+      }
+      .office-report-content h3 {
+        font-family: 'Roboto', sans-serif;
+        font-size: 11pt;
+        font-weight: 700;
+        color: #3b82f6;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 20pt;
+        margin-bottom: 8pt;
+      }
+      .office-report-content p {
+        margin-bottom: 12pt;
+        text-align: justify;
+        font-size: 11pt;
+      }
+      .office-report-content ul, .office-report-content ol {
+        margin-left: 20pt;
+        margin-bottom: 12pt;
+      }
+      .office-report-content li {
+        margin-bottom: 6pt;
+      }
+
+      @keyframes modal-fade-in {
+        from { opacity: 0; transform: scale(0.98) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .animate-modal {
+        animation: modal-fade-in 0.15s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom": "https://esm.sh/react-dom@18.2.0?external=react",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "lucide-react": "https://esm.sh/lucide-react@0.344.0?external=react",
+    "@google/genai": "https://esm.sh/@google/genai@1.3.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?external=react,react-dom",
+    "recharts": "https://esm.sh/recharts@2.12.2?external=react,react-dom",
+    "md5": "https://esm.sh/md5@2.3.0",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+    "vite": "https://esm.sh/vite@^5.1.6",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "dompurify": "https://esm.sh/dompurify@3.0.9",
+    "marked": "https://esm.sh/marked@12.0.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <div id="modal-root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
