@@ -62,7 +62,7 @@ export const ApiService = {
 
   config: {
     get: async (): Promise<SystemConfig | null> => {
-      return await safeFetch(supabase.from('system_config').select('*').eq('id', 'GLOBAL').single() as any, null);
+      return await safeFetch(supabase.from('system_config').select('*').eq('id', 'GLOBAL').single(), null);
     },
     update: async (updates: Partial<SystemConfig>) => {
       return supabase.from('system_config').update(updates).eq('id', 'GLOBAL');
@@ -70,14 +70,14 @@ export const ApiService = {
   },
 
   reports: {
-    getAll: async (): Promise<StrategicReport[]> => await safeFetch(supabase.from('strategic_reports').select('*').order('createdAt', { ascending: false }) as any, []),
+    getAll: async (): Promise<StrategicReport[]> => await safeFetch(supabase.from('strategic_reports').select('*').order('createdAt', { ascending: false }), []),
     save: async (report: StrategicReport) => supabase.from('strategic_reports').upsert(report),
     delete: async (id: string) => supabase.from('strategic_reports').delete().eq('id', id)
   },
 
   brands: {
     getAll: async (): Promise<string[]> => {
-      const data = await safeFetch(supabase.from('brands').select('name').order('name') as any, []);
+      const data = await safeFetch(supabase.from('brands').select('name').order('name'), []);
       return (data as any[]).map(item => typeof item === 'object' && item !== null ? item.name : item);
     },
     saveAll: async (brands: string[]) => {
@@ -88,7 +88,7 @@ export const ApiService = {
 
   showrooms: {
     getAll: async (): Promise<ShowroomConfig[]> => {
-      const data = await safeFetch(supabase.from('showrooms').select('*').order('id') as any, []);
+      const data = await safeFetch(supabase.from('showrooms').select('*').order('id'), []);
       return (data as any[]).map(row => ({
         id: row.id,
         address: row.address || '',
@@ -111,7 +111,7 @@ export const ApiService = {
   },
 
   tickets: {
-    getAll: async () => await safeFetch(supabase.from('tickets').select('*').order('createdAt', { ascending: false }) as any, []),
+    getAll: async () => await safeFetch(supabase.from('tickets').select('*').order('createdAt', { ascending: false }), []),
     saveAll: async (tickets: Ticket[]) => { 
       if (tickets.length > 0) {
         const cleanedTickets = tickets.map(t => cleanObject(t, TICKET_COLUMNS));
@@ -123,13 +123,13 @@ export const ApiService = {
   },
 
   products: {
-    getAll: async () => await safeFetch(supabase.from('products').select('*').order('name') as any, []),
+    getAll: async () => await safeFetch(supabase.from('products').select('*').order('name'), []),
     saveAll: async (products: Product[]) => { if (products.length > 0) await supabase.from('products').upsert(products); },
     delete: async (id: string) => supabase.from('products').delete().eq('id', id)
   },
 
   customers: {
-    getAll: async () => await safeFetch(supabase.from('customers').select('*').order('name') as any, []),
+    getAll: async () => await safeFetch(supabase.from('customers').select('*').order('name'), []),
     saveAll: async (customers: Customer[]) => { 
       if (customers.length > 0) {
         const cleanedCustomers = customers.map(c => cleanObject(c, CUSTOMER_COLUMNS));
@@ -141,18 +141,18 @@ export const ApiService = {
   },
 
   parts: {
-    getAll: async () => await safeFetch(supabase.from('parts').select('*').order('name') as any, []),
+    getAll: async () => await safeFetch(supabase.from('parts').select('*').order('name'), []),
     saveAll: async (parts: Part[]) => { if (parts.length > 0) await supabase.from('parts').upsert(parts); },
     delete: async (id: string) => supabase.from('parts').delete().eq('id', id)
   },
 
   stockMovements: {
-    getAll: async (): Promise<StockMovement[]> => await safeFetch(supabase.from('stock_movements').select('*').order('date', { ascending: false }) as any, []),
+    getAll: async (): Promise<StockMovement[]> => await safeFetch(supabase.from('stock_movements').select('*').order('date', { ascending: false }), []),
     saveAll: async (movements: StockMovement[]) => { if (movements.length > 0) await supabase.from('stock_movements').upsert(movements); }
   },
 
   technicians: {
-    getAll: async () => await safeFetch(supabase.from('technicians').select('*').order('name') as any, []),
+    getAll: async () => await safeFetch(supabase.from('technicians').select('*').order('name'), []),
     saveAll: async (technicians: Technician[]) => { 
       if (technicians.length > 0) {
         const cleanedTechs = technicians.map(t => cleanObject(t, TECHNICIAN_COLUMNS));
@@ -164,13 +164,13 @@ export const ApiService = {
   },
 
   warranties: {
-    getAll: async () => await safeFetch(supabase.from('warranties').select('*').order('purchaseDate', { ascending: false }) as any, []),
+    getAll: async () => await safeFetch(supabase.from('warranties').select('*').order('purchaseDate', { ascending: false }), []),
     saveAll: async (warranties: WarrantyRecord[]) => { if (warranties.length > 0) await supabase.from('warranties').upsert(warranties); },
     delete: async (id: string) => supabase.from('warranties').delete().eq('id', id)
   },
 
   users: {
-    getAll: async (): Promise<UserProfile[]> => await safeFetch(supabase.from('users').select('*') as any, []),
+    getAll: async (): Promise<UserProfile[]> => await safeFetch(supabase.from('users').select('*'), []),
     save: async (user: UserProfile) => {
       const cleaned = cleanObject(user, USER_COLUMNS);
       const { data, error } = await supabase.from('users').upsert(cleaned);
@@ -192,7 +192,7 @@ export const ApiService = {
       });
     },
     getConnectionLogs: async (userId: string) => {
-      return await safeFetch(supabase.from('user_connections').select('*').eq('user_id', userId).order('timestamp', { ascending: false }).limit(20) as any, []);
+      return await safeFetch(supabase.from('user_connections').select('*').eq('user_id', userId).order('timestamp', { ascending: false }).limit(20), []);
     }
   }
 };

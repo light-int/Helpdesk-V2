@@ -7,7 +7,6 @@ import {
   CheckCircle2, MapPin, AlertCircle,
   History, ArrowUpRight, ArrowDownLeft, Clock,
   CalendarDays, Ticket as TicketIcon, HardHat, ShieldCheck,
-  // Added DollarSign to the imports from lucide-react
   Info, ChevronRight, Minus, Layers, DollarSign
 } from 'lucide-react';
 import { Part, StockMovement } from '../types';
@@ -117,8 +116,8 @@ const PartsInventory: React.FC = () => {
         const data = XLSX.utils.sheet_to_json(ws);
         if (data.length > 0) {
           setImportData(data);
-          // Correction de l'erreur TS ici en forçant le type objet
-          setImportColumns(Object.keys(data[0] as object));
+          // Fixed Object.keys unknown type error by casting to any
+          setImportColumns(Object.keys(data[0] as any));
           setIsImportModalOpen(true);
         } else {
           addNotification({ title: 'Erreur', message: 'Le fichier est vide.', type: 'warning' });
