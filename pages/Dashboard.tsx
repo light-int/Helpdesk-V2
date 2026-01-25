@@ -1,14 +1,12 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
 import { 
-  BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area, Cell, PieChart, Pie
+  BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area
 } from 'recharts';
 import { 
-  Activity, MapPin, RefreshCw, Zap, ShieldCheck, Plus, MoreVertical, 
-  Sparkles, BrainCircuit, TrendingUp, Clock, Percent, DollarSign,
-  AlertTriangle, Users, CheckCircle, X, ClipboardList, Star, Package,
-  MessageSquare, History, UserCheck, Inbox, ArrowUpRight, Store, 
-  ShieldAlert, Database, ShoppingBag
+  Activity, RefreshCw, Zap, Sparkles, BrainCircuit, TrendingUp, Clock, Percent, DollarSign,
+  AlertTriangle, CheckCircle2, X, ClipboardList, Star, Package,
+  UserCheck, ArrowUpRight, Store, ShoppingBag, Plus, Users
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { generateStrategicReport } from '../services/geminiService';
@@ -82,7 +80,7 @@ const Dashboard: React.FC = () => {
       categories: stats.categoryData,
       impacts: stats.impactData
     });
-    setAiReport(report);
+    setAiReport(report || null);
     setIsGenerating(false);
   };
 
@@ -117,7 +115,7 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* SECTION 2: INFRASTRUCTURE SYSTÈME (NOUVEAU) */}
+      {/* SECTION 2: INFRASTRUCTURE SYSTÈME */}
       <section className="space-y-6">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#5f6368] ml-1">Infrastructure Horizon Cloud</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -177,7 +175,7 @@ const Dashboard: React.FC = () => {
               ))}
               {stats.criticalTickets === 0 && (
                 <div className="text-center py-10">
-                   <CheckCircle className="mx-auto text-green-200 mb-2" size={32} />
+                   <CheckCircle2 className="mx-auto text-green-200 mb-2" size={32} />
                    <p className="text-xs text-gray-400 font-medium">Aucun ticket critique</p>
                 </div>
               )}
@@ -204,7 +202,7 @@ const Dashboard: React.FC = () => {
              <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest mb-4">Interventions Finies</p>
              <div className="flex items-center justify-between">
                 <h3 className="text-3xl font-black text-green-600">{stats.myCompleted}</h3>
-                <CheckCircle className="text-green-100" size={32} />
+                <CheckCircle2 className="text-green-100" size={32} />
              </div>
           </div>
           <div className="google-card p-6 border-b-4 border-amber-500">
@@ -295,7 +293,7 @@ const Dashboard: React.FC = () => {
            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest mb-4">Nouveaux Dossiers</p>
            <div className="flex items-center justify-between">
               <h3 className="text-3xl font-black text-[#1a73e8]">{stats.newTickets}</h3>
-              <Plus className="text-blue-100" size={32} />
+              <Plus size={32} className="text-blue-100" />
            </div>
         </div>
         <div className="google-card p-6 border-b-4 border-red-600">
@@ -309,7 +307,7 @@ const Dashboard: React.FC = () => {
            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest mb-4">Messages Clients</p>
            <div className="flex items-center justify-between">
               <h3 className="text-3xl font-black text-green-600">En ligne</h3>
-              <Inbox className="text-green-100" size={32} />
+              <Activity className="text-green-100" size={32} />
            </div>
         </div>
         <div className="google-card p-6 border-b-4 border-purple-600">
@@ -319,42 +317,6 @@ const Dashboard: React.FC = () => {
               <UserCheck className="text-purple-100" size={32} />
            </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="lg:col-span-2 google-card p-8">
-            <h2 className="text-xs font-black uppercase tracking-widest text-[#3c4043] mb-8">Flux de Saisie Hebdomadaire</h2>
-            <div className="h-[300px]">
-               <ResponsiveContainer width="100%" height="100%">
-                 <AreaChart data={stats.categoryData}>
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f3f4" />
-                   <XAxis dataKey="name" />
-                   <Tooltip />
-                   <Area type="monotone" dataKey="value" stroke="#1a73e8" fill="#e8f0fe" />
-                 </AreaChart>
-               </ResponsiveContainer>
-            </div>
-         </div>
-         <div className="google-card p-8">
-            <h2 className="text-xs font-black uppercase tracking-widest text-[#3c4043] mb-8">Dernières Actions</h2>
-            <div className="space-y-6">
-               {tickets.slice(0, 4).map(t => (
-                 <div key={t.id} className="flex gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#f8f9fa] flex items-center justify-center shrink-0 border border-[#dadce0]">
-                       <History size={18} className="text-[#5f6368]" />
-                    </div>
-                    <div>
-                       <p className="text-xs font-bold text-[#3c4043]">Dossier #{t.id} créé</p>
-                       <p className="text-[10px] text-[#5f6368] uppercase font-bold">{t.customerName}</p>
-                       <p className="text-[9px] text-[#9aa0a6] mt-0.5">{new Date(t.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                    </div>
-                 </div>
-               ))}
-               <Link to="/tickets" className="block text-center py-2 text-[10px] font-black text-[#1a73e8] hover:underline uppercase mt-4">
-                  Consulter le journal complet
-               </Link>
-            </div>
-         </div>
       </div>
     </div>
   );
@@ -392,7 +354,7 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* AI REPORT OVERLAY (ADMIN ONLY) */}
+      {/* AI REPORT OVERLAY */}
       {aiReport && (
         <div className="google-card p-10 border-l-4 border-[#1a73e8] bg-[#f8f9ff] animate-in slide-in-from-top-4 duration-300 relative">
           <button onClick={() => setAiReport(null)} className="absolute top-4 right-4 text-[#5f6368] hover:bg-[#e8eaed] p-2 rounded-full">

@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, ShieldCheck, Loader2, AlertCircle } from 'lucide-react';
-import { useUser, useNotifications, useData } from '../App';
+import { useUser, useNotifications } from '../App';
 import { UserProfile } from '../types';
 import { ApiService } from '../services/apiService';
 
@@ -20,7 +20,7 @@ const LoginPage: React.FC = () => {
     
     try {
       // 1. Récupération de tous les utilisateurs depuis la DB Cloud
-      const users = await ApiService.users.getAll();
+      const users: UserProfile[] = await ApiService.users.getAll();
       
       // 2. Recherche d'une correspondance (Email ou Nom)
       const user = users.find(u => 
