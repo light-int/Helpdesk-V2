@@ -15,7 +15,7 @@ import Modal from '../components/Modal';
 import * as XLSX from 'xlsx';
 
 const PartsInventory: React.FC = () => {
-  const { parts, setParts, brands, isLoading, loadDemoData, refreshAll, isSyncing, stockMovements, addStockMovement, tickets } = useData();
+  const { parts, setParts, brands, isLoading, refreshAll, isSyncing, stockMovements, addStockMovement, tickets } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   
@@ -23,14 +23,12 @@ const PartsInventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<string>('Tous');
   
-  // États des Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
 
-  // Mapping States pour l'import
   const [importData, setImportData] = useState<any[]>([]);
   const [importColumns, setImportColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({
@@ -48,7 +46,6 @@ const PartsInventory: React.FC = () => {
 
   useEffect(() => { refreshAll(); }, []);
 
-  // Calculs du Gestionnaire de Stock
   const inventoryStats = useMemo(() => {
     const totalRefs = parts.length;
     const lowStockCount = parts.filter(p => p.currentStock <= p.minStock && p.currentStock > 0).length;
@@ -64,22 +61,6 @@ const PartsInventory: React.FC = () => {
        p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
     ).sort((a, b) => (a.currentStock <= a.minStock ? -1 : 1)); 
   }, [searchTerm, selectedBrand, parts]);
-
-  const filteredMovements = useMemo(() => {
-    return stockMovements.filter(m => 
-       m.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       m.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       (m.ticketId && m.ticketId.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [stockMovements, searchTerm]);
-
-  // Mouvements spécifiques pour la pièce sélectionnée
-  const partSpecificMovements = useMemo(() => {
-    if (!selectedPart) return [];
-    return stockMovements
-      .filter(m => m.partId === selectedPart.id)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [selectedPart, stockMovements]);
 
   const handleAdjustStock = async (id: string, delta: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -130,47 +111,6 @@ const PartsInventory: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const runImport = async () => {
-    const partsToImport: Part[] = importData.map(row => ({
-      id: `PT-${Math.floor(Math.random() * 1000000)}`,
-      name: String(row[mapping.name] || 'Pièce sans nom'),
-      sku: String(row[mapping.sku] || `SKU-${Date.now()}`),
-      brand: String(row[mapping.brand] || 'Inconnu'),
-      category: (row[mapping.category] as any) || 'Mécanique',
-      currentStock: parseInt(row[mapping.currentStock]) || 0,
-      minStock: parseInt(row[mapping.minStock]) || 5,
-      unitPrice: parseFloat(row[mapping.unitPrice]) || 0,
-      location: String(row[mapping.location] || 'Entrepôt central')
-    }));
-
-    for (const p of partsToImport) {
-       await addStockMovement({
-          partId: p.id,
-          partName: p.name,
-          quantity: p.currentStock,
-          type: 'IN',
-          reason: 'Importation initiale Excel',
-          performedBy: currentUser?.name || 'Système Horizon'
-       });
-    }
-
-    setParts(prev => [...prev, ...partsToImport]);
-    setIsImportModalOpen(false);
-    setImportData([]);
-    addNotification({ title: 'Succès Importation', message: `${partsToImport.length} articles intégrés au stock.`, type: 'success' });
-  };
-
-  const openAddModal = () => {
-    setEditingPart(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (e: React.MouseEvent, p: Part) => {
-    e.stopPropagation();
-    setEditingPart(p);
-    setIsModalOpen(true);
-  };
-
   const handleSavePart = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -216,12 +156,6 @@ const PartsInventory: React.FC = () => {
     }
   };
 
-  // Trouver le ticket lié pour les détails de traçabilité
-  const linkedTicket = useMemo(() => {
-    if (!selectedMovement?.ticketId) return null;
-    return tickets.find(t => t.id === selectedMovement.ticketId);
-  }, [selectedMovement, tickets]);
-
   if (isLoading) return <div className="h-[60vh] flex items-center justify-center"><Loader2 className="animate-spin text-[#1a73e8]" /></div>;
 
   return (
@@ -239,11 +173,10 @@ const PartsInventory: React.FC = () => {
           <button onClick={refreshAll} className="btn-google-outlined h-10 px-3">
             <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
           </button>
-          <button onClick={openAddModal} className="btn-google-primary shadow-lg shadow-blue-600/20 h-10 px-5 text-xs font-black uppercase tracking-widest"><Plus size={16} /> Nouvel Article</button>
+          <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-google-primary shadow-lg shadow-blue-600/20 h-10 px-5 text-xs font-black uppercase tracking-widest"><Plus size={16} /> Nouvel Article</button>
         </div>
       </header>
 
-      {/* DASHBOARD */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
          <div className="google-card p-6 border-l-4 border-blue-600">
             <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest flex items-center gap-2"><Package size={14}/> Références Actives</p>
@@ -269,12 +202,6 @@ const PartsInventory: React.FC = () => {
           className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'inventory' ? 'bg-white text-[#1a73e8] shadow-sm' : 'text-[#5f6368] hover:bg-white/50'}`}
         >
           <Database size={16} /> Catalogue Actuel
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-[#1a73e8] shadow-sm' : 'text-[#5f6368] hover:bg-white/50'}`}
-        >
-          <History size={16} /> Registre des Flux & Expertises
         </button>
       </div>
 
@@ -373,7 +300,7 @@ const PartsInventory: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                           <button onClick={(e) => openEditModal(e, p)} className="p-2 text-[#5f6368] hover:bg-white hover:text-[#1a73e8] rounded-full shadow-sm border border-transparent hover:border-[#dadce0] transition-all"><Edit3 size={18}/></button>
+                           <button onClick={(e) => { e.stopPropagation(); setEditingPart(p); setIsModalOpen(true); }} className="p-2 text-[#5f6368] hover:bg-white hover:text-[#1a73e8] rounded-full shadow-sm border border-transparent hover:border-[#dadce0] transition-all"><Edit3 size={18}/></button>
                            <button onClick={(e) => handleDelete(e, p.id)} className="p-2 text-[#5f6368] hover:bg-red-50 hover:text-red-600 rounded-full transition-all"><Trash2 size={18}/></button>
                         </div>
                       </td>
@@ -385,47 +312,31 @@ const PartsInventory: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Détails Volets... */}
-      {selectedPart && (
-        <div className="fixed inset-0 z-[100] overflow-hidden flex justify-end">
-           <div className="absolute inset-0 bg-black/40 backdrop-blur-[4px]" onClick={() => setSelectedPart(null)} />
-           <div className="relative w-full max-w-[580px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-             <div className="p-5 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa]">
-                <div className="flex items-center gap-3">
-                   <Package className="text-[#1a73e8]" size={20} />
-                   <h2 className="text-sm font-black uppercase">Fiche Article</h2>
-                </div>
-                <button onClick={() => setSelectedPart(null)}><X size={20}/></button>
-             </div>
-             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                <h3 className="text-2xl font-black">{selectedPart.name}</h3>
-                {/* Historique spécifique */}
-                <section className="space-y-4">
-                   <h4 className="text-[10px] font-black uppercase flex items-center gap-2">
-                      <History size={16} /> Journal des Flux
-                   </h4>
-                   <div className="space-y-3">
-                      {partSpecificMovements.map(m => (
-                        <div key={m.id} className="p-4 bg-white border border-[#dadce0] rounded-2xl flex items-center justify-between">
-                           <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${m.type === 'IN' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                 {m.type === 'IN' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                              </div>
-                              <div>
-                                 <p className="text-xs font-black">{m.type === 'IN' ? 'Arrivage' : 'Sortie'}</p>
-                                 <p className="text-[9px] text-[#5f6368]">{m.reason}</p>
-                              </div>
-                           </div>
-                           <span className={`text-xs font-black ${m.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>{m.type === 'IN' ? '+' : '-'}{m.quantity}</span>
-                        </div>
-                      ))}
-                   </div>
-                </section>
-             </div>
+      
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        title={editingPart ? `Modifier : ${editingPart.name}` : "Nouvel Article Inventaire"}
+        size="lg"
+      >
+        <form onSubmit={handleSavePart} className="space-y-6">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Nom de l'article</label><input name="name" type="text" defaultValue={editingPart?.name || ''} required className="bg-white" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">SKU / Code</label><input name="sku" type="text" defaultValue={editingPart?.sku || ''} required className="bg-white font-mono" /></div>
+              <div className="space-y-1.5">
+                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Marque</label>
+                 <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="bg-white">
+                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                 </select>
+              </div>
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Localisation Rayon</label><input name="location" type="text" defaultValue={editingPart?.location || ''} className="bg-white" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Prix Unitaire (F)</label><input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="bg-white font-bold" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Stock Initial</label><input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} required className="bg-white" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Seuil Alerte (Min)</label><input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} required className="bg-white" /></div>
            </div>
-        </div>
-      )}
+           <div className="flex gap-3 pt-6 border-t"><button type="submit" className="btn-google-primary flex-1 justify-center py-3"><Save size={18} /> Enregistrer</button><button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined flex-1">Annuler</button></div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -25,27 +25,22 @@ const Dashboard: React.FC = () => {
   useEffect(() => { refreshAll(); }, []);
 
   const stats = useMemo(() => {
-    // Basic Global Stats
     const totalRevenue = tickets?.reduce((acc, t) => acc + (t.financials?.grandTotal || 0), 0) || 0;
     const totalMargin = tickets?.reduce((acc, t) => acc + (t.financials?.netMargin || 0), 0) || 0;
     const marginPercent = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
     
-    // Technician Specific Stats
     const myTickets = tickets?.filter(t => t.assignedTechnicianId === currentUser?.id) || [];
     const myActive = myTickets.filter(t => t.status !== 'Fermé' && t.status !== 'Résolu').length;
     const myCompleted = myTickets.filter(t => t.status === 'Fermé' || t.status === 'Résolu').length;
     
-    // Agent Specific Stats
     const newTickets = tickets?.filter(t => t.status === 'Nouveau').length || 0;
     const criticalTickets = tickets?.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length || 0;
 
-    // Infrastructure Stats
     const accountCount = users.length;
     const productCount = products.length;
     const customerCount = customers.length;
     const showroomCount = showrooms.length;
 
-    // Charts
     const categoryData = ['SAV', 'Installation', 'Maintenance', 'Livraison'].map(cat => ({
       name: cat,
       value: tickets?.filter(t => t.category === cat).length || 0,
@@ -90,10 +85,8 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
-  // --- RENDU ADMIN / MANAGER ---
   const renderAdminDashboard = () => (
     <div className="space-y-10">
-      {/* SECTION 1: KPIS OPÉRATIONNELS */}
       <section className="space-y-6">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#5f6368] ml-1">Performances Opérationnelles</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -115,7 +108,6 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* SECTION 2: INFRASTRUCTURE SYSTÈME */}
       <section className="space-y-6">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#5f6368] ml-1">Infrastructure Horizon Cloud</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -185,7 +177,6 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
-  // --- RENDU TECHNICIEN ---
   const renderTechnicianDashboard = () => {
     const myInfo = technicians.find(t => t.id === currentUser?.id);
     return (
@@ -285,7 +276,6 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  // --- RENDU AGENT SAV ---
   const renderAgentDashboard = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -354,7 +344,6 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* AI REPORT OVERLAY */}
       {aiReport && (
         <div className="google-card p-10 border-l-4 border-[#1a73e8] bg-[#f8f9ff] animate-in slide-in-from-top-4 duration-300 relative">
           <button onClick={() => setAiReport(null)} className="absolute top-4 right-4 text-[#5f6368] hover:bg-[#e8eaed] p-2 rounded-full">
@@ -370,7 +359,6 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* CONDITIONAL CONTENT BASED ON ROLE */}
       {currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER' ? renderAdminDashboard() : 
        currentUser?.role === 'TECHNICIAN' ? renderTechnicianDashboard() : 
        renderAgentDashboard()}

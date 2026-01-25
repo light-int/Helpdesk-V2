@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Cloud, Lock, LayoutDashboard, MessageSquare, Users, Package, FileDown, Printer, FileText
+  Cloud, Lock, LayoutDashboard, MessageSquare, Users, Package, Printer
 } from 'lucide-react';
 import { useNotifications } from '../App';
 
