@@ -4,7 +4,8 @@ import {
   TrendingUp, DollarSign, Activity, Sparkles, BrainCircuit, X,
   PieChart as PieIcon, BarChart3, Wallet, Map, Calendar,
   ClipboardList, Award, CheckCircle2, User, ChevronRight, 
-  FileText, Loader2, FileDown, History, Trash2, CalendarDays, Eye
+  FileText, Loader2, FileDown, History, Trash2, CalendarDays, Eye,
+  Package, Tag, Hash, Info, Briefcase
 } from 'lucide-react';
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as ReChartsBarChart, Bar, Cell } from 'recharts';
 import { useData, useNotifications } from '../App';
@@ -446,94 +447,137 @@ export default function Finances() {
         )}
       </div>
 
-      <Modal 
-        isOpen={!!selectedExpertData} 
-        onClose={() => setSelectedTechId(null)} 
-        title={`Analyse Performance : ${selectedExpertData?.name}`}
-        size="lg"
-      >
-        {selectedExpertData && (
-          <div className="space-y-10 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[24px] shadow-sm">
-                  <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-2">Chiffre d'Affaires</p>
-                  <div className="flex items-baseline gap-2">
-                     <span className="text-3xl font-black text-blue-900">{selectedExpertData.revenue.toLocaleString()}</span>
-                     <span className="text-xs font-bold text-blue-400">FCFA</span>
-                  </div>
-               </div>
-               <div className="p-6 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[24px] shadow-sm">
-                  <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-2">Marge Nette</p>
-                  <div className="flex items-baseline gap-2">
-                     <span className="text-3xl font-black text-green-900">{selectedExpertData.margin.toLocaleString()}</span>
-                     <span className="text-xs font-bold text-green-400">FCFA</span>
-                  </div>
-               </div>
+      {/* TIROIR LATÉRAL DÉTAILS EXPERT - HAUTE PRIORITÉ (z-100) */}
+      {selectedExpertData && (
+        <div className="fixed inset-0 z-[100] overflow-hidden flex justify-end">
+          {/* Backdrop avec flou */}
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-[4px] animate-in fade-in duration-300"
+            onClick={() => setSelectedTechId(null)}
+          />
+          
+          {/* Contenu du tiroir avec animation coulissante */}
+          <div className="relative w-full max-w-[600px] bg-white h-full shadow-[-20px_0_60px_-15px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out">
+            {/* Header du Tiroir */}
+            <div className="p-6 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa] shrink-0">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 rounded-2xl bg-[#e8f0fe] text-[#1a73e8] flex items-center justify-center border border-[#d2e3fc] shadow-sm">
+                   <Award size={28} />
+                 </div>
+                 <div>
+                    <h2 className="text-lg font-black text-[#202124] uppercase tracking-widest leading-none">{selectedExpertData.name}</h2>
+                    <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
+                      <Activity size={12} className="text-[#1a73e8]" /> Rapport d'Activité Périodique
+                    </p>
+                 </div>
+              </div>
+              <button 
+                onClick={() => setSelectedTechId(null)} 
+                className="p-3 hover:bg-[#e8eaed] rounded-full text-[#5f6368] transition-all hover:rotate-90"
+              >
+                <X size={24} />
+              </button>
             </div>
 
-            <section className="space-y-6">
-               <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
-                     <History size={18} className="text-[#1a73e8]" /> Journal Exhaustif de la Période
-                  </h4>
-                  <span className="px-3 py-1 bg-[#f1f3f4] text-[#5f6368] text-[10px] font-black rounded-full uppercase">
-                     {selectedExpertData.detailedTickets.length} Dossiers
-                  </span>
-               </div>
-               
-               <div className="space-y-4">
-                  {selectedExpertData.detailedTickets.map(ticket => (
-                    <div key={ticket.id} className="p-6 bg-white border border-[#dadce0] rounded-3xl hover:border-[#1a73e8] hover:shadow-md transition-all group">
-                       <div className="flex justify-between items-start mb-4">
-                          <div>
-                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-100">#{ticket.id}</span>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{ticket.category}</span>
-                             </div>
-                             <h5 className="text-sm font-black text-[#3c4043]">{ticket.customerName}</h5>
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${
-                            ticket.status === 'Résolu' || ticket.status === 'Fermé' 
-                              ? 'bg-green-50 text-green-700 border-green-100' 
-                              : 'bg-amber-50 text-amber-600 border-amber-100'
-                          }`}>
-                            {ticket.status}
-                          </span>
-                       </div>
-                       
-                       <div className="p-4 bg-[#f8f9fa] rounded-2xl border border-transparent group-hover:border-[#f1f3f4] transition-all">
-                          <p className="text-[10px] text-[#9aa0a6] font-black uppercase mb-2">Objet du Dossier</p>
-                          <p className="text-xs text-[#5f6368] leading-relaxed font-medium italic">"{ticket.description}"</p>
-                       </div>
-
-                       {ticket.financials && (
-                          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
-                             <div className="flex flex-col">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Profit Net</span>
-                                <span className="text-sm font-black text-green-700">+{ticket.financials.netMargin.toLocaleString()} F</span>
-                             </div>
-                             <div className="flex flex-col text-right">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Montant Client</span>
-                                <span className="text-sm font-black text-[#1a73e8]">{ticket.financials.grandTotal.toLocaleString()} F</span>
-                             </div>
-                          </div>
-                       )}
+            {/* Corps du Tiroir */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar pb-32 bg-white">
+              {/* KPIs de l'Expert */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[28px] shadow-sm">
+                    <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-3">Chiffre d'Affaires Brut</p>
+                    <div className="flex items-baseline gap-2">
+                       <span className="text-3xl font-black text-blue-900">{selectedExpertData.revenue.toLocaleString()}</span>
+                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">FCFA</span>
                     </div>
-                  ))}
-               </div>
-            </section>
-            <div className="pt-6 border-t">
+                 </div>
+                 <div className="p-6 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[28px] shadow-sm">
+                    <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-3">Profit Net Estimé</p>
+                    <div className="flex items-baseline gap-2">
+                       <span className="text-3xl font-black text-green-900">{selectedExpertData.margin.toLocaleString()}</span>
+                       <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">FCFA</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Journal des Interventions de la période */}
+              <section className="space-y-6">
+                 <div className="flex items-center justify-between border-b pb-4">
+                    <h4 className="text-[11px] font-black text-[#3c4043] uppercase tracking-[0.2em] flex items-center gap-3">
+                       <History size={20} className="text-[#1a73e8]" /> Journal des Dossiers Périodiques
+                    </h4>
+                    <span className="px-4 py-1.5 bg-[#f1f3f4] text-[#5f6368] text-[10px] font-black rounded-full uppercase border">
+                       {selectedExpertData.detailedTickets.length} Opérations
+                    </span>
+                 </div>
+                 
+                 <div className="space-y-4">
+                    {selectedExpertData.detailedTickets.map(ticket => (
+                      <div key={ticket.id} className="p-6 bg-white border border-[#dadce0] rounded-3xl hover:border-[#1a73e8] hover:shadow-xl transition-all group relative overflow-hidden">
+                         <div className="absolute top-0 left-0 w-1 h-full bg-[#dadce0] group-hover:bg-[#1a73e8] transition-colors" />
+                         <div className="flex justify-between items-start mb-4">
+                            <div>
+                               <div className="flex items-center gap-3 mb-1.5">
+                                  <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-100">#{ticket.id}</span>
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{ticket.category}</span>
+                               </div>
+                               <h5 className="text-base font-black text-[#3c4043]">{ticket.customerName}</h5>
+                            </div>
+                            <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase border shadow-sm ${
+                              ticket.status === 'Résolu' || ticket.status === 'Fermé' 
+                                ? 'bg-green-50 text-green-700 border-green-100' 
+                                : 'bg-amber-50 text-amber-600 border-amber-100'
+                            }`}>
+                              {ticket.status}
+                            </span>
+                         </div>
+                         
+                         <div className="p-4 bg-[#f8f9fa] rounded-2xl border border-transparent group-hover:border-[#f1f3f4] transition-all mb-4">
+                            <p className="text-[9px] text-[#9aa0a6] font-black uppercase mb-1.5 tracking-wider flex items-center gap-2"><Info size={12}/> Diagnostic Terrain</p>
+                            <p className="text-xs text-[#5f6368] leading-relaxed font-medium italic">"{ticket.description}"</p>
+                         </div>
+
+                         {ticket.financials && (
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                               <div className="flex flex-col">
+                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Profit Net</span>
+                                  <span className="text-sm font-black text-green-700">+{ticket.financials.netMargin.toLocaleString()} F</span>
+                               </div>
+                               <div className="flex flex-col text-right">
+                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Montant Facturé</span>
+                                  <span className="text-sm font-black text-[#1a73e8]">{ticket.financials.grandTotal.toLocaleString()} F</span>
+                               </div>
+                            </div>
+                         )}
+                      </div>
+                    ))}
+                    
+                    {selectedExpertData.detailedTickets.length === 0 && (
+                      <div className="py-24 text-center border-4 border-dashed border-[#f1f3f4] rounded-[40px] bg-[#fafafa]">
+                         <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 text-gray-200 shadow-sm">
+                           <ClipboardList size={40} />
+                         </div>
+                         <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Aucune donnée historique</p>
+                         <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold">Ajustez la période d'analyse en haut de page.</p>
+                      </div>
+                    )}
+                 </div>
+              </section>
+            </div>
+
+            {/* Footer du Tiroir */}
+            <div className="p-6 border-t border-[#dadce0] bg-white shrink-0 shadow-[0_-10px_25px_-10px_rgba(0,0,0,0.1)]">
               <button 
                 onClick={() => setSelectedTechId(null)}
-                className="w-full btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"
+                className="w-full btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-[0.2em] shadow-sm hover:shadow-md transition-all border-[#dadce0]"
               >
-                Fermer l'Analyse Expert
+                Fermer le Rapport
               </button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
 
+      {/* MODAL VISIONNEUR DE RAPPORT PLEIN ÉCRAN */}
       <Modal 
         isOpen={showAiModal} 
         onClose={() => setShowAiModal(false)} 
@@ -634,7 +678,7 @@ export default function Finances() {
              </div>
              
              <div className="mt-20 pt-10 border-t border-gray-100 flex justify-between items-center opacity-40 shrink-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Document Certifié Horizon v2.7 • Confidentiel Plaza</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Document Certifié Horizon v2.8 • Confidentiel Plaza</p>
                 <div className="flex items-center gap-4">
                   <p className="text-[10px] font-bold text-gray-400 uppercase">Page 1 / 1</p>
                   <img src="https://ui-avatars.com/api/?name=RP&background=1a73e8&color=fff" className="w-6 h-6 rounded" alt="" />
