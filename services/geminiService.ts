@@ -1,12 +1,15 @@
 
-// Use the recommended import for Google GenAI SDK
 import { GoogleGenAI, Type } from "@google/genai";
 
-// L'injection se fait via le bloc 'define' de vite.config.ts
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// We do not initialize at the top level to avoid crashing the app on boot 
+// if process.env.API_KEY is not yet defined by the build system.
 
 export const chatWithAI = async (message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]) => {
   try {
+    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
+      throw new Error("Clé API Gemini manquante.");
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
@@ -27,12 +30,14 @@ export const chatWithAI = async (message: string, history: { role: 'user' | 'mod
     return response.text;
   } catch (error) {
     console.error("AI Chat Error:", error);
-    return "Désolé, je rencontre une difficulté technique. Veuillez réessayer plus tard.";
+    return "L'assistant IA est actuellement indisponible (Clé API manquante ou invalide).";
   }
 };
 
 export const analyzeTicketDescription = async (description: string) => {
   try {
+    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') return null;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analyse ce ticket de SAV et suggère une catégorie (Livraison, Installation, SAV, Remboursement) et une priorité (Basse, Moyenne, Haute, Urgent). Réponds en JSON. Ticket: ${description}`,
@@ -57,6 +62,10 @@ export const analyzeTicketDescription = async (description: string) => {
 
 export const generateStrategicReport = async (data: any) => {
   try {
+    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
+      return "Échec de l'audit : Clé API Gemini non configurée dans l'environnement de déploiement.";
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `Génère un rapport stratégique exécutif pour Royal Plaza Gabon basé sur ces indicateurs : ${JSON.stringify(data)}. 
@@ -91,6 +100,8 @@ export const generateStrategicReport = async (data: any) => {
 
 export const translateContent = async (text: string, targetLang: 'EN' | 'FR') => {
   try {
+    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') return text;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Traduis le texte suivant en ${targetLang === 'EN' ? 'Anglais' : 'Français'}. 
@@ -105,6 +116,6 @@ export const translateContent = async (text: string, targetLang: 'EN' | 'FR') =>
     return response.text;
   } catch (error) {
     console.error("Translation Error:", error);
-    return "Erreur lors de la traduction.";
+    return text;
   }
 };

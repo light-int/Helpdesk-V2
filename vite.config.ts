@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   base: './', // Crucial pour Hostinger (chemins relatifs)
   define: {
-    'process.env.API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || process.env.API_KEY)
+    // We stringify the key to ensure it's passed as a string literal to the browser
+    'process.env.API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || "")
   },
   build: {
     outDir: 'dist',
