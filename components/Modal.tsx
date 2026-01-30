@@ -37,28 +37,28 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" 
+        className="fixed inset-0 bg-black/50 backdrop-blur-[6px] transition-opacity duration-300 animate-in fade-in" 
         onClick={onClose}
       />
       
       {/* Modal Content */}
-      <div className={`relative bg-white w-full ${sizeClasses[size]} max-h-[90vh] rounded-lg shadow-2xl animate-modal overflow-hidden flex flex-col`}>
+      <div className={`relative bg-white w-full ${sizeClasses[size]} max-h-[95vh] rounded-[32px] shadow-2xl animate-modal-entry overflow-hidden flex flex-col border border-white/40`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#dadce0] bg-[#f8f9fa] shrink-0">
-          <h3 className="text-base font-medium text-[#3c4043]">{title}</h3>
+        <div className="flex items-center justify-between px-8 py-6 border-b border-[#dadce0] bg-[#f8f9fa] shrink-0">
+          <h3 className="text-sm font-black text-[#3c4043] uppercase tracking-widest">{title}</h3>
           <button 
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-[#e8eaed] text-[#5f6368] transition-colors"
+            className="p-2 rounded-full hover:bg-[#e8eaed] text-[#5f6368] transition-all hover:rotate-90 active:scale-90"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Body - This will now correctly scroll because parent has max-h */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
           {children}
         </div>
       </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot } from 'lucide-react';
-import { chatWithAI } from '../services/geminiService';
+import { MessageCircle, X, Send, Bot, AlertTriangle } from 'lucide-react';
+import { chatWithAI, isAiOperational } from '../services/geminiService';
 
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,6 +11,8 @@ const ChatWidget: React.FC = () => {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const aiReady = isAiOperational();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -20,9 +22,16 @@ const ChatWidget: React.FC = () => {
 
   const handleSend = async () => {
     if (!message.trim() || isLoading) return;
+    
     const userMsg = message;
     setMessage('');
     setMessages(prev => [...prev, { role: 'user', parts: [{ text: userMsg }] }]);
+    
+    if (!aiReady) {
+      setMessages(prev => [...prev, { role: 'model', parts: [{ text: "Je suis désolé, mon module de réponse intelligente est actuellement hors-ligne car aucune clé API Gemini n'a été détectée. Veuillez contacter un administrateur." }] }]);
+      return;
+    }
+
     setIsLoading(true);
     const aiResponse = await chatWithAI(userMsg, messages);
     setMessages(prev => [...prev, { role: 'model', parts: [{ text: aiResponse || "Service momentanément indisponible." }] }]);
@@ -40,13 +49,22 @@ const ChatWidget: React.FC = () => {
               </div>
               <div>
                 <p className="text-white font-black text-xs uppercase tracking-widest">Royal Assistant</p>
-                <p className="text-[#669bbc] text-[8px] uppercase font-black tracking-widest">IA Horizon • Online</p>
+                <p className={`${aiReady ? 'text-[#669bbc]' : 'text-amber-400'} text-[8px] uppercase font-black tracking-widest`}>
+                   {aiReady ? 'IA Horizon • Online' : 'IA Horizon • Hors-ligne'}
+                </p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="text-white/40 hover:text-[#c1121f] transition-colors">
               <X size={24} />
             </button>
           </div>
+
+          {!aiReady && (
+            <div className="bg-amber-50 p-3 flex items-center gap-3 border-b-2 border-[#003049]">
+               <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+               <p className="text-[10px] font-bold text-amber-800 uppercase leading-tight">Clé API manquante : Mode Démo Actif</p>
+            </div>
+          )}
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#fdf0d5]/50 custom-scrollbar">
             {messages.map((m, i) => (

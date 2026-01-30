@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
+// Fix: Ensure standard imports for react-router-dom v6
 import { Link, useLocation } from 'react-router-dom';
 import { NAVIGATION } from '../constants';
-import { LogOut, Menu, Languages, Globe } from 'lucide-react';
+import { LogOut, Menu, Languages } from 'lucide-react';
 import { useUser, useNotifications } from '../App';
-import { UserRole } from '../types';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();

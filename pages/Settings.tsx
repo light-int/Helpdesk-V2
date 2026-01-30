@@ -8,11 +8,13 @@ import {
   Zap, Save, MapPin, Phone, Store, ChevronRight, Edit3,
   Wifi, Server, CloudLightning, Info, ShieldCheck, Eye, EyeOff,
   UserPlus, UserMinus, ShieldAlert, Loader2, Fingerprint, LogIn,
-  Wrench, CheckSquare, Square
+  Wrench, CheckSquare, Square, MessageSquare, Facebook, Mail,
+  Link, ExternalLink, Sliders, Cpu, Rocket, BarChart4
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { UserRole, SystemConfig, ShowroomConfig, Showroom, UserProfile, TicketCategory, Technician } from '../types';
+import { UserRole, SystemConfig, ShowroomConfig, Showroom, UserProfile, TicketCategory, Technician, IntegrationConfig } from '../types';
 import { ApiService } from '../services/apiService';
+import { isAiOperational } from '../services/geminiService';
 import Modal from '../components/Modal';
 
 const CATEGORIES: TicketCategory[] = ['Livraison', 'Installation', 'SAV', 'Remboursement', 'Maintenance', 'Climatisation', 'Électronique'];
@@ -30,21 +32,24 @@ const Settings: React.FC = () => {
   const { brands, users, showrooms, refreshAll, isSyncing, config, updateConfig, saveShowroom, deleteShowroom, syncMetrics, saveUser, deleteUser, technicians } = useData();
   const { currentUser, updateUser: updateSession } = useUser();
   const { addNotification } = useNotifications();
-  const [activeTab, setActiveTab] = useState<'general' | 'auth' | 'database' | 'ai'>('general');
+  
+  const [activeTab, setActiveTab] = useState<'general' | 'auth' | 'database' | 'ai' | 'integrations'>('general');
   const [userSearch, setUserSearch] = useState('');
   
   // États des Modals
   const [isShowroomModalOpen, setIsShowroomModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
+  const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   
   // États d'édition et détails
   const [editingShowroom, setEditingShowroom] = useState<ShowroomConfig | null>(null);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [selectedUserForDetails, setSelectedUserForDetails] = useState<UserProfile | null>(null);
-  const [connectionLogs, setConnectionLogs] = useState<any[]>([]);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [integrationConfigs, setIntegrationConfigs] = useState<IntegrationConfig[]>([]);
+  const [editingIntegration, setEditingIntegration] = useState<IntegrationConfig | null>(null);
+  const [isSavingIntegration, setIsSavingIntegration] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
@@ -54,12 +59,15 @@ const Settings: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole>('AGENT');
   const [selectedSpecialties, setSelectedSpecialties] = useState<TicketCategory[]>([]);
   const [techPhone, setTechPhone] = useState('');
+  
+  const aiReady = isAiOperational();
 
   // Configuration des onglets par rôle
   const tabs = useMemo(() => {
     const baseTabs = [
       { id: 'general', label: 'Général', icon: <Settings2 size={18} /> },
-      { id: 'ai', label: 'Intelligence Artificielle', icon: <BrainCircuit size={18} /> },
+      { id: 'ai', label: 'IA Gemini', icon: <BrainCircuit size={18} /> },
+      { id: 'integrations', label: 'Intégrations', icon: <MessageSquare size={18} /> },
     ];
     
     if (currentUser?.role === 'ADMIN') {
@@ -72,6 +80,21 @@ const Settings: React.FC = () => {
     return baseTabs;
   }, [currentUser]);
 
+  useEffect(() => {
+    if (activeTab === 'integrations') {
+      fetchIntegrations();
+    }
+  }, [activeTab]);
+
+  const fetchIntegrations = async () => {
+    try {
+      const data = await ApiService.integrations.getConfigs();
+      setIntegrationConfigs(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return (users || []).filter(u => 
       u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
@@ -79,32 +102,34 @@ const Settings: React.FC = () => {
     );
   }, [users, userSearch]);
 
-  const fetchLogs = async (userId: string) => {
-    setIsLoadingLogs(true);
+  const handleIntegrationSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingIntegration) return;
+    setIsSavingIntegration(true);
+    const formData = new FormData(e.currentTarget);
+    
+    const updated: IntegrationConfig = {
+      ...editingIntegration,
+      enabled: formData.get('enabled') === 'on',
+      apiKey: formData.get('apiKey') as string,
+      webhookUrl: formData.get('webhookUrl') as string,
+      settings: {
+        ...editingIntegration.settings,
+        region: formData.get('region'),
+        appId: formData.get('appId')
+      }
+    };
+
     try {
-      const logs = await ApiService.users.getConnectionLogs(userId);
-      setConnectionLogs(logs);
+      await ApiService.integrations.saveConfig(updated);
+      setIsIntegrationModalOpen(false);
+      setEditingIntegration(null);
+      await fetchIntegrations();
+      addNotification({ title: 'Intégration Cloud', message: `Flux ${updated.name} synchronisé.`, type: 'success' });
     } catch (e) {
-      console.error(e);
+      addNotification({ title: 'Erreur Sync', message: 'Échec de la mise à jour du connecteur.', type: 'error' });
     } finally {
-      setIsLoadingLogs(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedUserForDetails) {
-      fetchLogs(selectedUserForDetails.id);
-    } else {
-      setConnectionLogs([]);
-    }
-  }, [selectedUserForDetails]);
-
-  const getRoleColor = (role: UserRole) => {
-    switch(role) {
-      case 'ADMIN': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'MANAGER': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'TECHNICIAN': return 'bg-orange-100 text-orange-700 border-orange-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      setIsSavingIntegration(false);
     }
   };
 
@@ -150,7 +175,6 @@ const Settings: React.FC = () => {
     setEditingUser(user);
     setSelectedRole(user.role);
     
-    // Si c'est un technicien, on pré-remplit les champs
     const techProfile = technicians.find(t => t.id === user.id);
     if (techProfile) {
       setSelectedSpecialties(techProfile.specialty);
@@ -177,7 +201,6 @@ const Settings: React.FC = () => {
     await deleteUser(userToDelete.id);
     setIsDeleteUserModalOpen(false);
     setUserToDelete(null);
-    if (selectedUserForDetails?.id === userToDelete.id) setSelectedUserForDetails(null);
   };
 
   const toggleSpecialty = (cat: TicketCategory) => {
@@ -230,7 +253,7 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+    <div className="space-y-6 animate-page-entry pb-20">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-normal text-[#3c4043]">Paramètres Horizon</h1>
@@ -244,18 +267,18 @@ const Settings: React.FC = () => {
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* TAB NAV */}
-        <div className="w-full lg:w-64 space-y-1">
+        <div className="w-full lg:w-64 space-y-1 bg-white p-2 rounded-2xl border border-[#dadce0]">
           {tabs.map(tab => (
             <button 
               key={tab.id} 
               onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-r-full transition-colors text-sm font-medium ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold ${
                 activeTab === tab.id 
-                  ? 'bg-[#e8f0fe] text-[#1a73e8]' 
-                  : 'text-[#3c4043] hover:bg-[#f1f3f4]'
+                  ? 'bg-[#1a73e8] text-white shadow-lg shadow-blue-600/20' 
+                  : 'text-[#5f6368] hover:bg-[#f1f3f4]'
               }`}
             >
-              <span className={activeTab === tab.id ? 'text-[#1a73e8]' : 'text-[#5f6368]'}>
+              <span className={activeTab === tab.id ? 'text-white' : 'text-[#5f6368]'}>
                 {tab.icon}
               </span>
               {tab.label}
@@ -271,18 +294,18 @@ const Settings: React.FC = () => {
                  <h2 className="text-base font-medium text-[#3c4043] mb-6">Identité de l'Instance</h2>
                  <div className="space-y-6 max-w-xl">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-[#5f6368]">Nom d'affichage SAV</label>
+                      <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Nom d'affichage SAV</label>
                       <input type="text" className="w-full" defaultValue="Royal Plaza - Horizon System" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-[#5f6368]">Fuseau horaire</label>
+                          <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Fuseau horaire</label>
                           <select className="w-full">
                              <option>(GMT+01:00) Afrique/Libreville</option>
                           </select>
                        </div>
                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-[#5f6368]">Fréquence Cloud</label>
+                          <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Fréquence Cloud</label>
                           <select 
                             className="w-full" 
                             disabled={currentUser?.role !== 'ADMIN'}
@@ -318,22 +341,162 @@ const Settings: React.FC = () => {
             </div>
           )}
 
+          {activeTab === 'integrations' && (
+            <div className="space-y-6">
+               <div className="google-card p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                       <h2 className="text-lg font-black text-[#202124] uppercase tracking-tight">Intégrations Omnicanales</h2>
+                       <p className="text-xs text-[#5f6368] mt-1">Connectez Royal Plaza aux réseaux sociaux et messageries réelles.</p>
+                    </div>
+                    <div className="p-2 bg-blue-50 text-[#1a73e8] rounded-xl"><Smartphone size={24}/></div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {integrationConfigs.map(integration => (
+                      <div key={integration.id} className="p-6 bg-white border border-[#dadce0] rounded-3xl hover:border-[#1a73e8] transition-all group shadow-sm">
+                        <div className="flex items-start justify-between mb-6">
+                           <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-sm ${
+                                integration.id === 'whatsapp' ? 'bg-green-50 text-green-600 border-green-100' :
+                                integration.id === 'messenger' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                'bg-red-50 text-red-600 border-red-100'
+                              }`}>
+                                {integration.id === 'whatsapp' && <Smartphone size={24} />}
+                                {integration.id === 'messenger' && <Facebook size={24} />}
+                                {integration.id === 'email' && <Mail size={24} />}
+                              </div>
+                              <div>
+                                 <h3 className="text-sm font-black text-[#3c4043]">{integration.name}</h3>
+                                 <div className="flex items-center gap-2 mt-1">
+                                    <div className={`w-2 h-2 rounded-full ${integration.enabled ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{integration.enabled ? 'Connecté' : 'Désactivé'}</span>
+                                 </div>
+                              </div>
+                           </div>
+                           <button 
+                             onClick={() => { setEditingIntegration(integration); setIsIntegrationModalOpen(true); }}
+                             className="p-2 text-[#5f6368] hover:bg-[#f1f3f4] rounded-xl transition-all"
+                           >
+                             <Sliders size={20} />
+                           </button>
+                        </div>
+                        <div className="space-y-4">
+                           <div className="p-3 bg-[#f8f9fa] rounded-xl border border-transparent text-[10px] text-[#5f6368] font-bold uppercase tracking-widest flex items-center justify-between">
+                              <span>Flux Direct Cloud</span>
+                              <CloudLightning size={14} className={integration.enabled ? 'text-blue-500' : 'text-gray-300'} />
+                           </div>
+                           <button 
+                            onClick={() => { setEditingIntegration(integration); setIsIntegrationModalOpen(true); }}
+                            className="w-full py-3 bg-[#f1f3f4] hover:bg-[#e8f0fe] text-[#5f6368] hover:text-[#1a73e8] rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                           >
+                             Configurer le connecteur
+                           </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="google-card p-8 border-l-4 border-[#1a73e8] bg-blue-50/30">
+                  <div className="flex items-start gap-4">
+                     <Info className="text-[#1a73e8] shrink-0 mt-1" size={24} />
+                     <div>
+                        <h4 className="text-sm font-black text-[#1a73e8] uppercase">Note de Synchronisation</h4>
+                        <p className="text-xs text-[#5f6368] mt-2 leading-relaxed">
+                           Les messages entrants via WhatsApp et Messenger sont automatiquement analysés par <strong>Gemini IA</strong> pour suggérer des tickets SAV prioritaires. Assurez-vous que vos Webhooks sont actifs sur les consoles développeurs respectives.
+                        </p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
           {activeTab === 'ai' && (
-            <div className="google-card p-8 space-y-8">
-               <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-[#e8f0fe] to-[#f8f9ff] border border-[#d2e3fc] rounded-lg">
-                  <div className="p-3 bg-white rounded-full text-[#1a73e8] shadow-sm"><Sparkles size={24}/></div>
-                  <div>
-                    <h2 className="text-base font-medium text-[#1a73e8]">Gemini Intelligence Engine</h2>
-                    <p className="text-xs text-[#5f6368]">Le moteur IA assiste le diagnostic et génère les rapports stratégiques.</p>
+            <div className="space-y-6">
+               <div className="google-card p-8 space-y-8">
+                  <div className="flex items-center gap-6 p-8 bg-gradient-to-r from-[#e8f0fe] to-[#f8f9ff] border border-[#d2e3fc] rounded-[40px] shadow-sm relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100 rounded-full -mr-16 -mt-16 opacity-30" />
+                     <div className="p-5 bg-white rounded-3xl text-[#1a73e8] shadow-xl border border-[#d2e3fc] z-10 animate-pulse">
+                        <Cpu size={40}/>
+                     </div>
+                     <div className="z-10 flex-1">
+                        <h2 className="text-xl font-black text-[#1a73e8] uppercase tracking-tighter">Moteur Horizon Intelligence</h2>
+                        <p className="text-sm text-[#5f6368] font-medium mt-1">Gouvernance centralisée de l'IA générative Gemini.</p>
+                        <div className="flex items-center gap-2 mt-3">
+                           <div className={`w-2 h-2 rounded-full ${aiReady ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
+                           <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{aiReady ? 'Connecté au Cloud Google AI' : 'API Non Configurée'}</span>
+                        </div>
+                     </div>
+                     <div className="z-10">
+                        <button 
+                           onClick={() => updateConfig({ aiEnabled: !config.aiEnabled })}
+                           className={`w-16 h-8 rounded-full relative transition-all shadow-inner ${config.aiEnabled ? 'bg-[#1a73e8]' : 'bg-[#bdc1c6]'}`}
+                        >
+                           <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg transition-all ${config.aiEnabled ? 'right-1' : 'left-1'}`} />
+                        </button>
+                     </div>
                   </div>
-                  <div className="ml-auto">
-                     <button 
-                        onClick={() => updateConfig({ aiEnabled: !config.aiEnabled })}
-                        className={`w-12 h-6 rounded-full relative transition-colors ${config.aiEnabled ? 'bg-[#1a73e8]' : 'bg-[#bdc1c6]'}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.aiEnabled ? 'right-1' : 'left-1'}`} />
-                      </button>
-                  </div>
+
+                  {config.aiEnabled && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                       <section className="space-y-6">
+                          <h3 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2 px-2">
+                             <Zap size={14} className="text-[#1a73e8]" /> Modules d'activation
+                          </h3>
+                          <div className="space-y-3">
+                             {[
+                                { id: 'aiChatbotEnabled', label: 'Chatbot d\'assistance', desc: 'Aide technique en temps réel via le widget.', icon: <MessageSquare size={16}/> },
+                                { id: 'aiAutoCategorization', label: 'Auto-Classification', desc: 'Analyse et tri automatique des nouveaux tickets.', icon: <Sliders size={16}/> },
+                                { id: 'aiStrategicAudit', label: 'Audits Stratégiques', desc: 'Génération de rapports de gouvernance.', icon: <BarChart4 size={16}/> },
+                             ].map(module => (
+                                <div key={module.id} className="p-4 bg-white border border-[#dadce0] rounded-2xl flex items-center justify-between hover:border-[#1a73e8] transition-all group">
+                                   <div className="flex items-center gap-4">
+                                      <div className="p-2 bg-gray-50 text-gray-400 group-hover:text-[#1a73e8] rounded-xl transition-colors">{module.icon}</div>
+                                      <div>
+                                         <p className="text-xs font-black text-[#3c4043] uppercase">{module.label}</p>
+                                         <p className="text-[10px] text-[#5f6368]">{module.desc}</p>
+                                      </div>
+                                   </div>
+                                   <button 
+                                      onClick={() => updateConfig({ [module.id]: !(config as any)[module.id] })}
+                                      className={`w-9 h-5 rounded-full relative transition-colors ${(config as any)[module.id] ? 'bg-[#1a73e8]' : 'bg-[#bdc1c6]'}`}
+                                   >
+                                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${(config as any)[module.id] ? 'right-0.5' : 'left-0.5'}`} />
+                                   </button>
+                                </div>
+                             ))}
+                          </div>
+                       </section>
+
+                       <section className="space-y-6">
+                          <h3 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2 px-2">
+                             <Rocket size={14} className="text-[#1a73e8]" /> Profil de performance
+                          </h3>
+                          <div className="space-y-3">
+                             {[
+                                { id: 'flash', label: 'Mode Horizon (Flash)', desc: 'Optimisé pour la vitesse et les flux quotidiens.', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+                                { id: 'pro', label: 'Mode Visionnaire (Pro)', desc: 'Analyse profonde, idéal pour les audits complexes.', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+                             ].map(model => (
+                                <button 
+                                   key={model.id}
+                                   onClick={() => updateConfig({ aiModel: model.id as any })}
+                                   className={`w-full p-5 rounded-2xl border-2 text-left transition-all relative ${config.aiModel === model.id ? `border-[#1a73e8] ${model.bg} shadow-lg shadow-blue-600/5` : 'border-transparent bg-white shadow-sm hover:border-gray-200'}`}
+                                >
+                                   <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                         <div className={`w-2 h-2 rounded-full ${model.id === 'flash' ? 'bg-green-500' : 'bg-purple-500'}`} />
+                                         <p className={`text-xs font-black uppercase tracking-tight ${model.color}`}>{model.label}</p>
+                                      </div>
+                                      {config.aiModel === model.id && <CheckCircle2 size={18} className="text-[#1a73e8]" />}
+                                   </div>
+                                   <p className="text-[10px] text-[#5f6368] mt-2 leading-relaxed">{model.desc}</p>
+                                </button>
+                             ))}
+                          </div>
+                       </section>
+                    </div>
+                  )}
                </div>
             </div>
           )}
@@ -412,7 +575,7 @@ const Settings: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase ${getRoleColor(user.role as UserRole)}`}>{user.role}</span>
+                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase bg-gray-100`}>{user.role}</span>
                           </td>
                           <td className="px-6 py-4 text-[#5f6368]">
                              {user.lastLogin ? new Date(user.lastLogin).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : 'Jamais'}
@@ -481,49 +644,120 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      {/* VOLET DÉTAILS UTILISATEUR */}
-      {selectedUserForDetails && (
-        <>
-          <div className="fixed inset-0 bg-black/25 backdrop-blur-[2px] z-[60]" onClick={() => setSelectedUserForDetails(null)} />
-          <div className="fixed right-0 top-0 h-screen w-[450px] bg-white z-[70] flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
-             <div className="p-4 border-b bg-[#f8f9fa] flex items-center justify-between">
-                <h2 className="text-xs font-black uppercase tracking-widest text-[#5f6368]">Fiche Collaborateur</h2>
-                <button onClick={() => setSelectedUserForDetails(null)} className="p-1 hover:bg-gray-200 rounded-full"><X size={20}/></button>
-             </div>
-             <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                <div className="text-center space-y-4">
-                   <img src={selectedUserForDetails.avatar} className="w-20 h-20 rounded-full mx-auto border-2 border-[#1a73e8] p-1" alt="" />
+      {/* MODAL CONFIGURATION INTEGRATION */}
+      <Modal 
+        isOpen={isIntegrationModalOpen} 
+        onClose={() => !isSavingIntegration && setIsIntegrationModalOpen(false)} 
+        title={`Configuration : ${editingIntegration?.name}`}
+        size="md"
+      >
+        {editingIntegration && (
+          <form onSubmit={handleIntegrationSave} className="space-y-6">
+             <div className="p-4 bg-[#f8f9fa] border border-[#dadce0] rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm bg-white`}>
+                      {editingIntegration.id === 'whatsapp' && <Smartphone size={20} className="text-green-600" />}
+                      {editingIntegration.id === 'messenger' && <Facebook size={20} className="text-blue-600" />}
+                      {editingIntegration.id === 'email' && <Mail size={20} className="text-red-500" />}
+                   </div>
                    <div>
-                      <h3 className="text-xl font-bold text-[#202124]">{selectedUserForDetails.name}</h3>
-                      <p className="text-xs text-[#5f6368]">{selectedUserForDetails.email}</p>
-                      <div className="flex justify-center gap-2 mt-2">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${getRoleColor(selectedUserForDetails.role as UserRole)}`}>{selectedUserForDetails.role}</span>
-                        <span className="text-[9px] font-bold text-[#9aa0a6] uppercase flex items-center gap-1"><MapPin size={10} /> {selectedUserForDetails.showroom || 'Corporate'}</span>
-                      </div>
+                      <p className="text-xs font-black text-[#3c4043] uppercase">État de la connexion</p>
+                      <p className="text-[10px] text-[#5f6368] uppercase font-bold tracking-widest">{editingIntegration.enabled ? 'Actif' : 'En pause'}</p>
                    </div>
                 </div>
-                <section className="space-y-4 pt-6 border-t">
-                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><History size={14} /> Accès Récents</h4>
-                   <div className="space-y-2">
-                      {isLoadingLogs ? <div className="text-center py-4"><Loader2 className="animate-spin inline text-[#1a73e8]" size={16}/></div> : 
-                        connectionLogs.length > 0 ? connectionLogs.map((log, i) => (
-                        <div key={i} className="p-3 bg-[#f8f9fa] rounded-lg flex items-center justify-between border text-[11px]">
-                           <span className="font-bold text-[#3c4043]">{new Date(log.timestamp).toLocaleDateString()}</span>
-                           <span className="text-[#5f6368]">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                        </div>
-                      )) : <p className="text-[10px] italic text-gray-400">Aucun historique.</p>}
-                   </div>
-                </section>
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] font-black uppercase text-[#5f6368]">Activer</span>
+                   <input 
+                    name="enabled" 
+                    type="checkbox" 
+                    defaultChecked={editingIntegration.enabled} 
+                    className="w-5 h-5 rounded border-[#dadce0] text-[#1a73e8] focus:ring-[#1a73e8]"
+                   />
+                </div>
              </div>
-             <div className="p-6 border-t flex gap-2">
-                <button onClick={(e) => openEditUser(e, selectedUserForDetails)} className="btn-google-primary flex-1 justify-center text-xs">Modifier</button>
-                <button onClick={(e) => handleDeleteUserClick(e, selectedUserForDetails)} disabled={currentUser?.id === selectedUserForDetails.id} className="p-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-20"><Trash2 size={20}/></button>
-             </div>
-          </div>
-        </>
-      )}
 
-      {/* MODAL GESTION SHOWROOM */}
+             <div className="space-y-5">
+                <div className="space-y-1.5">
+                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Clé API / Access Token</label>
+                   <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 text-[#dadce0]" size={16} />
+                      <input 
+                        name="apiKey" 
+                        type="password" 
+                        defaultValue={editingIntegration.apiKey} 
+                        placeholder="••••••••••••••••••••••••"
+                        className="pl-10 h-11 bg-white font-mono text-sm" 
+                      />
+                   </div>
+                </div>
+                
+                <div className="space-y-1.5">
+                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">URL Webhook (Entrant)</label>
+                   <div className="relative">
+                      <Link className="absolute left-3 top-2.5 text-[#dadce0]" size={16} />
+                      <input 
+                        name="webhookUrl" 
+                        type="url" 
+                        defaultValue={editingIntegration.webhookUrl} 
+                        placeholder="https://horizon-api.royalplaza.ga/webhooks/..."
+                        className="pl-10 h-11 bg-white text-sm" 
+                      />
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">ID Application</label>
+                      <input 
+                        name="appId" 
+                        type="text" 
+                        defaultValue={editingIntegration.settings?.appId} 
+                        placeholder="ex: app_29384"
+                        className="h-11 bg-white font-bold" 
+                      />
+                   </div>
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Région Cloud</label>
+                      <select 
+                        name="region" 
+                        defaultValue={editingIntegration.settings?.region || 'ga-lbv-1'}
+                        className="h-11 bg-white"
+                      >
+                         <option value="ga-lbv-1">Gabon (Libreville)</option>
+                         <option value="eu-west-1">Europe (Paris)</option>
+                         <option value="us-east-1">USA (Virginia)</option>
+                      </select>
+                   </div>
+                </div>
+             </div>
+
+             <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
+                <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+                <p className="text-[10px] text-amber-700 font-medium leading-relaxed uppercase">
+                   Toute modification de ces paramètres entraîne une déconnexion temporaire du flux omnicanal le temps de la validation du Handshake.
+                </p>
+             </div>
+
+             <div className="flex gap-3 pt-6 border-t border-[#dadce0]">
+                <button 
+                  type="submit" 
+                  disabled={isSavingIntegration}
+                  className="btn-google-primary flex-1 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20"
+                >
+                   {isSavingIntegration ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} /> Appliquer les réglages</>}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setIsIntegrationModalOpen(false)}
+                  className="btn-google-outlined px-8 text-[10px] font-black uppercase tracking-widest"
+                >
+                   Abandonner
+                </button>
+             </div>
+          </form>
+        )}
+      </Modal>
+      
       <Modal isOpen={isShowroomModalOpen} onClose={() => setIsShowroomModalOpen(false)} title="Showroom Plaza">
         <form onSubmit={handleShowroomSave} className="space-y-6">
            <div className="grid grid-cols-2 gap-6">
@@ -537,7 +771,6 @@ const Settings: React.FC = () => {
         </form>
       </Modal>
 
-      {/* MODAL GESTION UTILISATEUR ENRICHI (DYNAMIQUE TECHNIQUE) */}
       <Modal isOpen={isUserModalOpen} onClose={() => !isSavingUser && setIsUserModalOpen(false)} title="Compte Collaborateur Horizon" size="lg">
         <form onSubmit={handleUserSave} className="space-y-6">
            <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -560,7 +793,6 @@ const Settings: React.FC = () => {
 
               <div className="space-y-1"><label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Affectation Site</label><select name="showroom" defaultValue={editingUser?.showroom || 'Glass'} className="bg-white h-11">{showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}<option value="">Corporate</option></select></div>
 
-              {/* SECTION DYNAMIQUE TECHNICIEN */}
               {selectedRole === 'TECHNICIAN' && (
                 <div className="col-span-2 p-6 bg-[#fffcf5] border border-[#ffe082] rounded-2xl space-y-6 animate-in slide-in-from-top-2">
                    <div className="flex items-center gap-3 text-[#f57c00]">
@@ -614,7 +846,7 @@ const Settings: React.FC = () => {
            </div>
 
            <div className="flex gap-3 pt-6 border-t border-[#dadce0]">
-              <button type="submit" disabled={isSavingUser} className="btn-google-primary flex-1 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10">
+              <button type="submit" disabled={isSavingUser} className="btn-google-primary flex-1 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">
                 {isSavingUser ? <Loader2 className="animate-spin" size={18}/> : editingUser ? 'Mettre à jour le compte' : 'Créer le compte synchronisé'}
               </button>
               <button type="button" onClick={() => setIsUserModalOpen(false)} className="btn-google-outlined px-8 uppercase text-[10px] font-black tracking-widest">Annuler</button>
@@ -622,7 +854,6 @@ const Settings: React.FC = () => {
         </form>
       </Modal>
 
-      {/* MODAL SUPPRESSION UTILISATEUR */}
       <Modal isOpen={isDeleteUserModalOpen} onClose={() => setIsDeleteUserModalOpen(false)} title="Sécurité Accès Horizon" size="sm">
          <div className="space-y-6">
             <div className="flex items-start gap-4 p-4 bg-red-50 border border-red-100 rounded-xl">

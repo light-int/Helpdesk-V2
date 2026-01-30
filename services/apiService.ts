@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Ticket, Product, Customer, Part, UserProfile, Technician, WarrantyRecord, ShowroomConfig, SystemConfig, StrategicReport, StockMovement } from '../types';
+import { Ticket, Product, Customer, Part, UserProfile, Technician, WarrantyRecord, ShowroomConfig, SystemConfig, StrategicReport, StockMovement, Conversation, Message, IntegrationConfig } from '../types';
 
 const SUPABASE_URL = 'https://vdovdwdgqfgxoothhnvo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_aDdviGljTQwmWPPTqKc5Og_BOdN-bvJ';
@@ -52,11 +52,33 @@ const TECHNICIAN_COLUMNS = [
 
 export const ApiService = {
   dangerouslyClearAll: async () => {
-    const tables = ['tickets', 'customers', 'parts', 'products', 'users', 'technicians', 'warranties', 'brands', 'showrooms', 'strategic_reports', 'stock_movements', 'user_connections'];
+    const tables = ['tickets', 'customers', 'parts', 'products', 'users', 'technicians', 'warranties', 'brands', 'showrooms', 'strategic_reports', 'stock_movements', 'user_connections', 'conversations', 'messages', 'integration_configs'];
     for (const table of tables) {
       try {
         await supabase.from(table).delete().not('id', 'is', null);
       } catch (e) {}
+    }
+  },
+
+  integrations: {
+    getConfigs: async (): Promise<IntegrationConfig[]> => await safeFetch(supabase.from('integration_configs').select('*').order('name'), []),
+    saveConfig: async (config: IntegrationConfig) => supabase.from('integration_configs').upsert(config)
+  },
+
+  inbox: {
+    getConversations: async (): Promise<Conversation[]> => await safeFetch(supabase.from('conversations').select('*').order('last_activity', { ascending: false }), []),
+    getMessages: async (conversationId: string): Promise<Message[]> => await safeFetch(supabase.from('messages').select('*').eq('conversation_id', conversationId).order('timestamp', { ascending: true }), []),
+    sendMessage: async (message: Omit<Message, 'id' | 'timestamp'>) => {
+      const { data, error } = await supabase.from('messages').insert(message).select().single();
+      if (error) throw error;
+      await supabase.from('conversations').update({ 
+        last_message: message.content, 
+        last_activity: new Date().toISOString() 
+      }).eq('id', message.conversation_id);
+      return data;
+    },
+    markAsRead: async (conversationId: string) => {
+      await supabase.from('conversations').update({ unread_count: 0 }).eq('id', conversationId);
     }
   },
 
@@ -119,13 +141,20 @@ export const ApiService = {
         if (error) throw error;
       } 
     },
-    delete: async (id: string) => supabase.from('tickets').delete().eq('id', id)
+    delete: async (id: string) => await supabase.from('tickets').delete().eq('id', id)
   },
 
   products: {
-    getAll: async () => await safeFetch(supabase.from('products').select('*').order('name'), []),
+    getAll: async (): Promise<Product[]> => {
+      const data = await safeFetch(supabase.from('products').select('*').order('name'), []);
+      // Normalisation des champs d'images (aliasing image_url -> image)
+      return (data as any[]).map(p => ({
+        ...p,
+        image: p.image || p.image_url || null
+      }));
+    },
     saveAll: async (products: Product[]) => { if (products.length > 0) await supabase.from('products').upsert(products); },
-    delete: async (id: string) => supabase.from('products').delete().eq('id', id)
+    delete: async (id: string) => await supabase.from('products').delete().eq('id', id)
   },
 
   customers: {
@@ -137,13 +166,26 @@ export const ApiService = {
         if (error) throw error;
       }
     },
-    delete: async (id: string) => supabase.from('customers').delete().eq('id', id)
+    delete: async (id: string) => await supabase.from('customers').delete().eq('id', id)
   },
 
   parts: {
     getAll: async () => await safeFetch(supabase.from('parts').select('*').order('name'), []),
     saveAll: async (parts: Part[]) => { if (parts.length > 0) await supabase.from('parts').upsert(parts); },
-    delete: async (id: string) => supabase.from('parts').delete().eq('id', id)
+    delete: async (id: string) => {
+      const { error } = await supabase.from('parts').delete().eq('id', id);
+      if (error) {
+        console.error("API DELETE PART ERROR:", error);
+        throw error;
+      }
+    },
+    deleteBulk: async (ids: string[]) => {
+      const { error } = await supabase.from('parts').delete().in('id', ids);
+      if (error) {
+        console.error("API DELETE BULK PARTS ERROR:", error);
+        throw error;
+      }
+    }
   },
 
   stockMovements: {
@@ -152,7 +194,14 @@ export const ApiService = {
   },
 
   technicians: {
-    getAll: async () => await safeFetch(supabase.from('technicians').select('*').order('name'), []),
+    getAll: async (): Promise<Technician[]> => {
+      const data = await safeFetch(supabase.from('technicians').select('*').order('name'), []);
+      // Normalisation des avatars (aliasing avatar_url -> avatar)
+      return (data as any[]).map(t => ({
+        ...t,
+        avatar: t.avatar || t.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}&background=1a73e8&color=ffffff`
+      }));
+    },
     saveAll: async (technicians: Technician[]) => { 
       if (technicians.length > 0) {
         const cleanedTechs = technicians.map(t => cleanObject(t, TECHNICIAN_COLUMNS));
@@ -160,13 +209,13 @@ export const ApiService = {
         if (error) throw error;
       }
     },
-    delete: async (id: string) => supabase.from('technicians').delete().eq('id', id)
+    delete: async (id: string) => await supabase.from('technicians').delete().eq('id', id)
   },
 
   warranties: {
     getAll: async () => await safeFetch(supabase.from('warranties').select('*').order('purchaseDate', { ascending: false }), []),
     saveAll: async (warranties: WarrantyRecord[]) => { if (warranties.length > 0) await supabase.from('warranties').upsert(warranties); },
-    delete: async (id: string) => supabase.from('warranties').delete().eq('id', id)
+    delete: async (id: string) => await supabase.from('warranties').delete().eq('id', id)
   },
 
   users: {
@@ -180,7 +229,7 @@ export const ApiService = {
       }
       return data;
     },
-    delete: async (id: string) => supabase.from('users').delete().eq('id', id),
+    delete: async (id: string) => await supabase.from('users').delete().eq('id', id),
     logConnection: async (userId: string) => {
       return supabase.from('user_connections').insert({
         user_id: userId,

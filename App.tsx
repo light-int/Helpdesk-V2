@@ -1,6 +1,7 @@
 
 // @google/genai guidelines followed for service initialization and usage elsewhere.
 import React, { useState, createContext, useContext, useEffect, useCallback } from 'react';
+// Fix: Ensure standard imports for react-router-dom v6
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import md5 from 'md5';
 import Sidebar from './components/Sidebar';
@@ -21,12 +22,21 @@ import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
 import ChatWidget from './components/ChatWidget';
 import { 
-  X, AlertCircle, CheckCircle2, Info, AlertTriangle
+  X, AlertCircle, CheckCircle2, Info, AlertTriangle, BellRing
 } from 'lucide-react';
-import { Notification, UserProfile, Ticket, Product, Technician, Part, WarrantyRecord, Intervention, Customer, ShowroomConfig, SystemConfig, AuditLog, SyncMetrics, StrategicReport, StockMovement, UserRole, TicketCategory } from './types';
-import { PlazaDB, STORAGE_KEYS } from './services/db';
+import { 
+  Notification, UserProfile, Ticket, Product, Technician, 
+  Part, WarrantyRecord, Intervention, Customer, ShowroomConfig, 
+  SystemConfig, AuditLog, SyncMetrics, StrategicReport, StockMovement, 
+  UserRole, TicketCategory 
+} from './types';
+import { PlazaDB } from './services/db';
 import { ApiService } from './services/apiService';
-import { MOCK_TICKETS, MOCK_PRODUCTS, MOCK_CUSTOMERS, MOCK_PARTS, MOCK_USERS, MOCK_TECHNICIANS, MOCK_INTERVENTIONS, MOCK_WARRANTIES, MOCK_SHOWROOMS } from './constants';
+import { 
+  MOCK_TICKETS, MOCK_PRODUCTS, MOCK_CUSTOMERS, 
+  MOCK_PARTS, MOCK_TECHNICIANS, MOCK_INTERVENTIONS, 
+  MOCK_WARRANTIES, MOCK_SHOWROOMS 
+} from './constants';
 
 export const getGravatarUrl = (email?: string, size: number = 200) => {
   if (!email) return `https://ui-avatars.com/api/?name=User&background=1a73e8&color=ffffff&size=${size}`;
@@ -36,6 +46,10 @@ export const getGravatarUrl = (email?: string, size: number = 200) => {
 
 const DEFAULT_CONFIG: SystemConfig = {
   aiEnabled: true,
+  aiModel: 'flash',
+  aiAutoCategorization: true,
+  aiStrategicAudit: true,
+  aiChatbotEnabled: true,
   autoTranslate: false,
   sessionTimeout: 240,
   mfaRequired: false,
@@ -75,6 +89,8 @@ interface DataContextType {
   deleteTechnician: (id: string) => Promise<void>;
   parts: Part[];
   setParts: React.Dispatch<React.SetStateAction<Part[]>>;
+  deletePart: (id: string) => Promise<void>;
+  deletePartsBulk: (ids: string[]) => Promise<void>;
   stockMovements: StockMovement[];
   addStockMovement: (movement: Omit<StockMovement, 'id' | 'date'>) => Promise<void>;
   warranties: WarrantyRecord[];
@@ -168,6 +184,21 @@ const App: React.FC = () => {
     const id = Math.random().toString(36).substring(2, 9);
     const newNotif: Notification = { ...n, id, timestamp: new Date().toISOString(), read: false };
     setNotifications(prev => [newNotif, ...prev]);
+    
+    // Simulate push sound
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch(e) {}
+
     setTimeout(() => removeNotification(id), 6000);
   }, [removeNotification]);
 
@@ -175,22 +206,45 @@ const App: React.FC = () => {
     setIsSyncing(true);
     setSyncMetrics(prev => ({ ...prev, status: 'SYNCING' }));
     const startTime = performance.now();
+    
+    // Helper to call API safely and ignore failures on missing tables
+    const wrap = async <T,>(promise: Promise<T>, fallback: T): Promise<T> => {
+      try { return await promise; } catch (e) { 
+        console.warn("Table sync skipped:", e); 
+        return fallback; 
+      }
+    };
+
     try {
       const [t, p, tech, pt, mov, w, c, b, s, u, r, remoteConfig] = await Promise.all([
-        ApiService.tickets.getAll(), ApiService.products.getAll(), ApiService.technicians.getAll(),
-        ApiService.parts.getAll(), ApiService.stockMovements.getAll(), ApiService.warranties.getAll(), ApiService.customers.getAll(),
-        ApiService.brands.getAll(), ApiService.showrooms.getAll(), ApiService.users.getAll(),
-        ApiService.reports.getAll(), ApiService.config.get()
+        wrap(ApiService.tickets.getAll(), []), 
+        wrap(ApiService.products.getAll(), []), 
+        wrap(ApiService.technicians.getAll(), []),
+        wrap(ApiService.parts.getAll(), []), 
+        wrap(ApiService.stockMovements.getAll(), []), 
+        wrap(ApiService.warranties.getAll(), []), 
+        wrap(ApiService.customers.getAll(), []),
+        wrap(ApiService.brands.getAll(), []), 
+        wrap(ApiService.showrooms.getAll(), []), 
+        wrap(ApiService.users.getAll(), []),
+        wrap(ApiService.reports.getAll(), []), 
+        wrap(ApiService.config.get(), null)
       ]);
+      
       const endTime = performance.now();
       setTickets(t); setProducts(p); setTechnicians(tech); setParts(pt); setStockMovements(mov); setWarranties(w); setCustomers(c); setBrands(b); setShowrooms(s); setUsers(u); setReports(r);
       if (remoteConfig) setConfig(remoteConfig);
+      
       setSyncMetrics({ lastSuccess: new Date().toISOString(), latency: Math.round(endTime - startTime), status: 'CONNECTED', errorCount: 0 });
       setIsCloudConnected(true);
     } catch (error) {
+      console.error("Critical Sync Error:", error);
       setSyncMetrics(prev => ({ ...prev, status: 'ERROR', errorCount: prev.errorCount + 1 }));
       setIsCloudConnected(false);
-    } finally { setIsSyncing(false); setIsLoading(false); }
+    } finally { 
+      setIsSyncing(false); 
+      setIsLoading(false); 
+    }
   };
 
   const login = async (user: UserProfile) => { 
@@ -219,6 +273,7 @@ const App: React.FC = () => {
   };
 
   const deleteTicket = async (id: string) => {
+    setTickets(prev => prev.filter(t => t.id !== id));
     await ApiService.tickets.delete(id);
     await refreshAll();
   };
@@ -234,6 +289,7 @@ const App: React.FC = () => {
   };
 
   const deleteProduct = async (id: string) => {
+    setProducts(prev => prev.filter(p => p.id !== id));
     await ApiService.products.delete(id);
     await refreshAll();
   };
@@ -244,8 +300,43 @@ const App: React.FC = () => {
   };
 
   const deleteTechnician = async (id: string) => {
+    setTechnicians(prev => prev.filter(t => t.id !== id));
     await ApiService.technicians.delete(id);
     await refreshAll();
+  };
+
+  const deletePart = async (id: string) => {
+    const originalParts = [...parts];
+    setParts(prev => prev.filter(p => p.id !== id));
+    try {
+      await ApiService.parts.delete(id);
+      await refreshAll();
+    } catch (err: any) {
+      setParts(originalParts); // Rollback
+      addNotification({ 
+        title: 'Erreur Serveur', 
+        message: err.message || 'Impossible de supprimer cette pièce. Vérifiez les dépendances.', 
+        type: 'error' 
+      });
+      throw err;
+    }
+  };
+
+  const deletePartsBulk = async (ids: string[]) => {
+    const originalParts = [...parts];
+    setParts(prev => prev.filter(p => !ids.includes(p.id)));
+    try {
+      await ApiService.parts.deleteBulk(ids);
+      await refreshAll();
+    } catch (err: any) {
+      setParts(originalParts); // Rollback
+      addNotification({ 
+        title: 'Erreur de Masse', 
+        message: 'Échec de la suppression groupée sur le Cloud.', 
+        type: 'error' 
+      });
+      throw err;
+    }
   };
 
   const addStockMovement = async (movement: Omit<StockMovement, 'id' | 'date'>) => {
@@ -270,6 +361,7 @@ const App: React.FC = () => {
   };
 
   const deleteCustomer = async (id: string) => {
+    setCustomers(prev => prev.filter(c => c.id !== id));
     await ApiService.customers.delete(id);
     await refreshAll();
   };
@@ -280,6 +372,7 @@ const App: React.FC = () => {
   };
 
   const deleteShowroom = async (id: string) => {
+    setShowrooms(prev => prev.filter(s => s.id !== id));
     await ApiService.showrooms.delete(id);
     await refreshAll();
   };
@@ -316,6 +409,7 @@ const App: React.FC = () => {
   };
 
   const deleteUser = async (id: string) => {
+    setUsers(prev => prev.filter(u => u.id !== id));
     await ApiService.users.delete(id);
     await ApiService.technicians.delete(id);
     await refreshAll();
@@ -327,6 +421,7 @@ const App: React.FC = () => {
   };
 
   const deleteReport = async (id: string) => {
+    setReports(prev => prev.filter(r => r.id !== id));
     await ApiService.reports.delete(id);
     await refreshAll();
   };
@@ -378,7 +473,7 @@ const App: React.FC = () => {
           tickets, setTickets, saveTicket, deleteTicket,
           products, setProducts, saveProduct, saveProductsBulk, deleteProduct,
           technicians, setTechnicians, saveTechnician, deleteTechnician,
-          parts, setParts, stockMovements, addStockMovement,
+          parts, setParts, deletePart, deletePartsBulk, stockMovements, addStockMovement,
           warranties, setWarranties, saveWarranty,
           interventions: MOCK_INTERVENTIONS, customers, setCustomers, saveCustomer, deleteCustomer,
           brands, setBrands, showrooms, setShowrooms, saveShowroom, deleteShowroom,
@@ -392,7 +487,7 @@ const App: React.FC = () => {
               {currentUser ? (
                 <>
                   <Sidebar />
-                  <main className="flex-1 ml-64 p-8 min-h-screen relative">
+                  <main className="flex-1 ml-64 p-8 min-h-screen relative overflow-x-hidden">
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/inbox" element={<ProtectedRoute roles={['ADMIN', 'MANAGER', 'AGENT']}><Inbox /></ProtectedRoute>} />
@@ -422,31 +517,32 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 w-80 pointer-events-none no-print">
+              {/* PUSH NOTIFICATIONS CENTER */}
+              <div className="fixed top-8 right-8 z-[9999] flex flex-col gap-4 w-80 pointer-events-none no-print">
                 {notifications.map((n) => (
                   <div 
                     key={n.id} 
-                    className="google-card p-4 flex gap-3 shadow-2xl animate-in slide-in-from-right-8 pointer-events-auto border-l-4 bg-white"
+                    className="glass-notif p-5 flex gap-4 shadow-[0_30px_60px_rgba(0,0,0,0.15)] animate-push-notif pointer-events-auto rounded-3xl border-l-[8px]"
                     style={{ 
                       borderColor: n.type === 'success' ? '#34a853' : 
                                   n.type === 'error' ? '#ea4335' : 
                                   n.type === 'warning' ? '#fbbc04' : '#1a73e8' 
                     }}
                   >
-                    <div style={{ color: n.type === 'success' ? '#34a853' : 
+                    <div className="mt-1" style={{ color: n.type === 'success' ? '#34a853' : 
                                         n.type === 'error' ? '#ea4335' : 
                                         n.type === 'warning' ? '#fbbc04' : '#1a73e8' }}>
-                      {n.type === 'success' && <CheckCircle2 size={20} />}
-                      {n.type === 'error' && <AlertCircle size={20} />}
-                      {n.type === 'warning' && <AlertTriangle size={20} />}
-                      {n.type === 'info' && <Info size={20} />}
+                      {n.type === 'success' && <CheckCircle2 size={24} />}
+                      {n.type === 'error' && <AlertCircle size={24} />}
+                      {n.type === 'warning' && <AlertTriangle size={24} />}
+                      {n.type === 'info' && <BellRing size={24} className="animate-bounce" />}
                     </div>
                     <div className="flex-1">
-                       <p className="text-xs font-bold text-[#3c4043]">{n.title}</p>
-                       <p className="text-[10px] text-[#5f6368] mt-0.5">{n.message}</p>
+                       <p className="text-sm font-black text-[#202124] tracking-tight">{n.title}</p>
+                       <p className="text-[11px] text-[#5f6368] mt-1 font-semibold leading-relaxed">{n.message}</p>
                     </div>
-                    <button onClick={() => removeNotification(n.id)} className="text-[#dadce0] hover:text-[#5f6368] transition-colors h-fit">
-                      <X size={14} />
+                    <button onClick={() => removeNotification(n.id)} className="text-[#dadce0] hover:text-[#3c4043] transition-colors h-fit p-1">
+                      <X size={16} />
                     </button>
                   </div>
                 ))}

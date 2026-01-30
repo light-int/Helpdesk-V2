@@ -11,7 +11,7 @@ import { Ticket, UsedPart, InterventionReport } from '../types';
 import Modal from '../components/Modal';
 
 const MaintenanceLog: React.FC = () => {
-  const { tickets, technicians, isLoading, refreshAll, isSyncing, parts, saveTicket } = useData();
+  const { tickets, technicians, isLoading, refreshAll, isSyncing, parts, saveTicket, addStockMovement } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,7 +33,7 @@ const MaintenanceLog: React.FC = () => {
 
   const maintenance = useMemo(() => {
     return tickets.filter(t => 
-      (t.category === 'Maintenance' || t.category === 'Installation') &&
+      (t.category === 'Maintenance' || t.category === 'Installation' || t.category === 'SAV') &&
       (currentUser?.role === 'TECHNICIAN' ? t.assignedTechnicianId === currentUser.id : true) &&
       (t.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
        t.id.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -48,6 +48,14 @@ const MaintenanceLog: React.FC = () => {
       case 'En cours': return 'bg-amber-100 text-amber-700 border-amber-200';
       default: return 'bg-blue-100 text-blue-700 border-blue-200';
     }
+  };
+
+  const formatDuration = (ms?: number) => {
+    if (!ms) return null;
+    const mins = Math.floor(ms / 60000);
+    const hours = Math.floor(mins / 60);
+    const rMins = mins % 60;
+    return hours > 0 ? `${hours}h ${rMins}min` : `${rMins}min`;
   };
 
   const getEquipmentStatusColor = (status?: string) => {
@@ -96,18 +104,28 @@ const MaintenanceLog: React.FC = () => {
   const handleSaveIntervention = async () => {
     if (!selectedMaintenance) return;
 
+    // Calcul du nouveau total des pièces
     const partsTotal = usedParts.reduce((sum, p) => sum + (p.unitPrice * p.quantity), 0);
+    
+    // CALCUL DE LA DURÉE
+    const now = new Date();
+    let durationMs = selectedMaintenance.interventionReport?.durationMs || 0;
+    if (selectedMaintenance.interventionReport?.startedAt) {
+       durationMs = now.getTime() - new Date(selectedMaintenance.interventionReport.startedAt).getTime();
+    }
+
     const updatedTicket: Ticket = {
       ...selectedMaintenance,
       status: 'En attente d\'approbation',
-      lastUpdate: new Date().toISOString(),
+      lastUpdate: now.toISOString(),
       interventionReport: {
         ...selectedMaintenance.interventionReport,
         actionsTaken,
         partsUsed: usedParts,
         recommendations,
         equipmentStatus,
-        performedAt: new Date().toISOString()
+        performedAt: now.toISOString(),
+        durationMs
       },
       financials: {
         ...selectedMaintenance.financials!,
@@ -117,12 +135,39 @@ const MaintenanceLog: React.FC = () => {
     };
 
     try {
+      // DÉCRÉMENTATION DU STOCK
+      const oldParts = selectedMaintenance.interventionReport?.partsUsed || [];
+      for (const p of usedParts) {
+        if (!p.id) continue;
+        const previouslySubtracted = oldParts.find(op => op.id === p.id)?.quantity || 0;
+        const delta = p.quantity - previouslySubtracted;
+        if (delta > 0) {
+          await addStockMovement({
+            partId: p.id,
+            partName: p.name,
+            quantity: delta,
+            type: 'OUT',
+            reason: `Traitement Ticket #${selectedMaintenance.id}`,
+            performedBy: currentUser?.name || 'Technicien Horizon',
+            ticketId: selectedMaintenance.id
+          });
+        }
+      }
+
       await saveTicket(updatedTicket);
       setIsInterventionModalOpen(false);
       setSelectedMaintenance(updatedTicket);
-      addNotification({ title: 'Rapport soumis', message: 'Le dossier est maintenant en attente de validation manager.', type: 'info' });
+      addNotification({ 
+        title: 'Rapport technique clos', 
+        message: `Durée calculée : ${formatDuration(durationMs)}. En attente de validation manager.`, 
+        type: 'success' 
+      });
     } catch (err) {
-      console.error(err);
+      addNotification({ 
+        title: 'Erreur', 
+        message: 'Échec de la mise à jour du dossier technique.', 
+        type: 'error' 
+      });
     }
   };
 
@@ -167,7 +212,7 @@ const MaintenanceLog: React.FC = () => {
       {/* DASHBOARD MINI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          <div className="google-card p-6 border-b-4 border-[#1a73e8]">
-            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">Dossiers Maintenance</p>
+            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">Dossiers SAV/Maintenance</p>
             <h3 className="text-2xl font-bold text-[#3c4043] mt-2">{maintenance.length}</h3>
          </div>
          <div className="google-card p-6 border-b-4 border-[#a142f4]">
@@ -176,26 +221,26 @@ const MaintenanceLog: React.FC = () => {
               {maintenance.filter(m => m.status === 'En attente d\'approbation').length}
             </h3>
          </div>
-         <div className="google-card p-6 border-b-4 border-[#fbbc04]">
-            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">Disponibilité Expert</p>
+         <div className="google-card p-6 border-b-4 border-[#34a853]">
+            <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">Productivité Technique</p>
             <h3 className="text-2xl font-bold text-[#3c4043] mt-2">En ligne</h3>
          </div>
       </div>
 
       <div className="google-card overflow-hidden flex-1 flex flex-col">
         <div className="px-6 py-4 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa]">
-           <h2 className="text-xs font-black text-[#5f6368] uppercase tracking-widest">Registre des Interventions</h2>
+           <h2 className="text-xs font-black text-[#5f6368] uppercase tracking-widest">Registre des Interventions Terrain</h2>
            <button className="text-[#5f6368] hover:bg-[#e8eaed] p-2 rounded-full"><Filter size={18} /></button>
         </div>
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 custom-scrollbar">
           <table className="w-full text-left">
             <thead className="sticky top-0 bg-white z-10 border-b border-[#dadce0]">
               <tr className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">
                 <th className="px-6 py-4">Dossier #</th>
                 <th className="px-6 py-4">Client & Showroom</th>
                 <th className="px-6 py-4">Technicien Assigné</th>
+                <th className="px-6 py-4 text-center">Durée</th>
                 <th className="px-6 py-4 text-center">État</th>
-                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#dadce0]">
@@ -228,16 +273,14 @@ const MaintenanceLog: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-5 text-center">
+                       <span className="text-xs font-black text-[#5f6368]">
+                         {t.interventionReport?.durationMs ? formatDuration(t.interventionReport.durationMs) : '--'}
+                       </span>
+                    </td>
+                    <td className="px-6 py-5 text-center">
                        <span className={`px-2 py-1 rounded border text-[10px] font-black uppercase ${getStatusColor(t.status)}`}>
                          {t.status}
                        </span>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex justify-end gap-1">
-                         <button className="p-2 text-[#5f6368] hover:bg-[#e8f0fe] hover:text-[#1a73e8] rounded-full transition-all">
-                           <ArrowUpRight size={18}/>
-                         </button>
-                      </div>
                     </td>
                   </tr>
                 );
@@ -311,13 +354,13 @@ const MaintenanceLog: React.FC = () => {
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar pb-32">
               
-              {/* Workflow Alert for Manager */}
-              {selectedMaintenance.status === 'En attente d\'approbation' && currentUser?.role !== 'TECHNICIAN' && (
-                <div className="p-4 bg-purple-50 border border-purple-100 rounded-2xl flex items-center gap-4 animate-pulse">
-                   <ShieldQuestion className="text-purple-600" size={28} />
+              {/* Chrono Alert */}
+              {selectedMaintenance.status === 'En cours' && (
+                <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-4 animate-pulse">
+                   <Clock className="text-amber-600" size={28} />
                    <div>
-                      <p className="text-xs font-black text-purple-700 uppercase tracking-widest">Action requise Manager</p>
-                      <p className="text-[10px] text-purple-600 font-medium">Le rapport technique est prêt. Veuillez valider la clôture administrative.</p>
+                      <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Intervention en cours</p>
+                      <p className="text-[10px] text-amber-600 font-medium italic">L'expert a activé le chronomètre technique.</p>
                    </div>
                 </div>
               )}
@@ -332,6 +375,12 @@ const MaintenanceLog: React.FC = () => {
                         <p className="text-sm font-black uppercase">{selectedMaintenance.interventionReport.equipmentStatus}</p>
                       </div>
                    </div>
+                   {selectedMaintenance.interventionReport.durationMs && (
+                      <div className="text-right">
+                         <p className="text-[9px] font-black uppercase opacity-70">Temps passé</p>
+                         <p className="text-xs font-black">{formatDuration(selectedMaintenance.interventionReport.durationMs)}</p>
+                      </div>
+                   )}
                 </div>
               )}
 
@@ -342,11 +391,11 @@ const MaintenanceLog: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-[#f8f9fa] border border-[#dadce0] rounded-2xl">
-                    <p className="text-[9px] font-black text-[#5f6368] uppercase mb-1">Date Planifiée</p>
-                    <p className="text-xs font-bold text-[#3c4043]">{formatDate(selectedMaintenance.createdAt)}</p>
+                    <p className="text-[9px] font-black text-[#5f6368] uppercase mb-1">Démarrage expert</p>
+                    <p className="text-xs font-bold text-[#3c4043]">{selectedMaintenance.interventionReport?.startedAt ? formatDate(selectedMaintenance.interventionReport.startedAt) : '--'}</p>
                   </div>
                   <div className="p-4 bg-[#f0f4ff] border border-[#d2e3fc] rounded-2xl">
-                    <p className="text-[9px] font-black text-[#1a73e8] uppercase mb-1">Date Réalisée</p>
+                    <p className="text-[9px] font-black text-[#1a73e8] uppercase mb-1">Clôture technique</p>
                     <p className="text-xs font-bold text-[#3c4043]">{selectedMaintenance.interventionReport?.performedAt ? formatDate(selectedMaintenance.interventionReport.performedAt) : '--'}</p>
                   </div>
                 </div>
@@ -383,7 +432,7 @@ const MaintenanceLog: React.FC = () => {
                 </div>
               </section>
 
-              {/* Technician Info - DISABLED IF CLOSED */}
+              {/* Technician Info */}
               <section className="space-y-4">
                 <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
                   <User size={16} /> Expert en charge
@@ -415,7 +464,7 @@ const MaintenanceLog: React.FC = () => {
                 </div>
               </section>
 
-              {/* Intervention History - VISIBLE SECTION - DISABLED IF CLOSED */}
+              {/* Intervention History */}
               <section className="space-y-4">
                 <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
                   <History size={16} /> Rapport d'Intervention Technique
@@ -497,7 +546,7 @@ const MaintenanceLog: React.FC = () => {
               </section>
             </div>
 
-            {/* Actions Footer - DISABLED IF CLOSED */}
+            {/* Actions Footer */}
             <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-[#dadce0] bg-white">
               {selectedMaintenance.status !== 'Fermé' ? (
                 <button 
@@ -524,6 +573,17 @@ const MaintenanceLog: React.FC = () => {
         size="lg"
       >
         <div className="space-y-8">
+           {/* Info Temps au rapport */}
+           <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2 text-blue-700">
+                 <Clock size={18} />
+                 <span className="text-xs font-black uppercase tracking-widest">Chronographe technique</span>
+              </div>
+              <span className="text-sm font-black text-blue-900">
+                 {selectedMaintenance?.interventionReport?.startedAt ? `Temps de travail : ${formatDuration(new Date().getTime() - new Date(selectedMaintenance.interventionReport.startedAt).getTime())}` : 'Temps non chronométré'}
+              </span>
+           </div>
+
            {/* Section État du Matériel */}
            <section className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-[#3c4043] flex items-center gap-2">

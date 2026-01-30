@@ -11,6 +11,53 @@ export interface StrategicReport {
   statsSnapshot?: any;
 }
 
+export interface SystemConfig {
+  aiEnabled: boolean;
+  aiModel: 'flash' | 'pro';
+  aiAutoCategorization: boolean;
+  aiStrategicAudit: boolean;
+  aiChatbotEnabled: boolean;
+  autoTranslate: boolean;
+  sessionTimeout: number; 
+  mfaRequired: boolean;
+  syncFrequency: 'realtime' | 'manual' | 'hourly';
+  maintenanceMode: boolean;
+  passwordComplexity: 'low' | 'medium' | 'high';
+}
+
+export interface IntegrationConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  apiKey?: string;
+  webhookUrl?: string;
+  settings: any;
+  lastSync?: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_type: 'client' | 'agent' | 'system';
+  sender_name?: string;
+  content: string;
+  status: 'sent' | 'delivered' | 'read';
+  timestamp: string;
+  metadata?: any;
+}
+
+export interface Conversation {
+  id: string;
+  customer_id?: string;
+  customer_name: string;
+  customer_avatar?: string;
+  source: 'WhatsApp' | 'Messenger' | 'Email';
+  last_message: string;
+  unread_count: number;
+  status: 'open' | 'resolved' | 'archived';
+  last_activity: string;
+}
+
 export interface DashboardWidget {
   id: string;
   label: string;
@@ -33,7 +80,7 @@ export interface UserProfile {
   avatar: string;
   status?: 'Actif' | 'Inactif' | 'En en attente';
   email?: string;
-  phone?: string; // Added for sync with tech profile
+  phone?: string; 
   password?: string;
   preferences?: UserPreferences;
   lastLogin?: string;
@@ -46,16 +93,6 @@ export interface SyncMetrics {
   latency: number | null;
   status: 'CONNECTED' | 'DISCONNECTED' | 'SYNCING' | 'ERROR';
   errorCount: number;
-}
-
-export interface SystemConfig {
-  aiEnabled: boolean;
-  autoTranslate: boolean;
-  sessionTimeout: number; // en minutes
-  mfaRequired: boolean;
-  syncFrequency: 'realtime' | 'manual' | 'hourly';
-  maintenanceMode: boolean;
-  passwordComplexity: 'low' | 'medium' | 'high';
 }
 
 export type Showroom = string;
@@ -122,18 +159,6 @@ export interface FinancialDetail {
 export type TicketStatus = 'Nouveau' | 'En cours' | 'En attente d\'approbation' | 'Résolu' | 'Fermé';
 export type TicketCategory = 'Livraison' | 'Installation' | 'SAV' | 'Remboursement' | 'Information' | 'Maintenance' | 'Climatisation' | 'Électronique';
 
-export interface InstallationStep {
-  id: string;
-  label: string;
-  completed: boolean;
-}
-
-export interface MaintenanceStep {
-  id: string;
-  label: string;
-  completed: boolean;
-}
-
 export interface UsedPart {
   id?: string;
   name: string;
@@ -144,57 +169,11 @@ export interface UsedPart {
 export interface InterventionReport {
   equipmentStatus?: 'Excellent' | 'Bon' | 'Critique' | 'À remplacer';
   performedAt?: string;
+  startedAt?: string;
+  durationMs?: number;
   recommendations?: string;
   actionsTaken?: string[];
   partsUsed?: UsedPart[];
-}
-
-export interface ScheduleItem {
-  id: string;
-  title: string;
-  date: string;
-  type: 'Intervention' | 'Congé' | 'Formation' | 'Réunion';
-}
-
-export interface Intervention {
-  id: string;
-  technicianId: string;
-  technicianName: string;
-  zone: string;
-  competence: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  partsUsed: string[];
-  cost: number;
-  customerRating: number;
-}
-
-export interface WarrantyRecord {
-  id: string;
-  product: string;
-  brand: string;
-  serialNumber: string;
-  customerName: string;
-  purchaseDate: string;
-  durationMonths: number;
-  expiryDate: string;
-  isExtensionAvailable: boolean;
-}
-
-export interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  type: 'Particulier' | 'Entreprise';
-  address: string;
-  status: string;
-  totalSpent: number;
-  ticketsCount: number;
-  lastVisit: string;
-  companyName?: string;
-  isArchived?: boolean;
 }
 
 export interface Technician {
@@ -211,7 +190,6 @@ export interface Technician {
   status: 'Disponible' | 'En intervention' | 'Hors ligne';
   nps?: number;
   performanceHistory?: { day: string, resolved: number }[];
-  schedule?: ScheduleItem[];
   firstFixRate?: number;
   showroom?: string;
 }
@@ -239,10 +217,48 @@ export interface Ticket {
   description: string;
   location?: string;
   financials?: FinancialDetail;
-  installationChecklist?: InstallationStep[];
-  maintenanceChecklist?: MaintenanceStep[];
-  maintenanceFrequency?: 'Mensuelle' | 'Trimestrielle' | 'Annuelle';
   interventionReport?: InterventionReport;
+  isArchived?: boolean;
+}
+
+export interface WarrantyRecord {
+  id: string;
+  product: string;
+  brand: string;
+  serialNumber: string;
+  customerName: string;
+  purchaseDate: string;
+  durationMonths: number;
+  expiryDate: string;
+  isExtensionAvailable?: boolean;
+}
+
+export interface Intervention {
+  id: string;
+  technicianId: string;
+  technicianName: string;
+  zone: string;
+  competence: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  partsUsed: string[];
+  cost: number;
+  customerRating: number;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  type: 'Particulier' | 'Entreprise';
+  address: string;
+  status: string;
+  totalSpent: number;
+  ticketsCount: number;
+  lastVisit: string;
+  companyName?: string;
   isArchived?: boolean;
 }
 

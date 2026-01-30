@@ -1,21 +1,25 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// We do not initialize at the top level to avoid crashing the app on boot 
-// if process.env.API_KEY is not yet defined by the build system.
+/**
+ * Vérifie si le moteur IA est prêt à l'emploi.
+ * L'application ne doit pas planter si cette fonction retourne false.
+ */
+export const isAiOperational = () => {
+  const key = process.env.API_KEY;
+  return !!key && key !== 'undefined' && key !== 'votre_cle_gemini_ici' && key.length > 10;
+};
 
-export const chatWithAI = async (message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[]) => {
+export const chatWithAI = async (message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], modelType: 'flash' | 'pro' = 'flash') => {
   try {
-    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
-      throw new Error("Clé API Gemini manquante.");
+    if (!isAiOperational()) {
+      return "L'IA Horizon est actuellement en mode repos (Clé API non configurée). Vous pouvez toujours utiliser toutes les fonctions de gestion SAV manuellement.";
     }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...history.map(h => ({ role: (h.role === 'user' ? 'user' : 'model') as any, parts: h.parts })),
-        { role: 'user', parts: [{ text: message }] }
-      ],
+    
+    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const chat = ai.chats.create({
+      model: modelName,
       config: {
         systemInstruction: `Tu es l'assistant IA 2026 de Royal Plaza à Libreville, Gabon. 
         Tu aides les clients et le personnel avec :
@@ -26,20 +30,28 @@ export const chatWithAI = async (message: string, history: { role: 'user' | 'mod
         Réponds de manière professionnelle, chaleureuse et courte en français.`,
         temperature: 0.7,
       },
+      history: history.map(h => ({
+        role: h.role,
+        parts: h.parts
+      }))
     });
+
+    const response = await chat.sendMessage({ message: message });
     return response.text;
   } catch (error) {
     console.error("AI Chat Error:", error);
-    return "L'assistant IA est actuellement indisponible (Clé API manquante ou invalide).";
+    return "Connexion interrompue avec le moteur IA. Veuillez vérifier votre connexion internet.";
   }
 };
 
-export const analyzeTicketDescription = async (description: string) => {
+export const analyzeTicketDescription = async (description: string, modelType: 'flash' | 'pro' = 'flash') => {
+  if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle requise' };
+
   try {
-    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') return null;
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: modelName,
       contents: `Analyse ce ticket de SAV et suggère une catégorie (Livraison, Installation, SAV, Remboursement) et une priorité (Basse, Moyenne, Haute, Urgent). Réponds en JSON. Ticket: ${description}`,
       config: {
         responseMimeType: "application/json",
@@ -60,14 +72,17 @@ export const analyzeTicketDescription = async (description: string) => {
   }
 };
 
-export const generateStrategicReport = async (data: any) => {
+export const generateStrategicReport = async (data: any, modelType: 'flash' | 'pro' = 'pro') => {
+  if (!isAiOperational()) {
+    return "# AUDIT INDISPONIBLE\n\nLe moteur d'intelligence stratégique nécessite une clé API active pour compiler ces données.";
+  }
+
   try {
-    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
-      return "Échec de l'audit : Clé API Gemini non configurée dans l'environnement de déploiement.";
-    }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Les rapports utilisent toujours Pro si disponible, sinon Flash
+    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: modelName,
       contents: `Génère un rapport stratégique exécutif pour Royal Plaza Gabon basé sur ces indicateurs : ${JSON.stringify(data)}. 
       
       STRUCTURE DE TEXTE REQUISE (Format Office) :
@@ -99,9 +114,10 @@ export const generateStrategicReport = async (data: any) => {
 };
 
 export const translateContent = async (text: string, targetLang: 'EN' | 'FR') => {
+  if (!isAiOperational()) return text;
+
   try {
-    if (!process.env.API_KEY || process.env.API_KEY === 'undefined') return text;
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Traduis le texte suivant en ${targetLang === 'EN' ? 'Anglais' : 'Français'}. 

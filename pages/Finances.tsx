@@ -5,15 +5,20 @@ import {
   PieChart as PieIcon, BarChart3, Wallet, Map, Calendar,
   ClipboardList, Award, CheckCircle2, User, ChevronRight, 
   FileText, Loader2, FileDown, History, Trash2, CalendarDays, Eye,
-  Package, Tag, Hash, Info, Briefcase
+  Package, Tag, Hash, Info, Briefcase, ArrowUpRight, LayoutDashboard,
+  Layers, ShoppingCart, AlertCircle
 } from 'lucide-react';
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as ReChartsBarChart, Bar, Cell } from 'recharts';
+import { 
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
+  BarChart as ReChartsBarChart, Bar, Cell, PieChart, Pie, AreaChart, Area 
+} from 'recharts';
 import { useData, useNotifications } from '../App';
-import { generateStrategicReport } from '../services/geminiService';
+import { generateStrategicReport, isAiOperational } from '../services/geminiService';
 import { generatePDFFromElement } from '../services/pdfService';
 import { marked } from 'marked';
 import { StrategicReport } from '../types';
 import Modal from '../components/Modal';
+import Drawer from '../components/Drawer';
 
 export default function Finances() {
   const { tickets: allTickets, showrooms, technicians, reports, saveReport, deleteReport, refreshAll } = useData();
@@ -27,6 +32,8 @@ export default function Finances() {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
   
+  const aiReady = isAiOperational();
+
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -93,15 +100,23 @@ export default function Finances() {
       };
     }).sort((a, b) => b.revenue - a.revenue);
 
+    const trendData = financialTickets.reduce((acc: any[], t) => {
+      const day = t.createdAt.split('T')[0];
+      const existing = acc.find(item => item.day === day);
+      if (existing) {
+        existing.revenue += (t.financials?.grandTotal || 0);
+        existing.margin += (t.financials?.netMargin || 0);
+      } else {
+        acc.push({ day, revenue: (t.financials?.grandTotal || 0), margin: (t.financials?.netMargin || 0) });
+      }
+      return acc;
+    }, []).sort((a, b) => a.day.localeCompare(b.day));
+
     return { 
-      totalRev, 
-      totalMargin, 
-      count: financialTickets.length, 
+      totalRev, totalMargin, count: financialTickets.length, 
       totalInterventions: filteredByDate.length,
-      breakdownData, 
-      showroomFinancials, 
-      technicianFinancials,
-      dateRange: { start: startDate, end: endDate }
+      breakdownData, showroomFinancials, technicianFinancials,
+      trendData, dateRange: { start: startDate, end: endDate }
     };
   }, [allTickets, showrooms, technicians, startDate, endDate]);
 
@@ -111,31 +126,23 @@ export default function Finances() {
   }, [selectedTechId, stats.technicianFinancials]);
 
   const handleStrategicReport = async () => {
+    if (!aiReady) {
+      addNotification({ title: 'IA Inactive', message: 'Le service d\'audit nécessite une configuration Cloud.', type: 'warning' });
+      return;
+    }
     setIsGenerating(true);
-    addNotification({ title: 'Génération de l\'audit', message: 'Compilation des flux financiers et techniques...', type: 'info' });
+    addNotification({ title: 'Génération de l\'audit', message: 'Compilation des flux financiers...', type: 'info' });
     
     const aiPayload = {
       periode: { debut: startDate, fin: endDate },
-      global: { 
-        ca_total: stats.totalRev, 
-        marge_totale: stats.totalMargin, 
-        volume_global: stats.totalInterventions,
-        taux_marge_global: stats.totalRev > 0 ? (stats.totalMargin / stats.totalRev) * 100 : 0
-      },
-      experts: stats.technicianFinancials.map(t => ({
-        nom: t.name,
-        ca: t.revenue,
-        marge: t.margin,
-        volume: t.tickets,
-        clotures: t.closedTickets,
-        rendement: t.marginRate
-      })),
+      global: { ca_total: stats.totalRev, marge_totale: stats.totalMargin },
+      experts: stats.technicianFinancials.map(t => ({ nom: t.name, ca: t.revenue, marge: t.margin })),
       showrooms: stats.showroomFinancials
     };
 
     try {
       const reportMarkdown = await generateStrategicReport(aiPayload);
-      const htmlContent = marked.parse ? marked.parse(reportMarkdown || '') : (marked as any)(reportMarkdown || '');
+      const htmlContent = marked.parse(reportMarkdown || '');
       
       const newReport: StrategicReport = {
         id: `REP-${Date.now()}`,
@@ -148,35 +155,25 @@ export default function Finances() {
       };
       
       await saveReport(newReport);
-      
       setAiReportHtml(htmlContent as string);
       setCurrentReportMeta({ start: startDate, end: endDate });
       setShowAiModal(true);
-      addNotification({ title: 'Rapport Archivé', message: 'L\'audit a été sauvegardé dans l\'historique cloud.', type: 'success' });
+      addNotification({ title: 'Rapport Archivé', message: 'Audit sauvegardé dans le cloud.', type: 'success' });
     } catch (error) {
-      console.error(error);
-      addNotification({ title: 'Erreur IA', message: 'Impossible de générer le rapport analytique.', type: 'error' });
+      addNotification({ title: 'Erreur IA', message: 'Échec de la génération analytique.', type: 'error' });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleViewArchivedReport = (report: StrategicReport) => {
-    setAiReportHtml(report.content);
-    setCurrentReportMeta({ start: report.startDate, end: report.endDate });
-    setShowAiModal(true);
-  };
-
   const handleDownloadPDF = async () => {
     setIsExportingPDF(true);
-    addNotification({ title: 'Impression PDF', message: 'Finalisation du document Office...', type: 'info' });
-    
+    addNotification({ title: 'Export PDF', message: 'Préparation du document...', type: 'info' });
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await generatePDFFromElement('strategic-audit-content', `Audit_Plaza_Horizon_${startDate}.pdf`);
-      addNotification({ title: 'Succès', message: 'Rapport exporté au format A4.', type: 'success' });
-    } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la conversion PDF.', type: 'error' });
+      await generatePDFFromElement('strategic-audit-content', `Audit_Plaza_${startDate}_${endDate}.pdf`);
+      addNotification({ title: 'Succès', message: 'Rapport téléchargé.', type: 'success' });
+    } catch (error) {
+      addNotification({ title: 'Erreur', message: 'Échec de la génération PDF.', type: 'error' });
     } finally {
       setIsExportingPDF(false);
     }
@@ -184,510 +181,303 @@ export default function Finances() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20 relative">
-      
-      {(isGenerating || isExportingPDF) && (
-        <div className="fixed inset-0 bg-[#202124]/70 backdrop-blur-md z-[10000] flex flex-col items-center justify-center cursor-wait">
-          <div className="bg-white p-12 rounded-[40px] shadow-2xl flex flex-col items-center gap-8 max-w-md text-center">
-             <div className="relative">
-                <div className="relative bg-white p-6 rounded-full shadow-lg border border-[#f1f3f4]">
-                  {isExportingPDF ? <FileDown size={64} className="text-[#1a73e8]" /> : <BrainCircuit size={64} className="text-[#1a73e8]" />}
-                </div>
-                <Loader2 size={100} className="text-[#1a73e8] animate-spin absolute -top-[18px] -left-[18px] opacity-10" />
-             </div>
-             <div className="space-y-3">
-                <h2 className="text-2xl font-black text-[#202124] uppercase tracking-tight">
-                  {isExportingPDF ? 'Préparation PDF' : 'Analyse Stratégique'}
-                </h2>
-                <p className="text-sm text-[#5f6368] font-medium leading-relaxed">
-                  {isExportingPDF 
-                    ? "Capture haute fidélité des tableaux et graphiques..." 
-                    : "Gemini traite l'historique des opérations Plaza..."}
-                </p>
-             </div>
-          </div>
-        </div>
-      )}
-
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-normal text-[#3c4043]">Analytique Financière & Volume</h1>
-          <p className="text-[#5f6368] text-sm">Gouvernance des flux Royal Plaza par showroom et expert.</p>
+          <h1 className="text-2xl font-normal text-[#3c4043]">Analytique Financière</h1>
+          <p className="text-[#5f6368] text-sm">Pilotage financier et rentabilité Royal Plaza.</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-2 bg-white border border-[#dadce0] rounded-md px-3 h-10 shadow-sm">
+          <div className="flex items-center gap-2 bg-white border border-[#dadce0] rounded-xl px-4 h-11 shadow-sm">
             <Calendar size={14} className="text-[#1a73e8]" />
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border-none p-0 text-xs font-bold focus:ring-0 w-28 h-auto bg-transparent" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border-none p-0 text-xs font-black focus:ring-0 w-28 h-auto bg-transparent" />
             <span className="text-[#bdc1c6] mx-1">au</span>
-            <input type="date" value={endDate} className="border-none p-0 text-xs font-bold focus:ring-0 w-28 h-auto bg-transparent" onChange={e => setEndDate(e.target.value)} />
+            <input type="date" value={endDate} className="border-none p-0 text-xs font-black focus:ring-0 w-28 h-auto bg-transparent" onChange={e => setEndDate(e.target.value)} />
           </div>
-          <button onClick={handleStrategicReport} disabled={isGenerating} className="btn-google-primary bg-gradient-to-r from-indigo-600 to-blue-600 border-none flex items-center gap-3 shadow-lg h-10 px-6">
-             <Sparkles size={16} className="text-yellow-300" />
-             <span className="font-bold text-xs uppercase tracking-widest">Audit Stratégique IA</span>
+          <button 
+            onClick={handleStrategicReport} 
+            disabled={isGenerating} 
+            className={`btn-google-primary shadow-lg h-11 ${aiReady ? 'shadow-blue-600/10' : 'bg-gray-400 cursor-not-allowed opacity-60'}`}
+          >
+             <Sparkles size={16} className={isGenerating ? 'animate-pulse' : ''} /> {aiReady ? 'Audit IA' : 'IA Inactive'}
           </button>
         </div>
       </header>
 
-      <div className="flex items-center gap-1 p-1 bg-[#f1f3f4] rounded-lg">
-        {[
-          { id: 'overview', label: 'Vue d\'ensemble', icon: <BarChart3 size={16}/> },
-          { id: 'performance', label: 'Performance Élite', icon: <Award size={16}/> },
-          { id: 'volume', label: 'Volume Expert', icon: <ClipboardList size={16}/> },
-          { id: 'history', label: 'Historique Audits', icon: <History size={16}/> }
-        ].map(tab => (
+      <div className="flex items-center gap-1 p-1 bg-[#f1f3f4] rounded-2xl w-fit">
+        {['overview', 'performance', 'volume', 'history'].map(tab => (
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-xs font-black uppercase tracking-widest transition-all ${
-              activeTab === tab.id 
-                ? 'bg-white text-[#1a73e8] shadow-sm' 
-                : 'text-[#5f6368] hover:bg-white/50'
+            key={tab}
+            onClick={() => setActiveTab(tab as any)}
+            className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeTab === tab ? 'bg-white text-[#1a73e8] shadow-sm' : 'text-[#5f6368] hover:bg-[#e8eaed]'
             }`}
           >
-            {tab.icon}
-            {tab.label}
+            {tab === 'overview' ? 'Vue d\'ensemble' : tab === 'performance' ? 'Top Experts' : tab === 'volume' ? 'Showrooms' : 'Archives'}
           </button>
         ))}
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-8">
         {activeTab === 'overview' && (
-          <div className="space-y-6">
+          <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
-                { label: 'Revenu Brut Période', value: `${stats.totalRev.toLocaleString()} FCFA`, icon: <DollarSign size={20}/>, color: '#1a73e8' },
-                { label: 'Marge Nette Réelle', value: `${stats.totalMargin.toLocaleString()} FCFA`, icon: <TrendingUp size={20}/>, color: '#34a853' },
-                { label: 'Taux de Marge Moyen', value: `${stats.totalRev > 0 ? ((stats.totalMargin/stats.totalRev)*100).toFixed(1) : 0}%`, icon: <Wallet size={20}/>, color: '#fbbc04' },
+                { label: 'Revenu Brut', value: stats.totalRev, color: '#1a73e8', icon: <DollarSign size={20}/> },
+                { label: 'Marge Nette', value: stats.totalMargin, color: '#34a853', icon: <TrendingUp size={20}/> },
+                { label: 'Rendement', value: `${stats.totalRev > 0 ? ((stats.totalMargin/stats.totalRev)*100).toFixed(1) : 0}%`, color: '#fbbc04', icon: <Activity size={20}/> },
               ].map((s, i) => (
-                <div key={i} className="google-card p-6 border-l-4" style={{ borderColor: s.color }}>
-                  <p className="text-[#5f6368] text-[10px] font-black uppercase tracking-[0.2em]">{s.label}</p>
-                  <h3 className="text-xl font-bold text-[#3c4043] mt-2 tracking-tight">{s.value}</h3>
+                <div key={i} className="google-card p-6 border-b-4 flex items-center justify-between" style={{ borderColor: s.color }}>
+                  <div>
+                    <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">{s.label}</p>
+                    <h3 className="text-2xl font-bold text-[#3c4043] mt-2">{typeof s.value === 'number' ? s.value.toLocaleString() + ' F' : s.value}</h3>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-2xl text-gray-400">{s.icon}</div>
                 </div>
               ))}
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="google-card p-8">
-                  <h2 className="text-sm font-black uppercase tracking-widest text-[#3c4043] mb-8 flex items-center gap-2"><Map size={18} className="text-[#1a73e8]" /> Profit par Showroom</h2>
-                  <div className="h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ReChartsBarChart data={stats.showroomFinancials}>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 google-card p-8">
+                 <h2 className="text-sm font-black text-[#3c4043] uppercase tracking-widest mb-8 flex items-center gap-3">
+                   <TrendingUp size={18} className="text-[#1a73e8]" /> Tendance des Flux
+                 </h2>
+                 <div className="h-[350px]">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={stats.trendData}>
+                        <defs>
+                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#1a73e8" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#1a73e8" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f3f4" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#5f6368', fontSize: 11, fontWeight: 'bold'}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#5f6368', fontSize: 11}} />
-                        <Tooltip formatter={(value: number) => `${value.toLocaleString()} FCFA`} />
-                        <Bar dataKey="revenue" name="CA Brut" fill="#1a73e8" radius={[4, 4, 0, 0]} barSize={30} />
-                        <Bar dataKey="margin" name="Marge Nette" fill="#34a853" radius={[4, 4, 0, 0]} barSize={30} />
-                      </ReChartsBarChart>
-                    </ResponsiveContainer>
-                  </div>
-               </div>
-               <div className="google-card p-8">
-                  <h2 className="text-sm font-black uppercase tracking-widest text-[#3c4043] mb-8 flex items-center gap-2"><PieIcon size={18} className="text-[#1a73e8]" /> Structure des Coûts</h2>
-                  <div className="h-[250px]">
+                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#5f6368', fontSize: 10}} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#5f6368', fontSize: 10}} />
+                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} />
+                        <Area type="monotone" dataKey="revenue" stroke="#1a73e8" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                        <Area type="monotone" dataKey="margin" stroke="#34a853" strokeWidth={3} fill="transparent" />
+                      </AreaChart>
+                   </ResponsiveContainer>
+                 </div>
+              </div>
+
+              <div className="google-card p-8 flex flex-col">
+                 <h2 className="text-sm font-black text-[#3c4043] uppercase tracking-widest mb-8 flex items-center gap-3">
+                   <PieIcon size={18} className="text-[#1a73e8]" /> Structure des Coûts
+                 </h2>
+                 <div className="flex-1 min-h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ReChartsBarChart data={stats.breakdownData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f3f4" />
-                        <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#5f6368', fontSize: 10}} />
-                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#3c4043', fontSize: 11, fontWeight: 'bold'}} width={100} />
-                        <Tooltip formatter={(value: number) => `${value.toLocaleString()} FCFA`} />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
-                          {stats.breakdownData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                        </Bar>
-                      </ReChartsBarChart>
+                      <PieChart>
+                        <Pie
+                          data={stats.breakdownData}
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {stats.breakdownData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
                     </ResponsiveContainer>
-                  </div>
-               </div>
+                 </div>
+                 <div className="space-y-3 mt-4">
+                    {stats.breakdownData.map((d, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                            <span className="text-xs font-bold text-[#5f6368]">{d.name}</span>
+                         </div>
+                         <span className="text-xs font-black text-[#3c4043]">{d.value.toLocaleString()} F</span>
+                      </div>
+                    ))}
+                 </div>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {activeTab === 'performance' && (
-          <section className="google-card overflow-hidden">
-            <div className="p-8">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#dadce0] text-[#5f6368] font-black uppercase tracking-widest text-[9px]">
-                    <th className="pb-4">Expert Royal Plaza</th>
-                    <th className="pb-4 text-center">Clôtures</th>
-                    <th className="pb-4 text-right">CA Brut</th>
-                    <th className="pb-4 text-right">Marge Nette</th>
-                    <th className="pb-4 text-right">Taux de Rendement</th>
-                  </tr>
+           <div className="google-card overflow-hidden">
+             <div className="px-8 py-5 border-b bg-[#f8f9fa] flex items-center justify-between">
+                <h2 className="text-xs font-black text-[#5f6368] uppercase tracking-widest">Classement Rentabilité Experts</h2>
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] font-bold text-gray-400">BASÉ SUR {stats.count} CLÔTURES</span>
+                </div>
+             </div>
+             <table className="w-full text-left">
+                <thead className="bg-white border-b text-[10px] font-black uppercase text-gray-400">
+                   <tr>
+                      <th className="px-8 py-5">Expert Technique</th>
+                      <th className="px-8 py-5 text-center">Volume traité</th>
+                      <th className="px-8 py-5 text-right">CA Généré</th>
+                      <th className="px-8 py-5 text-right">Marge Nette</th>
+                      <th className="px-8 py-5 text-right">Performance</th>
+                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#dadce0]">
-                  {stats.technicianFinancials.map(tech => (
-                    <tr 
-                      key={tech.id} 
-                      onClick={() => setSelectedTechId(tech.id)}
-                      className={`hover:bg-[#e8f0fe] transition-all cursor-pointer group active:bg-[#d2e3fc] ${selectedTechId === tech.id ? 'bg-[#e8f0fe]' : ''}`}
-                    >
-                      <td className="py-4 px-2 font-black text-[#3c4043]">
-                         <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-full bg-[#f1f3f4] flex items-center justify-center text-[#5f6368] border border-[#dadce0]">
-                             <User size={14} />
-                           </div>
-                           {tech.name}
-                         </div>
-                      </td>
-                      <td className="py-4 text-center font-bold text-[#5f6368]">{tech.closedTickets}</td>
-                      <td className="py-4 text-right font-bold text-[#1a73e8]">{tech.revenue.toLocaleString()} FCFA</td>
-                      <td className={`py-4 text-right font-bold ${tech.margin < 0 ? 'text-red-600' : 'text-[#34a853]'}`}>{tech.margin.toLocaleString()} FCFA</td>
-                      <td className="py-4 text-right pr-4">
-                        <div className="flex items-center justify-end gap-3">
-                          <span className={`px-3 py-1 rounded-full font-black text-[10px] ${tech.marginRate > 40 ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                            {tech.marginRate.toFixed(1)}%
-                          </span>
-                          <ChevronRight size={16} className="text-[#dadce0] group-hover:text-[#1a73e8] transition-all" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-[#dadce0] text-sm">
+                   {stats.technicianFinancials.map((tech, idx) => (
+                      <tr key={tech.id} onClick={() => setSelectedTechId(tech.id)} className="hover:bg-[#f8faff] cursor-pointer group transition-all">
+                         <td className="px-8 py-5">
+                            <div className="flex items-center gap-4">
+                               <span className="text-xs font-black text-gray-300 w-4">{idx + 1}</span>
+                               <img src={tech.avatar} className="w-10 h-10 rounded-full border shadow-sm" alt="" />
+                               <div>
+                                  <p className="font-bold text-[#3c4043] group-hover:text-[#1a73e8]">{tech.name}</p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase">Expert Horizon</p>
+                               </div>
+                            </div>
+                         </td>
+                         <td className="px-8 py-5 text-center">
+                            <span className="px-3 py-1 rounded-full bg-gray-100 text-[10px] font-black">{tech.closedTickets}</span>
+                         </td>
+                         <td className="px-8 py-5 text-right font-medium text-gray-500">{tech.revenue.toLocaleString()} F</td>
+                         <td className="px-8 py-5 text-right font-black text-[#1a73e8]">{tech.margin.toLocaleString()} F</td>
+                         <td className="px-8 py-5 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                               <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-[#1a73e8]" style={{ width: `${tech.marginRate}%` }} />
+                                </div>
+                               <span className="text-xs font-black text-[#3c4043] min-w-[40px]">{tech.marginRate.toFixed(1)}%</span>
+                            </div>
+                         </td>
+                      </tr>
+                   ))}
                 </tbody>
-              </table>
-            </div>
-          </section>
+             </table>
+           </div>
         )}
 
         {activeTab === 'volume' && (
-          <section className="google-card overflow-hidden">
-            <div className="p-8">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#dadce0] text-[#5f6368] font-black uppercase tracking-widest text-[9px]">
-                    <th className="pb-4">Expert Royal Plaza</th>
-                    <th className="pb-4 text-center">Interventions Total</th>
-                    <th className="pb-4 text-center">Taux de Résolution</th>
-                    <th className="pb-4 text-right">État du flux</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#dadce0]">
-                  {stats.technicianFinancials.map(tech => (
-                    <tr 
-                      key={tech.id} 
-                      onClick={() => setSelectedTechId(tech.id)}
-                      className={`hover:bg-[#f8f9fa] cursor-pointer group transition-all active:bg-[#f1f3f4] ${selectedTechId === tech.id ? 'bg-[#e8f0fe]' : ''}`}
-                    >
-                      <td className="py-4 px-2 font-black text-[#3c4043]">
-                         <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-full bg-[#f1f3f4] flex items-center justify-center text-[#5f6368] border border-[#dadce0]"><User size={14} /></div>
-                           {tech.name}
-                         </div>
-                      </td>
-                      <td className="py-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                           <span className="text-lg font-black text-[#3c4043]">{tech.tickets}</span>
-                           <Activity size={14} className="text-[#1a73e8]" />
-                        </div>
-                      </td>
-                      <td className="py-4 text-center">
-                        <div className="w-24 mx-auto bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                           <div className="h-full bg-[#1a73e8]" style={{ width: `${tech.tickets > 0 ? (tech.closedTickets / tech.tickets) * 100 : 0}%` }} />
-                        </div>
-                        <p className="text-[8px] font-black text-[#5f6368] mt-1 uppercase">{tech.tickets > 0 ? ((tech.closedTickets/tech.tickets)*100).toFixed(0) : 0}% Clôturés</p>
-                      </td>
-                      <td className="py-4 text-right pr-4">
-                        <div className="flex items-center justify-end gap-3">
-                           <span className="text-[10px] font-bold text-[#34a853] flex items-center justify-end gap-1"><CheckCircle2 size={12} /> Flux Opérationnel</span>
-                           <ChevronRight size={16} className="text-[#dadce0] group-hover:text-[#1a73e8] transition-all" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="google-card p-8">
+                 <h2 className="text-sm font-black text-[#3c4043] uppercase tracking-widest mb-8">CA par Showroom</h2>
+                 <div className="h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                       <ReChartsBarChart data={stats.showroomFinancials} layout="vertical" margin={{left: 40}}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f3f4" />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#3c4043', fontWeight: 'bold'}} />
+                          <Tooltip cursor={{fill: '#f8f9fa'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} />
+                          <Bar dataKey="revenue" fill="#1a73e8" radius={[0, 8, 8, 0]} barSize={32} />
+                       </ReChartsBarChart>
+                    </ResponsiveContainer>
+                 </div>
+              </div>
+
+              <div className="google-card p-8">
+                 <h2 className="text-sm font-black text-[#3c4043] uppercase tracking-widest mb-8">Performance des Sites</h2>
+                 <div className="space-y-6">
+                    {stats.showroomFinancials.map(s => (
+                       <div key={s.name} className="p-6 bg-[#f8f9fa] rounded-3xl border border-transparent hover:border-[#dadce0] transition-all">
+                          <div className="flex justify-between items-start mb-4">
+                             <div>
+                                <h4 className="text-sm font-black text-[#3c4043]">{s.name}</h4>
+                                <p className="text-[10px] text-[#5f6368] font-bold uppercase">{s.tickets} Dossiers Traités</p>
+                             </div>
+                             <span className="text-xs font-black text-[#1a73e8]">{s.revenue.toLocaleString()} F</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                             <div className="flex-1 h-3 bg-white border rounded-full overflow-hidden">
+                                <div className="h-full bg-[#34a853]" style={{ width: `${(s.margin / (s.revenue || 1)) * 100}%` }} />
+                             </div>
+                             <span className="text-[10px] font-black text-[#34a853] uppercase">{((s.margin / (s.revenue || 1)) * 100).toFixed(0)}% Rent.</span>
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+           </div>
         )}
 
         {activeTab === 'history' && (
-          <div className="space-y-4">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {reports.map(report => (
-                  <div key={report.id} className="google-card group hover:border-[#1a73e8] transition-all p-6 relative">
-                     <div className="flex justify-between items-start mb-6">
-                        <div className="w-12 h-12 bg-blue-50 text-[#1a73e8] rounded-2xl flex items-center justify-center">
-                           <FileText size={24} />
-                        </div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); if(window.confirm('Supprimer ce rapport des archives ?')) deleteReport(report.id); }}
-                          className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                        >
-                           <Trash2 size={18} />
-                        </button>
-                     </div>
-                     <div className="space-y-1 mb-6">
-                        <h3 className="text-sm font-black text-[#3c4043] uppercase tracking-tight line-clamp-1">{report.title}</h3>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">
-                           <CalendarDays size={10} /> Généré le {new Date(report.createdAt).toLocaleDateString()}
-                        </p>
-                     </div>
-                     <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                        <div className="flex flex-col">
-                           <p className="text-[9px] font-black text-gray-400 uppercase">Marge Période</p>
-                           <p className="text-xs font-black text-green-700">{report.statsSnapshot?.totalMargin?.toLocaleString() || '--'} F</p>
-                        </div>
-                        <button 
-                          onClick={() => handleViewArchivedReport(report)}
-                          className="flex items-center gap-2 px-4 py-2 bg-[#f1f3f4] text-[#3c4043] rounded-lg text-[10px] font-black uppercase tracking-widest group-hover:bg-[#1a73e8] group-hover:text-white transition-all shadow-sm"
-                        >
-                           Consulter <Eye size={12} />
-                        </button>
-                     </div>
-                  </div>
-                ))}
-             </div>
-             {reports.length === 0 && (
-               <div className="py-20 text-center google-card">
-                  <History size={48} className="mx-auto text-gray-200 mb-4" />
-                  <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">Aucun audit archivé</p>
-                  <p className="text-[10px] text-gray-300 mt-1 uppercase">Les rapports générés apparaîtront ici automatiquement.</p>
-               </div>
-             )}
-          </div>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {reports.map(r => (
+                 <div key={r.id} className="google-card p-6 hover:border-[#1a73e8] transition-all cursor-pointer group" onClick={() => { setAiReportHtml(r.content); setShowAiModal(true); }}>
+                    <div className="flex justify-between items-start mb-4">
+                       <div className="p-3 bg-blue-50 text-[#1a73e8] rounded-2xl group-hover:bg-[#1a73e8] group-hover:text-white transition-colors">
+                          <FileText size={24} />
+                       </div>
+                       <button onClick={(e) => { e.stopPropagation(); deleteReport(r.id); }} className="p-2 text-red-100 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"><Trash2 size={16}/></button>
+                    </div>
+                    <h3 className="text-sm font-black uppercase text-[#3c4043] line-clamp-2 leading-tight">{r.title}</h3>
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-50">
+                       <p className="text-[10px] text-gray-400 font-bold uppercase">{new Date(r.createdAt).toLocaleDateString()}</p>
+                       <span className="text-[10px] font-black text-[#1a73e8] flex items-center gap-1">CONSULTER <ChevronRight size={12}/></span>
+                    </div>
+                 </div>
+              ))}
+           </div>
         )}
       </div>
 
-      {/* TIROIR LATÉRAL DÉTAILS EXPERT - HAUTE PRIORITÉ (z-100) */}
-      {selectedExpertData && (
-        <div className="fixed inset-0 z-[100] overflow-hidden flex justify-end">
-          {/* Backdrop avec flou */}
-          <div 
-            className="absolute inset-0 bg-black/40 backdrop-blur-[4px] animate-in fade-in duration-300"
-            onClick={() => setSelectedTechId(null)}
-          />
-          
-          {/* Contenu du tiroir avec animation coulissante */}
-          <div className="relative w-full max-w-[600px] bg-white h-full shadow-[-20px_0_60px_-15px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out">
-            {/* Header du Tiroir */}
-            <div className="p-6 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa] shrink-0">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 rounded-2xl bg-[#e8f0fe] text-[#1a73e8] flex items-center justify-center border border-[#d2e3fc] shadow-sm">
-                   <Award size={28} />
-                 </div>
-                 <div>
-                    <h2 className="text-lg font-black text-[#202124] uppercase tracking-widest leading-none">{selectedExpertData.name}</h2>
-                    <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
-                      <Activity size={12} className="text-[#1a73e8]" /> Rapport d'Activité Périodique
-                    </p>
-                 </div>
-              </div>
-              <button 
-                onClick={() => setSelectedTechId(null)} 
-                className="p-3 hover:bg-[#e8eaed] rounded-full text-[#5f6368] transition-all hover:rotate-90"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Corps du Tiroir */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar pb-32 bg-white">
-              {/* KPIs de l'Expert */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[28px] shadow-sm">
-                    <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-3">Chiffre d'Affaires Brut</p>
-                    <div className="flex items-baseline gap-2">
-                       <span className="text-3xl font-black text-blue-900">{selectedExpertData.revenue.toLocaleString()}</span>
-                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">FCFA</span>
-                    </div>
-                 </div>
-                 <div className="p-6 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[28px] shadow-sm">
-                    <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-3">Profit Net Estimé</p>
-                    <div className="flex items-baseline gap-2">
-                       <span className="text-3xl font-black text-green-900">{selectedExpertData.margin.toLocaleString()}</span>
-                       <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">FCFA</span>
-                    </div>
-                 </div>
-              </div>
-
-              {/* Journal des Interventions de la période */}
-              <section className="space-y-6">
-                 <div className="flex items-center justify-between border-b pb-4">
-                    <h4 className="text-[11px] font-black text-[#3c4043] uppercase tracking-[0.2em] flex items-center gap-3">
-                       <History size={20} className="text-[#1a73e8]" /> Journal des Dossiers Périodiques
-                    </h4>
-                    <span className="px-4 py-1.5 bg-[#f1f3f4] text-[#5f6368] text-[10px] font-black rounded-full uppercase border">
-                       {selectedExpertData.detailedTickets.length} Opérations
-                    </span>
-                 </div>
-                 
-                 <div className="space-y-4">
-                    {selectedExpertData.detailedTickets.map(ticket => (
-                      <div key={ticket.id} className="p-6 bg-white border border-[#dadce0] rounded-3xl hover:border-[#1a73e8] hover:shadow-xl transition-all group relative overflow-hidden">
-                         <div className="absolute top-0 left-0 w-1 h-full bg-[#dadce0] group-hover:bg-[#1a73e8] transition-colors" />
-                         <div className="flex justify-between items-start mb-4">
-                            <div>
-                               <div className="flex items-center gap-3 mb-1.5">
-                                  <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-100">#{ticket.id}</span>
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{ticket.category}</span>
-                               </div>
-                               <h5 className="text-base font-black text-[#3c4043]">{ticket.customerName}</h5>
-                            </div>
-                            <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase border shadow-sm ${
-                              ticket.status === 'Résolu' || ticket.status === 'Fermé' 
-                                ? 'bg-green-50 text-green-700 border-green-100' 
-                                : 'bg-amber-50 text-amber-600 border-amber-100'
-                            }`}>
-                              {ticket.status}
-                            </span>
-                         </div>
-                         
-                         <div className="p-4 bg-[#f8f9fa] rounded-2xl border border-transparent group-hover:border-[#f1f3f4] transition-all mb-4">
-                            <p className="text-[9px] text-[#9aa0a6] font-black uppercase mb-1.5 tracking-wider flex items-center gap-2"><Info size={12}/> Diagnostic Terrain</p>
-                            <p className="text-xs text-[#5f6368] leading-relaxed font-medium italic">"{ticket.description}"</p>
-                         </div>
-
-                         {ticket.financials && (
-                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                               <div className="flex flex-col">
-                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Profit Net</span>
-                                  <span className="text-sm font-black text-green-700">+{ticket.financials.netMargin.toLocaleString()} F</span>
-                               </div>
-                               <div className="flex flex-col text-right">
-                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Montant Facturé</span>
-                                  <span className="text-sm font-black text-[#1a73e8]">{ticket.financials.grandTotal.toLocaleString()} F</span>
-                               </div>
-                            </div>
-                         )}
-                      </div>
-                    ))}
-                    
-                    {selectedExpertData.detailedTickets.length === 0 && (
-                      <div className="py-24 text-center border-4 border-dashed border-[#f1f3f4] rounded-[40px] bg-[#fafafa]">
-                         <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 text-gray-200 shadow-sm">
-                           <ClipboardList size={40} />
-                         </div>
-                         <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Aucune donnée historique</p>
-                         <p className="text-[10px] text-gray-300 mt-2 uppercase font-bold">Ajustez la période d'analyse en haut de page.</p>
-                      </div>
-                    )}
-                 </div>
-              </section>
-            </div>
-
-            {/* Footer du Tiroir */}
-            <div className="p-6 border-t border-[#dadce0] bg-white shrink-0 shadow-[0_-10px_25px_-10px_rgba(0,0,0,0.1)]">
-              <button 
-                onClick={() => setSelectedTechId(null)}
-                className="w-full btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-[0.2em] shadow-sm hover:shadow-md transition-all border-[#dadce0]"
-              >
-                Fermer le Rapport
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL VISIONNEUR DE RAPPORT PLEIN ÉCRAN */}
-      <Modal 
-        isOpen={showAiModal} 
-        onClose={() => setShowAiModal(false)} 
-        title="Visionneur de Gouvernance Horizon" 
-        size="full"
+      <Drawer
+        isOpen={!!selectedExpertData}
+        onClose={() => setSelectedTechId(null)}
+        title={selectedExpertData?.name || ''}
+        subtitle="Rapport de Performance Financière"
+        icon={<Award size={20} />}
       >
-        <div className="bg-[#202124] min-h-screen -m-6 p-12 flex flex-col items-center overflow-y-auto custom-scrollbar">
-          
-          <div className="fixed top-20 right-10 z-[120] flex flex-col gap-3 no-print">
-             <button 
-               onClick={handleDownloadPDF} 
-               disabled={isExportingPDF}
-               className="w-14 h-14 bg-[#1a73e8] text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center group"
-               title="Exporter en PDF"
-             >
-                {isExportingPDF ? <Loader2 className="animate-spin" /> : <FileDown size={24} />}
-             </button>
-             <button 
-               onClick={() => setShowAiModal(false)}
-               className="w-14 h-14 bg-white/10 text-white backdrop-blur-md border border-white/20 rounded-full shadow-2xl hover:bg-white hover:text-[#202124] transition-all flex items-center justify-center"
-               title="Fermer"
-             >
-                <X size={24} />
-             </button>
+        {selectedExpertData && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-2 gap-4">
+               <div className="p-5 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[32px] shadow-sm">
+                  <p className="text-[10px] font-black text-blue-700 uppercase mb-2 tracking-widest">CA Réalisé</p>
+                  <p className="text-xl font-black text-blue-900">{selectedExpertData.revenue.toLocaleString()} F</p>
+               </div>
+               <div className="p-5 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[32px] shadow-sm">
+                  <p className="text-[10px] font-black text-green-700 uppercase mb-2 tracking-widest">Marge Net</p>
+                  <p className="text-xl font-black text-green-900">{selectedExpertData.margin.toLocaleString()} F</p>
+               </div>
+            </div>
+
+            <section className="space-y-4">
+               <h4 className="text-[11px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
+                  <History size={18} /> Historique des Opérations
+               </h4>
+               <div className="space-y-3">
+                  {selectedExpertData.detailedTickets.map(ticket => (
+                    <div key={ticket.id} className="p-5 bg-white border border-[#dadce0] rounded-3xl hover:border-[#1a73e8] hover:shadow-lg transition-all group">
+                       <div className="flex justify-between items-start mb-3">
+                          <div>
+                             <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-100">#{ticket.id}</span>
+                             <h5 className="text-sm font-black text-[#3c4043] mt-1 line-clamp-1">{ticket.customerName}</h5>
+                          </div>
+                          <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${ticket.status === 'Résolu' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{ticket.status}</span>
+                       </div>
+                       <div className="p-3 bg-gray-50 rounded-xl mb-3">
+                          <p className="text-[10px] text-gray-500 font-medium italic truncate">"{ticket.description}"</p>
+                       </div>
+                       {ticket.financials && (
+                         <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 pt-3 border-t border-gray-100">
+                            <span className="flex items-center gap-1"><Package size={10}/> Marge : {ticket.financials.netMargin.toLocaleString()} F</span>
+                            <span className="text-[#3c4043] font-black">{ticket.financials.grandTotal.toLocaleString()} F TTC</span>
+                         </div>
+                       )}
+                    </div>
+                  ))}
+               </div>
+            </section>
           </div>
+        )}
+      </Drawer>
 
-          <div 
-            id="strategic-audit-content" 
-            className="bg-white shadow-[0_0_100px_rgba(0,0,0,0.5)] p-[60px] min-h-[1123px] w-[794px] overflow-visible relative flex flex-col box-border animate-in slide-in-from-bottom-8 duration-700"
-          >
-             <div className="flex items-center justify-between border-b-2 border-gray-100 pb-12 mb-12">
-                <div className="space-y-1">
-                   <p className="text-[16px] font-black text-blue-700 tracking-[0.3em] uppercase">Royal Plaza Gabon</p>
-                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Audit de Gouvernance Opérationnelle</p>
-                </div>
-                <div className="text-right">
-                   <p className="text-[11px] font-black text-gray-700 uppercase tracking-tight">Période : {currentReportMeta ? new Date(currentReportMeta.start).toLocaleDateString() : 'N/A'} - {currentReportMeta ? new Date(currentReportMeta.end).toLocaleDateString() : 'N/A'}</p>
-                   <p className="text-[10px] font-bold text-gray-400 uppercase">Généré par Horizon Intelligence</p>
-                </div>
-             </div>
-
-             <div className="mb-14">
-                <h2 className="text-[15pt] font-black text-blue-900 uppercase tracking-widest mb-8 border-l-4 border-blue-600 pl-5">I. Synthèse Financière Réelle</h2>
-                <div className="grid grid-cols-3 gap-6">
-                   <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl">
-                      <p className="text-[10px] font-black text-blue-400 uppercase mb-2">Chiffre d'Affaires Brut</p>
-                      <p className="text-[18px] font-black text-blue-900">{stats.totalRev.toLocaleString()} FCFA</p>
-                   </div>
-                   <div className="p-6 bg-green-50 border border-green-100 rounded-2xl">
-                      <p className="text-[10px] font-black text-green-400 uppercase mb-2">Marge Nette de l'Activité</p>
-                      <p className="text-[18px] font-black text-blue-900">{stats.totalMargin.toLocaleString()} FCFA</p>
-                   </div>
-                   <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl">
-                      <p className="text-[10px] font-black text-amber-400 uppercase mb-2">Performance Marge</p>
-                      <p className="text-[18px] font-black text-amber-900">{stats.totalRev > 0 ? ((stats.totalMargin/stats.totalRev)*100).toFixed(1) : 0}%</p>
-                   </div>
-                </div>
-             </div>
-
-             <div className="mb-14">
-                <div className="flex items-center gap-3 mb-6">
-                   <Award className="text-blue-600" size={24} />
-                   <h3 className="text-[12pt] font-black text-gray-800 uppercase tracking-widest">II. Rendement Individuel Experts</h3>
-                </div>
-                <table className="w-full text-left border-collapse">
-                   <thead>
-                      <tr className="bg-gray-100 border-y border-gray-200 text-[10px] font-black text-gray-500 uppercase">
-                         <th className="px-5 py-3">Expert Technique</th>
-                         <th className="px-5 py-3 text-center">Clôtures</th>
-                         <th className="px-5 py-3 text-right">CA Brut</th>
-                         <th className="px-5 py-3 text-right">Marge Net</th>
-                         <th className="px-5 py-3 text-right">Rendement</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-100 text-[11px]">
-                      {stats.technicianFinancials.map(tech => (
-                        <tr key={tech.id}>
-                           <td className="px-5 py-3 font-bold text-gray-800">{tech.name}</td>
-                           <td className="px-5 py-3 text-center font-medium">{tech.closedTickets}</td>
-                           <td className="px-5 py-3 text-right font-bold text-blue-700">{tech.revenue.toLocaleString()} F</td>
-                           <td className="px-5 py-3 text-right font-bold text-green-700">{tech.margin.toLocaleString()} F</td>
-                           <td className="px-5 py-3 text-right font-black text-gray-900">{tech.marginRate.toFixed(1)}%</td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-
-             <div className="mt-10 border-t-4 border-blue-900/10 pt-14 flex-1">
-                <div className="flex items-center gap-4 mb-10">
-                   <BrainCircuit className="text-indigo-600" size={32} />
-                   <h2 className="text-[15pt] font-black text-indigo-900 uppercase tracking-widest">III. Audit Stratégique Gemini</h2>
-                </div>
-                <div 
-                  className="office-report-content max-w-none text-[12pt] leading-[1.7]"
-                  dangerouslySetInnerHTML={{ __html: aiReportHtml }}
-                />
-             </div>
-             
-             <div className="mt-20 pt-10 border-t border-gray-100 flex justify-between items-center opacity-40 shrink-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Document Certifié Horizon v2.8 • Confidentiel Plaza</p>
-                <div className="flex items-center gap-4">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Page 1 / 1</p>
-                  <img src="https://ui-avatars.com/api/?name=RP&background=1a73e8&color=fff" className="w-6 h-6 rounded" alt="" />
-                </div>
-             </div>
-          </div>
-
-          <div className="h-20 shrink-0" />
-        </div>
+      <Modal isOpen={showAiModal} onClose={() => setShowAiModal(false)} title="Audit de Gouvernance Horizon" size="full">
+         <div className="bg-[#202124] min-h-screen -m-10 p-12 flex flex-col items-center overflow-y-auto">
+            <div className="fixed top-20 right-10 z-[120] flex gap-3">
+               <button 
+                onClick={handleDownloadPDF} 
+                disabled={isExportingPDF}
+                className="w-12 h-12 bg-[#1a73e8] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+               >
+                 {isExportingPDF ? <Loader2 size={24} className="animate-spin" /> : <FileDown size={24} />}
+               </button>
+               <button onClick={() => setShowAiModal(false)} className="w-12 h-12 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/30 transition-all shadow-xl"><X size={24}/></button>
+            </div>
+            <div id="strategic-audit-content" className="bg-white p-[60px] min-h-[1123px] w-[794px] shadow-2xl office-report-content animate-in fade-in zoom-in-95 duration-500" dangerouslySetInnerHTML={{ __html: aiReportHtml }} />
+         </div>
       </Modal>
     </div>
   );

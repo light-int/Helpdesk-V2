@@ -19,22 +19,17 @@ const LoginPage: React.FC = () => {
     setError(null);
     
     try {
-      // 1. Récupération de tous les utilisateurs depuis la DB Cloud avec typage explicite
       const users: UserProfile[] = await ApiService.users.getAll();
-      
-      // 2. Recherche d'une correspondance (Email ou Nom)
       const user = users.find((u: UserProfile) => 
         (u.email?.toLowerCase() === username.toLowerCase() || u.name.toLowerCase() === username.toLowerCase()) && 
         u.password === password
       );
 
       if (user) {
-        // Connexion réussie via DB
         await new Promise(r => setTimeout(r, 800));
         login(user);
         addNotification({ title: 'Système Horizon', message: `Content de vous revoir, ${user.name}.`, type: 'success' });
       } 
-      // 3. Cas particulier : Premier démarrage (Si aucune donnée en DB)
       else if (users.length === 0 && username.toLowerCase() === 'admin' && password === 'intxxl') {
         const firstAdmin: UserProfile = {
           id: 'U-01', 
@@ -46,7 +41,6 @@ const LoginPage: React.FC = () => {
           status: 'Actif', 
           showroom: 'Glass'
         };
-        // On enregistre l'admin en DB pour la prochaine fois
         await ApiService.users.save(firstAdmin);
         login(firstAdmin);
         addNotification({ title: 'Initialisation', message: 'Compte Administrateur créé dans le Cloud.', type: 'info' });
@@ -82,7 +76,7 @@ const LoginPage: React.FC = () => {
                    <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Identifiant ou Email</label>
                    <input 
                     type="text" value={username} onChange={e => setUsername(e.target.value)}
-                    className="w-full h-12 text-base"
+                    className="w-full h-12 text-base !border-[#dadce0]"
                     placeholder="ex: admin@royalplaza.ga"
                     required
                    />
@@ -91,7 +85,7 @@ const LoginPage: React.FC = () => {
                    <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Mot de passe</label>
                    <input 
                     type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    className="w-full h-12 text-base"
+                    className="w-full h-12 text-base !border-[#dadce0]"
                     placeholder="••••••••"
                     required
                    />

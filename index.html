@@ -17,6 +17,8 @@
         --google-border: #dadce0;
         --google-bg: #f8f9fa;
         --google-surface: #ffffff;
+        --spring-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --royal-easing: cubic-bezier(0.22, 1, 0.36, 1);
       }
       body {
         font-family: 'Roboto', sans-serif;
@@ -27,38 +29,47 @@
         overflow-x: hidden;
       }
       
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #bdc1c6; border-radius: 10px; }
+
+      /* STANDARDISATION DES CHAMPS DE SAISIE */
+      input, select, textarea {
+        border: 1px solid var(--google-border) !important;
+        border-radius: 12px !important;
+        padding: 0.7rem 1rem !important;
+        transition: all 0.2s var(--spring-easing) !important;
+        background-color: white !important;
+        font-size: 14px !important;
+        outline: none !important;
+        width: 100%;
+        color: #3c4043;
       }
-      ::-webkit-scrollbar-track {
-        background: transparent;
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--google-blue) !important;
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15) !important;
+        transform: translateY(-1px);
       }
-      ::-webkit-scrollbar-thumb {
-        background: #bdc1c6;
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #9aa0a6;
-      }
+      input::placeholder { color: #9aa0a6; }
 
       .google-card {
         background: var(--google-surface);
         border: 1px solid var(--google-border);
-        border-radius: 8px;
-        transition: box-shadow 0.2s ease;
+        border-radius: 16px;
+        transition: all 0.4s var(--spring-easing);
       }
       .google-card:hover {
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 30px rgba(60,64,67,0.08);
       }
 
       .btn-google-primary {
         background-color: var(--google-blue);
         color: white !important;
-        font-weight: 500;
-        padding: 0.5rem 1.5rem;
-        border-radius: 4px;
-        transition: background-color 0.2s;
+        font-weight: 600;
+        padding: 0.6rem 1.8rem;
+        border-radius: 12px;
+        transition: all 0.3s var(--spring-easing);
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -68,93 +79,73 @@
       }
       .btn-google-primary:hover {
         background-color: var(--google-blue-hover);
-        box-shadow: 0 1px 2px 0 rgba(66,133,244,.3), 0 1px 3px 1px rgba(66,133,244,.15);
+        transform: scale(1.03);
+        box-shadow: 0 6px 15px rgba(26, 115, 232, 0.25);
       }
-      
+      .btn-google-primary:active { transform: scale(0.97); }
+
       .btn-google-outlined {
-        background-color: transparent;
-        color: var(--google-blue) !important;
-        font-weight: 500;
-        padding: 0.5rem 1.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--google-border);
-        transition: background-color 0.2s;
-        font-size: 14px;
+        background-color: white;
+        color: var(--google-grey) !important;
+        border: 1px solid var(--google-border) !important;
+        font-weight: 600;
+        padding: 0.6rem 1.2rem;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
         cursor: pointer;
       }
       .btn-google-outlined:hover {
-        background-color: rgba(26,115,232,0.04);
-        border-color: var(--google-blue);
+        background-color: #f8f9fa;
+        border-color: #bdc1c6 !important;
+        color: #3c4043 !important;
       }
 
-      input, select, textarea {
-        background-color: #ffffff !important;
-        color: #202124 !important;
-        border: 1px solid var(--google-border) !important;
-        border-radius: 4px !important;
-        padding: 0.6rem 0.8rem !important;
-        font-size: 14px !important;
-        width: 100%;
+      /* SYSTÈME D'ANIMATIONS */
+      @keyframes pageIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes royalSlideIn {
+        from { transform: translateX(100%); opacity: 0.5; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
 
-      @media print {
-        .no-print { display: none !important; }
-      }
-
-      .office-report-content {
-        font-family: 'Lora', serif;
-        color: #1e293b;
-        line-height: 1.6;
-      }
-      .office-report-content h1 {
-        font-family: 'Playfair Display', serif;
-        font-size: 28pt;
-        color: #0f172a;
-        margin-top: 0;
-        margin-bottom: 24pt;
-        border-bottom: 2px solid #3b82f6;
-        padding-bottom: 12pt;
-        letter-spacing: normal !important;
-      }
-      .office-report-content h2 {
-        font-family: 'Playfair Display', serif;
-        font-size: 18pt;
-        color: #1e3a8a;
-        margin-top: 30pt;
-        margin-bottom: 12pt;
-        font-weight: 700;
-        letter-spacing: normal !important;
-      }
-      .office-report-content h3 {
-        font-family: 'Roboto', sans-serif;
-        font-size: 11pt;
-        font-weight: 700;
-        color: #3b82f6;
+      .animate-page-entry { animation: pageIn 0.5s var(--spring-easing) forwards; }
+      .animate-modal-entry { animation: pageIn 0.4s var(--spring-easing) forwards; }
+      .animate-royal-drawer { animation: royalSlideIn 0.5s var(--royal-easing) forwards; }
+      .animate-backdrop { animation: fadeIn 0.4s ease-out forwards; }
+      
+      .badge-new {
+        background: linear-gradient(135deg, #1a73e8, #4285f4);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 9px;
+        font-weight: 900;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-top: 20pt;
-        margin-bottom: 8pt;
-      }
-      .office-report-content p {
-        margin-bottom: 12pt;
-        text-align: justify;
-        font-size: 11pt;
-      }
-      .office-report-content ul, .office-report-content ol {
-        margin-left: 20pt;
-        margin-bottom: 12pt;
-      }
-      .office-report-content li {
-        margin-bottom: 6pt;
+        box-shadow: 0 4px 10px rgba(26, 115, 232, 0.2);
       }
 
-      @keyframes modal-fade-in {
-        from { opacity: 0; transform: scale(0.98) translateY(10px); }
-        to { opacity: 1; transform: scale(1) translateY(0); }
+      .glass-notif {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 20px;
       }
-      .animate-modal {
-        animation: modal-fade-in 0.15s ease-out forwards;
-      }
+
+      .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 10px; }
+      @media print { .no-print { display: none !important; } }
     </style>
   <script type="importmap">
 {
