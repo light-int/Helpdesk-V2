@@ -52,6 +52,7 @@ const Tickets: React.FC = () => {
 
   const canCreateTicket = currentUser?.role !== 'TECHNICIAN';
   const isManager = currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN';
+  const isTechnician = currentUser?.role === 'TECHNICIAN';
 
   // Helper colors
   const getPriorityColor = (priority: string) => {
@@ -91,7 +92,7 @@ const Tickets: React.FC = () => {
     return (tickets || []).filter(t => {
       if (t.isArchived) return false;
       
-      if (currentUser?.role === 'TECHNICIAN') {
+      if (isTechnician) {
         const isMine = t.assignedTechnicianId === currentUser.id;
         const isNewInMyShowroom = t.status === 'Nouveau' && t.showroom === currentUser.showroom;
         if (!isMine && !isNewInMyShowroom) return false;
@@ -313,7 +314,7 @@ const Tickets: React.FC = () => {
         icon={<TicketIcon size={20} />}
         footer={
           <div className="flex gap-3">
-             {currentUser?.role === 'TECHNICIAN' && (selectedTicket?.status === 'Nouveau' || selectedTicket?.status === 'En cours') && (
+             {isTechnician && (selectedTicket?.status === 'Nouveau' || selectedTicket?.status === 'En cours') && (
                 <button onClick={handleIntervene} className="flex-[2] btn-google-primary bg-blue-600 hover:bg-blue-700 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
                    <PlayCircle size={18} /> {selectedTicket.status === 'Nouveau' ? 'Intervenir (Démarrer)' : 'Rédiger le Rapport'}
                 </button>
@@ -323,7 +324,9 @@ const Tickets: React.FC = () => {
                    <ShieldCheck size={18} /> Certifier & Approuver
                 </button>
              )}
-             <button onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"><Edit3 size={18} /> Modifier</button>
+             {!isTechnician && (
+               <button onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"><Edit3 size={18} /> Modifier</button>
+             )}
           </div>
         }
       >
@@ -375,39 +378,41 @@ const Tickets: React.FC = () => {
                 </div>
              </div>
 
-             {/* 3. BLOC CLIENT & LOCALISATION */}
-             <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><User size={14} /> Titulaire du Dossier</h4>
-                <div className="p-8 bg-white border border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-10">
-                   <div className="space-y-6">
-                      <div className="flex items-center gap-4">
-                         <div className="w-12 h-12 bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600"><User size={24}/></div>
-                         <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase">Identité Client</p>
-                            <p className="text-base font-black text-gray-800 uppercase tracking-tight">{selectedTicket.customerName}</p>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                         <div className="w-12 h-12 bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-600"><Smartphone size={24}/></div>
-                         <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase">Contact Mobile</p>
-                            <p className="text-base font-black text-gray-800 font-mono">{selectedTicket.customerPhone}</p>
-                         </div>
-                      </div>
-                   </div>
-                   <div className="bg-blue-50/50 p-6 border-l-4 border-blue-200">
-                      <p className="text-[9px] font-black text-blue-600 uppercase mb-2 flex items-center gap-2"><MapPin size={12}/> Zone d'intervention</p>
-                      <p className="text-sm font-bold text-gray-700 uppercase leading-relaxed">{selectedTicket.location || 'Showroom d''origine'}</p>
-                   </div>
-                </div>
-             </section>
+             {/* 3. BLOC CLIENT & LOCALISATION - MASQUÉ POUR LE TECHNICIEN */}
+             {!isTechnician && (
+                <section className="space-y-4">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><User size={14} /> Titulaire du Dossier</h4>
+                  <div className="p-8 bg-white border border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600"><User size={24}/></div>
+                          <div>
+                              <p className="text-[9px] font-black text-gray-400 uppercase">Identité Client</p>
+                              <p className="text-base font-black text-gray-800 uppercase tracking-tight">{selectedTicket.customerName}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-600"><Smartphone size={24}/></div>
+                          <div>
+                              <p className="text-[9px] font-black text-gray-400 uppercase">Contact Mobile</p>
+                              <p className="text-base font-black text-gray-800 font-mono">{selectedTicket.customerPhone}</p>
+                          </div>
+                        </div>
+                    </div>
+                    <div className="bg-blue-50/50 p-6 border-l-4 border-blue-200">
+                        <p className="text-[9px] font-black text-blue-600 uppercase mb-2 flex items-center gap-2"><MapPin size={12}/> Zone d'intervention</p>
+                        <p className="text-sm font-bold text-gray-700 uppercase leading-relaxed">{selectedTicket.location || 'Showroom d\'origine'}</p>
+                    </div>
+                  </div>
+                </section>
+             )}
 
              {/* 4. DIAGNOSTIC INITIAL */}
              <section className="space-y-4">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={14} /> Symptômes & Diagnostic Initial</h4>
-                <div className="p-8 bg-[#fffdf5] border border-[#ffe082] relative">
-                   <div className="absolute top-0 left-0 w-1 h-full bg-[#f9ab00]" />
-                   <p className="text-gray-700 italic text-sm font-medium leading-relaxed">"{selectedTicket.description}"</p>
+                <div className="p-8 bg-[#fffdf5] border border-[#ffe082] relative shadow-sm">
+                   <div className="absolute top-0 left-0 w-1.5 h-full bg-[#f9ab00]" />
+                   <p className="text-[#3c4043] italic text-base font-medium leading-relaxed">"{selectedTicket.description}"</p>
                 </div>
              </section>
 
@@ -462,7 +467,7 @@ const Tickets: React.FC = () => {
       </Drawer>
 
       {/* MODAL RAPPORT TECHNIQUE */}
-      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Rapport Technique & Matériaux" size="lg">
+      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Saisie des Matériaux & Rapport Technique" size="lg">
          <form onSubmit={handleSaveReport} className="space-y-10">
             <section className="space-y-4">
                <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2"><Activity size={14} className="text-[#1a73e8]" /> Diagnostic Final</h4>
@@ -475,17 +480,29 @@ const Tickets: React.FC = () => {
             <section className="space-y-4">
                <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Actions Effectuées</h4>
                <div className="flex gap-2">
-                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} placeholder="ex: Nettoyage circuit..." className="flex-1 bg-gray-50 border-none text-xs font-bold" />
+                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), currentAction.trim() && (setReportActions([...reportActions, currentAction.trim()]), setCurrentAction('')))} placeholder="ex: Nettoyage bloc évaporateur..." className="flex-1 bg-gray-50 border-none text-xs font-bold" />
                   <button type="button" onClick={() => { if(currentAction.trim()) { setReportActions([...reportActions, currentAction.trim()]); setCurrentAction(''); } }} className="w-10 h-10 bg-[#1a73e8] text-white flex items-center justify-center shadow-lg"><Plus size={20}/></button>
                </div>
                <div className="space-y-2">{reportActions.map((a, i) => (<div key={i} className="flex justify-between p-3 bg-white border border-gray-100 text-[10px] font-black uppercase"><span>{a}</span><button type="button" onClick={() => setReportActions(reportActions.filter((_, idx) => idx !== i))} className="text-red-400"><Trash2 size={14}/></button></div>))}</div>
             </section>
             <section className="space-y-4">
                <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Pièces Débitées du Stock</h4>
-               <select onChange={(e) => { const p = parts.find(it => it.id === e.target.value); if(p) setReportParts([...reportParts, { id: p.id, name: p.name, quantity: 1, unitPrice: p.unitPrice }]); }} className="w-full h-11 bg-gray-50 border-none text-xs font-bold" value=""><option value="">Chercher une pièce...</option>{parts.filter(p => p.currentStock > 0).map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}</select>
-               <div className="space-y-2">{reportParts.map(p => (<div key={p.id} className="flex justify-between p-3 bg-white border border-gray-100 text-xs font-black uppercase"><span>{p.name}</span><div className="flex items-center gap-3"><button type="button" onClick={() => setReportParts(reportParts.filter(it => it.id !== p.id))} className="text-red-400"><X size={14}/></button></div></div>))}</div>
+               <select onChange={(e) => { const p = parts.find(it => it.id === e.target.value); if(p) setReportParts([...reportParts, { id: p.id, name: p.name, quantity: 1, unitPrice: p.unitPrice }]); }} className="w-full h-11 bg-gray-50 border-none text-xs font-bold" value=""><option value="">Sélectionner un article du catalogue...</option>{parts.filter(p => p.currentStock > 0).map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku}) - Dispo: {p.currentStock}</option>)}</select>
+               <div className="space-y-2">
+                  {reportParts.map(p => (
+                    <div key={p.id} className="flex justify-between items-center p-4 bg-white border-2 border-[#f1f3f4] shadow-sm">
+                       <div className="flex-1">
+                          <p className="text-[10px] font-black text-[#202124] uppercase">{p.name}</p>
+                          <p className="text-[9px] text-blue-600 font-bold uppercase mt-1">Référentiel Cloud Horizon</p>
+                       </div>
+                       <div className="flex items-center gap-6">
+                          <button type="button" onClick={() => setReportParts(reportParts.filter(item => item.id !== p.id))} className="text-red-300 hover:text-red-600 ml-4"><X size={20}/></button>
+                       </div>
+                    </div>
+                  ))}
+               </div>
             </section>
-            <div className="flex gap-3 pt-6 border-t border-gray-100"><button type="submit" className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Valider & Clôturer</button><button type="button" onClick={() => setIsReportModalOpen(false)} className="btn-google-outlined px-8 text-[10px] font-black uppercase">Abandonner</button></div>
+            <div className="flex gap-3 pt-6 border-t border-gray-100"><button type="submit" className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Valider & Mettre à jour les stocks</button><button type="button" onClick={() => setIsReportModalOpen(false)} className="btn-google-outlined px-8 text-[10px] font-black uppercase">Abandonner</button></div>
          </form>
       </Modal>
 
