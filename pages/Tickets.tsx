@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, Search, RefreshCw, Filter, MoreHorizontal, 
-  // Ticket as TicketIcon used here to avoid conflict with Ticket interface
   Sparkles, User, Clock, CheckCircle2, Ticket as TicketIcon,
   AlertCircle, DollarSign, X, ChevronRight, ClipboardCheck, Info,
   Calendar, CreditCard, FileText, Settings, Activity, Save, Package,
@@ -12,7 +11,8 @@ import {
   ShieldAlert, Tag, Hash, Archive, Eye, Smartphone, Briefcase, Play,
   Zap, Map, Layers, Target, Headphones, Receipt, Info as InfoIcon, FilterX, BellRing,
   SlidersHorizontal, LayoutGrid, ListFilter, MapPinned, ChevronLeft, ArrowUpRight,
-  Timer, BarChart3, RotateCcw, Boxes, Shapes, CalendarDays, Sliders, ChevronDown, ChevronUp
+  Timer, BarChart3, RotateCcw, Boxes, Shapes, CalendarDays, Sliders, ChevronDown, ChevronUp,
+  CreditCard as PaymentIcon, Gauge
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, TicketStatus, TicketCategory, Showroom, UsedPart, Customer } from '../types';
@@ -64,7 +64,17 @@ const Tickets: React.FC = () => {
   const allFilteredTickets = useMemo(() => {
     return tickets.filter(t => {
       if (t.isArchived) return false;
-      if (currentUser?.role === 'TECHNICIAN' && t.assignedTechnicianId !== currentUser.id) return false;
+      
+      // VISIBILITÉ TECHNIQUE AMÉLIORÉE
+      if (currentUser?.role === 'TECHNICIAN') {
+        // Le technicien voit :
+        // 1. Ce qui lui est assigné
+        const isMine = t.assignedTechnicianId === currentUser.id;
+        // 2. Les nouveaux tickets de son showroom (pour auto-assignation)
+        const isNewInMyShowroom = t.status === 'Nouveau' && t.showroom === currentUser.showroom;
+        
+        if (!isMine && !isNewInMyShowroom) return false;
+      }
       
       const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (t.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,12 +116,19 @@ const Tickets: React.FC = () => {
 
   const totalPages = Math.ceil(allFilteredTickets.length / TICKETS_PER_PAGE);
 
-  const stats = useMemo(() => ({
-    total: tickets.filter(t => !t.isArchived).length,
-    urgent: tickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length,
-    new: tickets.filter(t => t.status === 'Nouveau').length,
-    closed: tickets.filter(t => (t.status === 'Résolu' || t.status === 'Fermé')).length
-  }), [tickets]);
+  const stats = useMemo(() => {
+    const relevant = tickets.filter(t => {
+      if (t.isArchived) return false;
+      if (currentUser?.role === 'TECHNICIAN') return t.assignedTechnicianId === currentUser.id;
+      return true;
+    });
+    return {
+      total: relevant.length,
+      urgent: relevant.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length,
+      new: relevant.filter(t => t.status === 'Nouveau').length,
+      closed: relevant.filter(t => (t.status === 'Résolu' || t.status === 'Fermé')).length
+    };
+  }, [tickets, currentUser]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -181,12 +198,14 @@ const Tickets: React.FC = () => {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-light text-[#202124]">Tickets & SAV</h1>
-          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management Central Royal Plaza Horizon</p>
+          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">
+             {currentUser?.role === 'TECHNICIAN' ? `Missions pour ${currentUser.name}` : 'Management Central Royal Plaza Horizon'}
+          </p>
         </div>
         <div className="flex gap-3">
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser le flux des dossiers SAV"><RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /></button>
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser la liste"><RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /></button>
           {canCreateTicket && (
-            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Émettre un nouveau dossier SAV">
+            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Émettre un dossier SAV">
               <Plus size={20} /> <span>Nouveau Dossier</span>
             </button>
           )}
@@ -196,12 +215,12 @@ const Tickets: React.FC = () => {
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/>, title: "Nombre total de dossiers non archivés" },
-          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/>, title: "Dossiers critiques nécessitant une action immédiate" },
-          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/>, title: "Nouveaux dossiers non assignés" },
-          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/>, title: "Volume de dossiers résolus sur la période" }
+          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/>, tooltip: "Nombre total de dossiers non archivés" },
+          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/>, tooltip: "Tickets prioritaires en attente de résolution" },
+          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/>, tooltip: "Dossiers n'ayant pas encore d'expert assigné" },
+          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/>, tooltip: "Tickets résolus cette semaine" }
         ].map((s, i) => (
-          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }} title={s.title}>
+          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }} title={s.tooltip}>
              <div className="flex justify-between items-start">
                <div>
                  <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{s.label}</p>
@@ -217,7 +236,7 @@ const Tickets: React.FC = () => {
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="p-8 space-y-8">
            <div className="flex flex-col xl:flex-row gap-6">
-              <div className="relative flex-1 group" title="Recherche par client, identifiant ou numéro de série">
+              <div className="relative flex-1 group" title="Rechercher par client, ticket ID ou S/N">
                  <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                  <input 
                   type="text" 
@@ -227,7 +246,7 @@ const Tickets: React.FC = () => {
                   onChange={e => setSearchTerm(e.target.value)}
                  />
                  {searchTerm && (
-                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500" title="Effacer le filtre">
+                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500">
                      <X size={22} />
                    </button>
                  )}
@@ -237,8 +256,8 @@ const Tickets: React.FC = () => {
                  <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
                     {[
                       { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tous les tickets' },
-                      { id: 'Nouveau', icon: <BellRing size={20} />, label: 'Dossiers Nouveaux' },
-                      { id: 'En cours', icon: <Clock size={20} />, label: 'Interventions en cours' }
+                      { id: 'Nouveau', icon: <BellRing size={20} />, label: 'Nouveaux dossiers' },
+                      { id: 'En cours', icon: <Clock size={20} />, label: 'Dossiers en cours' }
                     ].map(item => (
                       <button 
                         key={item.id}
@@ -254,27 +273,27 @@ const Tickets: React.FC = () => {
                  <div className="flex items-center gap-4">
                     <button 
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                      title={showAdvancedFilters ? "Masquer les options stratégiques" : "Afficher les filtres par showroom et priorité"}
+                      title={showAdvancedFilters ? "Masquer les filtres avancés" : "Afficher filtres par Showroom / Urgence"}
                       className={`p-4.5 border-2 transition-all ${showAdvancedFilters ? 'bg-[#202124] border-[#202124] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}
                     >
                       <Sliders size={22} />
                     </button>
 
-                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group" title="Dossiers correspondants aux critères">
+                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group">
                       <div className="absolute top-0 right-0 w-1 h-full bg-[#1a73e8]" />
                       <div className="shrink-0 mr-4">
                          <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                             <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Base de Données</span>
                          </div>
-                         <p className="text-lg font-black text-[#202124] leading-none mt-1">{allFilteredTickets.length} <span className="text-[10px] text-gray-400 font-bold">FICHES</span></p>
+                         <p className="text-lg font-black text-[#202124] leading-none mt-1">{allFilteredTickets.length} <span className="text-[10px] text-gray-400 font-bold uppercase">Résultats</span></p>
                       </div>
                       <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl"><LayoutGrid size={18}/></div>
                     </div>
                  </div>
                  
                  {(searchTerm || statusFilter !== 'Tous' || priorityFilter !== 'Toutes' || showroomFilter !== 'Tous' || categoryFilter !== 'Toutes') && (
-                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser l'ensemble des filtres">
+                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser tous les filtres">
                        <RotateCcw size={24} className="group-hover:rotate-[-180deg] transition-transform duration-700" />
                     </button>
                  )}
@@ -284,12 +303,11 @@ const Tickets: React.FC = () => {
            {showAdvancedFilters && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-[#f1f3f4] animate-in slide-in-from-top-4 duration-500">
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Source géographique de la demande"><MapPin size={12} /> Showroom émetteur</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><MapPin size={12} /> Showroom émetteur</label>
                    <select 
                       value={showroomFilter} 
                       onChange={e => setShowroomFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                      title="Choisir un point de vente spécifique"
                    >
                       <option value="Tous">Tous les showrooms</option>
                       {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
@@ -297,12 +315,11 @@ const Tickets: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Niveau critique pour le respect du contrat de service"><Zap size={12} /> Niveau d'urgence</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Zap size={12} /> Niveau d'urgence</label>
                    <select 
                       value={priorityFilter} 
                       onChange={e => setPriorityFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                      title="Filtrer par degré d'urgence"
                    >
                       <option value="Toutes">Toutes priorités</option>
                       <option value="Urgent">Urgent SLA</option>
@@ -312,12 +329,11 @@ const Tickets: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Type d'intervention nécessaire"><Tag size={12} /> Catégorie technique</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Tag size={12} /> Catégorie technique</label>
                    <select 
                       value={categoryFilter} 
                       onChange={e => setCategoryFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                      title="Filtrer par type de service"
                    >
                       <option value="Toutes">Toutes catégories</option>
                       <option value="SAV">SAV Classique</option>
@@ -347,12 +363,12 @@ const Tickets: React.FC = () => {
                   key={t.id} 
                   onClick={() => setSelectedTicket(t)}
                   className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedTicket?.id === t.id ? 'bg-[#e8f0fe]' : 'bg-white'}`}
-                  title={`Consulter le dossier technique #${t.id}`}
+                  title="Cliquer pour les détails complets"
                 >
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-3">
                        <span className="text-sm font-black text-[#1a73e8]">#{t.id}</span>
-                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200" title={`Demande reçue via ${t.source}`}>{t.source}</span>
+                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200" title={`Source: ${t.source}`}>{t.source}</span>
                     </div>
                   </td>
                   <td className="px-10 py-6">
@@ -370,7 +386,7 @@ const Tickets: React.FC = () => {
                      </div>
                   </td>
                   <td className="px-10 py-6 text-right">
-                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`} title={`État actuel du workflow: ${t.status}`}>
+                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`} title={`État du dossier: ${t.status}`}>
                       {t.status}
                     </span>
                   </td>
@@ -418,22 +434,22 @@ const Tickets: React.FC = () => {
         )}
       </div>
 
-      {/* DETAIL DRAWER */}
+      {/* DETAIL DRAWER - ENHANCED */}
       <Drawer
         isOpen={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
-        title="Dossier Technique Expert"
-        subtitle={`Ticket ID: ${selectedTicket?.id} • Showroom ${selectedTicket?.showroom}`}
+        title="Commandement Technique SAV"
+        subtitle={`Ticket #${selectedTicket?.id} • Showroom ${selectedTicket?.showroom}`}
         icon={<TicketIcon size={20} />}
         footer={
           <div className="flex gap-3">
-             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10" title="Consulter ou remplir les rapports de maintenance">
-                <Wrench size={18} /> Rapports d'intervention
+             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10">
+                <Edit3 size={18} /> Modifier le Dossier
              </button>
              <button 
-               onClick={() => { if(selectedTicket && window.confirm('Dossier résolu et certifié ?')) { /* Logic */ setSelectedTicket(null); } }}
+               onClick={() => { if(selectedTicket && window.confirm('Marquer ce dossier comme résolu et certifié ?')) { /* Logic */ setSelectedTicket(null); } }}
                className="p-4 bg-green-50 text-green-700 border border-green-100 rounded-none hover:bg-green-600 hover:text-white transition-all shadow-sm"
-               title="Marquer le dossier comme certifié et résolu"
+               title="Certifier la résolution"
              >
                 <CheckCircle2 size={20} />
              </button>
@@ -441,60 +457,192 @@ const Tickets: React.FC = () => {
         }
       >
         {selectedTicket && (
-          <div className="space-y-10">
-             <div className="p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] rounded-none shadow-sm flex flex-col items-center text-center" title="Identité visuelle du matériel sinistré">
-                <div className={`w-20 h-20 rounded-none flex items-center justify-center mb-6 shadow-xl ${getPriorityColor(selectedTicket.priority)} text-white`}>
-                   <ShieldAlert size={40} />
-                </div>
-                <h3 className="text-2xl font-black text-[#202124] tracking-tight">{selectedTicket.productName}</h3>
-                <p className="text-[10px] font-black text-[#1a73e8] uppercase tracking-[0.2em] mt-2">{selectedTicket.brand} • S/N {selectedTicket.serialNumber || 'Non Saisie'}</p>
-                <div className="mt-8 flex items-center gap-10">
-                   <div className="text-center">
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ouverture</p>
-                      <p className="text-sm font-bold text-[#3c4043]">{new Date(selectedTicket.createdAt).toLocaleDateString()}</p>
+          <div className="space-y-12 pb-20">
+             {/* HEADER INFO TECH */}
+             <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className={`p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] rounded-none shadow-sm flex-1 text-center`}>
+                   <div className={`w-16 h-16 rounded-none flex items-center justify-center mx-auto mb-4 shadow-xl ${getPriorityColor(selectedTicket.priority)} text-white`}>
+                      <ShieldAlert size={32} />
                    </div>
-                   <div className="h-8 w-px bg-gray-200" />
-                   <div className="text-center">
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Flux</p>
-                      <p className="text-sm font-black text-[#1a73e8] uppercase">{selectedTicket.source}</p>
+                   <h3 className="text-xl font-black text-[#202124] tracking-tight">{selectedTicket.productName}</h3>
+                   <p className="text-[9px] font-black text-[#1a73e8] uppercase tracking-[0.2em] mt-1">{selectedTicket.brand} • S/N {selectedTicket.serialNumber || 'Non Saisie'}</p>
+                   
+                   <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
+                      <div>
+                         <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Impact Client</p>
+                         <span className={`px-2 py-0.5 text-[9px] font-black uppercase border ${
+                            selectedTicket.clientImpact === 'Critique' ? 'bg-red-50 text-red-700 border-red-200' : 
+                            selectedTicket.clientImpact === 'Modéré' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                            'bg-blue-50 text-blue-700 border-blue-200'
+                         }`}>
+                           {selectedTicket.clientImpact || 'Faible'}
+                         </span>
+                      </div>
+                      <div>
+                         <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Délai SLA</p>
+                         <span className="text-[10px] font-bold text-[#3c4043]">{selectedTicket.status === 'Nouveau' ? 'J+0' : 'En cours'}</span>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="w-full md:w-72 p-6 bg-white border border-[#dadce0] space-y-4">
+                   <h4 className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2"><User size={14} /> Expert Assigné</h4>
+                   {selectedTicket.assignedTechnicianId ? (
+                      <div className="flex items-center gap-4">
+                         <img src={technicians.find(t => t.id === selectedTicket.assignedTechnicianId)?.avatar} className="w-12 h-12 rounded-none border p-0.5 bg-white shadow-sm" alt="" />
+                         <div>
+                            <p className="text-sm font-black text-[#202124] leading-none">{technicians.find(t => t.id === selectedTicket.assignedTechnicianId)?.name}</p>
+                            <p className="text-[9px] text-[#1a73e8] font-bold uppercase mt-1">Technicien Élite</p>
+                         </div>
+                      </div>
+                   ) : (
+                      <button className="w-full py-3 bg-blue-50 text-[#1a73e8] text-[9px] font-black uppercase tracking-widest hover:bg-[#1a73e8] hover:text-white transition-all border border-blue-100 flex items-center justify-center gap-2">
+                         <UserPlus size={14}/> Assigner un expert
+                      </button>
+                   )}
+                   <div className="pt-4 border-t border-gray-100">
+                      <p className="text-[8px] font-black text-gray-400 uppercase mb-2">Canal d'ouverture</p>
+                      <div className="flex items-center gap-2">
+                         <span className="p-1.5 bg-gray-50 text-gray-600 border"><MessageSquare size={12}/></span>
+                         <span className="text-[10px] font-black text-[#3c4043] uppercase tracking-tighter">{selectedTicket.source}</span>
+                      </div>
                    </div>
                 </div>
              </div>
 
-             <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><User size={16} /> Informations Titulaire</h4>
-                <div className="p-8 bg-white border border-[#dadce0] space-y-6 shadow-sm">
-                   <div className="flex items-center gap-6" title="Nom complet du client enregistré">
-                      <div className="w-14 h-14 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8]"><User size={24}/></div>
-                      <div>
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nom du Client</p>
-                         <p className="text-lg font-black text-[#3c4043]">{selectedTicket.customerName}</p>
+             {/* CLIENT & DESCRIPTION */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <section className="space-y-4">
+                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Briefcase size={16} /> Titulaire du Contrat</h4>
+                   <div className="p-8 bg-white border border-[#dadce0] space-y-6 shadow-sm">
+                      <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><User size={20}/></div>
+                         <div>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Identité Client</p>
+                            <p className="text-base font-black text-[#3c4043]">{selectedTicket.customerName}</p>
+                         </div>
+                      </div>
+                      <div className="h-px bg-gray-100" />
+                      <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><Smartphone size={20}/></div>
+                         <div>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Contact Urgent</p>
+                            <p className="text-base font-black text-[#3c4043] font-mono tracking-tighter">{selectedTicket.customerPhone}</p>
+                         </div>
+                      </div>
+                      <div className="h-px bg-gray-100" />
+                      <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><MapPin size={20}/></div>
+                         <div>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Localisation Site</p>
+                            <p className="text-xs font-bold text-[#5f6368] uppercase leading-tight">{selectedTicket.location || selectedTicket.showroom}</p>
+                         </div>
                       </div>
                    </div>
-                   <div className="h-px bg-gray-100" />
-                   <div className="flex items-center gap-6" title="Ligne directe mobile">
-                      <div className="w-14 h-14 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8]"><Smartphone size={24}/></div>
-                      <div>
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mobile Direct</p>
-                         <p className="text-lg font-black text-[#3c4043] font-mono">{selectedTicket.customerPhone}</p>
-                      </div>
+                </section>
+
+                <section className="space-y-4">
+                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={16} /> Diagnostic Client & Sinistre</h4>
+                   <div className="p-8 bg-[#fffcf5] border border-[#ffe082] shadow-sm italic text-sm text-gray-700 leading-relaxed font-medium relative h-full">
+                      <div className="absolute top-4 right-4 text-amber-300 opacity-30"><Play size={40} fill="currentColor"/></div>
+                      "{selectedTicket.description}"
+                      {selectedTicket.purchaseDate && (
+                         <div className="mt-10 pt-6 border-t border-amber-100 flex justify-between items-center not-italic">
+                            <div>
+                               <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Date d'Acquisition</p>
+                               <p className="text-xs font-bold text-[#3c4043]">{new Date(selectedTicket.purchaseDate).toLocaleDateString()}</p>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Protection</p>
+                               <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[9px] font-black uppercase border border-green-100">Garantie Plaza Care</span>
+                            </div>
+                         </div>
+                      )}
                    </div>
-                </div>
-             </section>
+                </section>
+             </div>
 
-             <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={16} /> Description du Sinistre</h4>
-                <div className="p-8 bg-[#fffcf5] border border-[#ffe082] shadow-sm italic text-sm text-gray-700 leading-relaxed font-medium" title="Symptômes et descriptif fournis par le client">
-                   "{selectedTicket.description}"
-                </div>
-             </section>
+             {/* FINANCIALS - ONLY IF SAV */}
+             {selectedTicket.financials && (
+               <section className="space-y-4">
+                  <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><DollarSign size={16} /> Expertise Financière Horizon</h4>
+                  <div className="p-10 bg-white border border-[#dadce0] shadow-sm relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rotate-45 translate-x-16 -translate-y-16" />
+                     <div className="grid grid-cols-1 md:grid-cols-4 gap-10 relative z-10">
+                        <div>
+                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Composants & Pièces</p>
+                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.partsTotal.toLocaleString()} <span className="text-[10px]">F</span></p>
+                        </div>
+                        <div>
+                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Main d'œuvre Expert</p>
+                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.laborTotal.toLocaleString()} <span className="text-[10px]">F</span></p>
+                        </div>
+                        <div>
+                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Logistique & Dépl.</p>
+                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.travelFee.toLocaleString()} <span className="text-[10px]">F</span></p>
+                        </div>
+                        <div className="p-4 bg-blue-50 border border-blue-100">
+                           <p className="text-[9px] font-black text-[#1a73e8] uppercase tracking-widest mb-2">Total Intervention HT</p>
+                           <p className="text-2xl font-black text-[#1a73e8] tracking-tighter">{selectedTicket.financials.grandTotal.toLocaleString()} <span className="text-xs">F</span></p>
+                           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-blue-100">
+                              <PaymentIcon size={12} className={selectedTicket.financials.isPaid ? 'text-green-600' : 'text-red-500'} />
+                              <span className={`text-[9px] font-black uppercase ${selectedTicket.financials.isPaid ? 'text-green-600' : 'text-red-500'}`}>
+                                 {selectedTicket.financials.isPaid ? 'Règlement Certifié' : 'En attente Paiement'}
+                              </span>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </section>
+             )}
 
+             {/* INTERVENTION REPORT */}
              <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><History size={16} /> Chronologie des Actions</h4>
-                <div className="py-12 text-center border-2 border-dashed border-[#dadce0] bg-gray-50/50">
-                   <Clock size={40} className="mx-auto text-gray-200 mb-4 opacity-50" />
-                   <p className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-widest">Aucun rapport expert documenté</p>
-                </div>
+                <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Wrench size={16} /> Rapport d'Intervention Expert</h4>
+                {selectedTicket.interventionReport?.actionsTaken?.length ? (
+                   <div className="p-8 bg-[#f8faff] border border-[#d2e3fc] space-y-8 shadow-sm">
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+                            <p className="text-[10px] font-black text-blue-700 uppercase tracking-[0.3em]">Actions Certifiées Cloud</p>
+                         </div>
+                         <div className="text-right">
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Condition Finale</p>
+                            <span className="text-sm font-black text-[#202124] uppercase">{selectedTicket.interventionReport.equipmentStatus || 'Vérifié'}</span>
+                         </div>
+                      </div>
+                      <div className="space-y-4">
+                         {selectedTicket.interventionReport.actionsTaken.map((action, idx) => (
+                            <div key={idx} className="flex gap-4 items-start group">
+                               <div className="w-8 h-8 bg-white border border-[#dadce0] flex items-center justify-center shrink-0 text-[#1a73e8] shadow-sm"><CheckCircle2 size={16}/></div>
+                               <div className="flex-1 pt-1.5 border-b border-gray-100 pb-4 group-last:border-none">
+                                  <p className="text-xs font-bold text-[#3c4043] uppercase tracking-tighter leading-relaxed">{action}</p>
+                               </div>
+                            </div>
+                         ))}
+                      </div>
+
+                      {selectedTicket.interventionReport.partsUsed?.length ? (
+                         <div className="mt-10 p-6 bg-white border border-[#dadce0]">
+                            <h5 className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest mb-4 flex items-center gap-2"><Package size={14}/> Pièces Extraites de l'Inventaire</h5>
+                            <div className="space-y-3">
+                               {selectedTicket.interventionReport.partsUsed.map((part, pidx) => (
+                                  <div key={pidx} className="flex justify-between items-center text-xs font-bold p-3 bg-gray-50 border-l-4 border-[#1a73e8]">
+                                     <span className="text-[#3c4043]">{part.name}</span>
+                                     <span className="text-[#1a73e8] uppercase font-black tracking-widest">Qty: {part.quantity} • {(part.unitPrice * part.quantity).toLocaleString()} F</span>
+                                  </div>
+                               ))}
+                            </div>
+                         </div>
+                      ) : null}
+                   </div>
+                ) : (
+                   <div className="py-20 text-center border-2 border-dashed border-[#dadce0] bg-gray-50/50">
+                      <Clock size={40} className="mx-auto text-gray-200 mb-4 opacity-50" />
+                      <p className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-widest">Aucune donnée technique transmise</p>
+                      <p className="text-[9px] text-gray-400 mt-2 font-medium">L'expert n'a pas encore validé son rapport terrain.</p>
+                   </div>
+                )}
              </section>
           </div>
         )}
@@ -508,11 +656,11 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Identité Complète</label>
-                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Jean Mba" title="Nom et prénom du client" />
+                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Jean Mba" />
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Ligne Mobile</label>
-                       <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-[#f8f9fa] border-none font-black font-mono" placeholder="+241 ..." title="Numéro de téléphone actif" />
+                       <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-[#f8f9fa] border-none font-black font-mono" placeholder="+241 ..." />
                     </div>
                  </div>
               </div>
@@ -521,11 +669,11 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Désignation Produit</label>
-                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Split LG Dual Inverter" title="Nom commercial de l'article" />
+                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Split LG Dual Inverter" />
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">N° de Série (S/N)</label>
-                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" placeholder="ex: SN-LG-..." title="Le numéro de série unique présent sur l'étiquette du produit" />
+                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" placeholder="ex: SN-LG-..." />
                     </div>
                  </div>
               </div>
@@ -534,13 +682,13 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Showroom Émetteur</label>
-                       <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full h-11 bg-[#f8f9fa] border-none font-black text-[10px] uppercase" title="Point de vente traitant la demande">
+                       <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full h-11 bg-[#f8f9fa] border-none font-black text-[10px] uppercase">
                           {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
                        </select>
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Expert Assigné</label>
-                       <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full h-11 bg-[#f8f9fa] border-none text-[#1a73e8] font-black text-[10px] uppercase" title="Spécialiste en charge de l'intervention">
+                       <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full h-11 bg-[#f8f9fa] border-none text-[#1a73e8] font-black text-[10px] uppercase">
                           <option value="">Algorithme Auto-Assign</option>
                           {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                        </select>
@@ -550,10 +698,10 @@ const Tickets: React.FC = () => {
            </div>
            <div className="space-y-2 pt-6 border-t border-[#f1f3f4]">
               <label className="text-[9px] font-black text-gray-400 uppercase ml-1 tracking-widest">Diagnostic Préliminaire / Descriptif</label>
-              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all shadow-inner" placeholder="Décrire avec précision les symptômes signalés par le bénéficiaire..." title="Détail technique de la panne ou du service demandé" />
+              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all shadow-inner" placeholder="Décrire avec précision les symptômes signalés par le bénéficiaire..." />
            </div>
            
-           <div className="p-6 bg-blue-50 border border-dashed border-blue-200 flex items-start gap-4 shadow-sm" title="Certification de validité cloud">
+           <div className="p-6 bg-blue-50 border border-dashed border-blue-200 flex items-start gap-4 shadow-sm">
               <ShieldCheck size={24} className="text-[#1a73e8] mt-1 shrink-0" />
               <div>
                  <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Certification Cloud Horizon</p>
@@ -564,10 +712,10 @@ const Tickets: React.FC = () => {
            </div>
 
            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Enregistrer et notifier l'expert technique">
+              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20">
                  <Save size={20} /> Valider le dossier
               </button>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Annuler la saisie sans sauvegarder">Annuler</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
            </div>
         </form>
       </Modal>

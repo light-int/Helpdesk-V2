@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   Activity, RefreshCw, Sparkles, TrendingUp, DollarSign,
-  AlertTriangle, CheckCircle2, Star, ArrowUpRight
+  AlertTriangle, CheckCircle2, Star, ArrowUpRight, UserCheck
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { generateStrategicReport, isAiOperational } from '../services/geminiService';
@@ -24,17 +24,25 @@ const Dashboard: React.FC = () => {
   useEffect(() => { refreshAll(); }, []);
 
   const stats = useMemo(() => {
-    const validTickets = (tickets || []).filter(t => !t.isArchived);
-    const totalRevenue = validTickets.reduce((acc, t) => acc + (t.financials?.grandTotal || 0), 0) || 0;
-    const criticalTickets = validTickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length || 0;
+    // Filtrage par rôle : Un technicien ne voit que SES tickets
+    const roleFilteredTickets = (tickets || []).filter(t => {
+      if (t.isArchived) return false;
+      if (currentUser?.role === 'TECHNICIAN') {
+        return t.assignedTechnicianId === currentUser.id;
+      }
+      return true;
+    });
+
+    const totalRevenue = roleFilteredTickets.reduce((acc, t) => acc + (t.financials?.grandTotal || 0), 0) || 0;
+    const criticalTickets = roleFilteredTickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length || 0;
 
     const categoryData = ['SAV', 'Installation', 'Maintenance', 'Livraison'].map(cat => ({
       name: cat,
-      value: validTickets.filter(t => t.category === cat).length || 0,
+      value: roleFilteredTickets.filter(t => t.category === cat).length || 0,
     }));
 
-    return { totalRevenue, categoryData, criticalTickets, totalCount: validTickets.length };
-  }, [tickets]);
+    return { totalRevenue, categoryData, criticalTickets, totalCount: roleFilteredTickets.length };
+  }, [tickets, currentUser]);
 
   if (isLoading) return (
     <div className="h-[80vh] flex items-center justify-center">
@@ -42,12 +50,18 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
+  const isTech = currentUser?.role === 'TECHNICIAN';
+
   return (
     <div className="space-y-8 animate-page-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-light text-[#202124]">Tableau de Bord</h1>
-          <p className="text-[#5f6368] text-xs font-bold uppercase tracking-widest mt-1">Surveillance Cloud Horizon • Libreville</p>
+          <h1 className="text-3xl font-light text-[#202124]">
+            {isTech ? `Console Expert : ${currentUser.name}` : 'Tableau de Bord'}
+          </h1>
+          <p className="text-[#5f6368] text-xs font-bold uppercase tracking-widest mt-1">
+            {isTech ? 'Suivi de votre activité technique individuelle' : 'Surveillance Cloud Horizon • Libreville'}
+          </p>
         </div>
         <div className="flex gap-3">
           {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && (
@@ -67,15 +81,15 @@ const Dashboard: React.FC = () => {
       {/* STRATEGIC KPIS - SHARP EDITION */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Chiffre d\'Affaires', value: `${(stats.totalRevenue/1000).toFixed(0)}k`, color: '#1a73e8', icon: <DollarSign size={20}/> },
-          { label: 'Volume SAV Actif', value: stats.totalCount, color: '#1a73e8', icon: <Activity size={20}/> },
-          { label: 'Urgences SLA', value: stats.criticalTickets, color: '#d93025', icon: <AlertTriangle size={20}/> },
-          { label: 'Satisfaction Client', value: '4.9', color: '#188038', icon: <Star size={20}/> }
+          { label: isTech ? 'Mon CA Produit' : 'Chiffre d\'Affaires', value: `${(stats.totalRevenue/1000).toFixed(0)}k`, color: '#1a73e8', icon: <DollarSign size={20}/> },
+          { label: isTech ? 'Mes Missions' : 'Volume SAV Actif', value: stats.totalCount, color: '#1a73e8', icon: <Activity size={20}/> },
+          { label: 'Mes Urgences', value: stats.criticalTickets, color: '#d93025', icon: <AlertTriangle size={20}/> },
+          { label: 'Ma Note Expert', value: isTech ? '4.9' : '4.9', color: '#188038', icon: <Star size={20}/> }
         ].map((s, i) => (
           <div key={i} className="stats-card">
              <div className="flex justify-between items-start mb-4">
                <div className="p-2 bg-gray-50 text-gray-500">{s.icon}</div>
-               <div className="text-[10px] font-bold text-gray-400 uppercase">Aujourd'hui</div>
+               <div className="text-[10px] font-bold text-gray-400 uppercase">Période Actuelle</div>
              </div>
              <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">{s.label}</p>
              <h3 className="text-3xl font-bold text-[#202124] mt-2 tracking-tight">{s.value}</h3>
@@ -85,7 +99,9 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
          <div className="lg:col-span-2 stats-card p-10 bg-white">
-            <h2 className="text-xs font-black text-[#202124] uppercase tracking-widest mb-10">Flux d'Interventions par Pôle</h2>
+            <h2 className="text-xs font-black text-[#202124] uppercase tracking-widest mb-10">
+               {isTech ? 'Répartition de mes interventions' : 'Flux d\'Interventions par Pôle'}
+            </h2>
             <div className="h-[350px]">
                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.categoryData}>
@@ -109,9 +125,14 @@ const Dashboard: React.FC = () => {
          </div>
 
          <div className="stats-card p-6 bg-[#fdfdfd]">
-            <h2 className="text-xs font-black text-[#202124] uppercase tracking-widest mb-6">Urgences Critiques</h2>
+            <h2 className="text-xs font-black text-[#202124] uppercase tracking-widest mb-6">
+               {isTech ? 'Mes Priorités' : 'Urgences Critiques'}
+            </h2>
             <div className="space-y-2">
-               {tickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').slice(0, 5).map((t) => (
+               {tickets.filter(t => {
+                  const matchesUser = isTech ? t.assignedTechnicianId === currentUser.id : true;
+                  return matchesUser && t.priority === 'Urgent' && t.status !== 'Fermé';
+               }).slice(0, 5).map((t) => (
                   <Link to={`/tickets?id=${t.id}`} key={t.id} className="block p-4 border border-[#dadce0] bg-white hover:border-[#1a73e8] transition-all group">
                      <div className="flex justify-between items-start">
                         <span className="text-[10px] font-black text-[#1a73e8]">#{t.id}</span>
@@ -123,8 +144,8 @@ const Dashboard: React.FC = () => {
                ))}
                {stats.criticalTickets === 0 && (
                   <div className="py-20 text-center">
-                     <CheckCircle2 size={40} className="mx-auto text-gray-200 mb-4" />
-                     <p className="text-xs font-bold text-gray-400 uppercase">Flux Nominal</p>
+                     <CheckCircle2 size={40} className="mx-auto text-green-100 mb-4" />
+                     <p className="text-xs font-bold text-gray-400 uppercase">Aucune urgence en attente</p>
                   </div>
                )}
             </div>
