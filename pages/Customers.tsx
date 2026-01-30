@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { 
   Users, Search, Plus, Mail, Phone, Filter, 
   Edit3, Trash2, Save, Building2, User as UserIcon,
@@ -11,9 +10,7 @@ import {
   Archive, RotateCcw, AlertCircle, ChevronLeft, ChevronRight,
   FilterX, Smartphone, Briefcase, TrendingUp, DollarSign,
   LayoutGrid, ListFilter, SlidersHorizontal, UserPlus,
-  Star, Trophy, Zap, ChevronUp, ChevronDown,
-  // Fix: Added missing RefreshCw icon import
-  RefreshCw
+  Star, Trophy, Zap, ChevronUp, ChevronDown, RefreshCw
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Customer, Ticket } from '../types';
@@ -54,7 +51,9 @@ const Customers: React.FC = () => {
     return (customers || []).filter(c => {
       if (c.isArchived) return false;
       const cleanSearch = searchTerm.toLowerCase();
-      const matchesSearch = c.name.toLowerCase().includes(cleanSearch) || c.phone.includes(cleanSearch) || (c.companyName || '').toLowerCase().includes(cleanSearch);
+      const matchesSearch = c.name.toLowerCase().includes(cleanSearch) || 
+                          c.phone.includes(cleanSearch) || 
+                          (c.companyName || '').toLowerCase().includes(cleanSearch);
       const matchesType = typeFilter === 'Tous' || c.type === typeFilter;
       const matchesStatus = statusFilter === 'Tous' || c.status === statusFilter;
       
@@ -76,13 +75,6 @@ const Customers: React.FC = () => {
       t.customerName === selectedCustomer.name
     ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [selectedCustomer, tickets]);
-
-  const isRecent = (dateStr?: string) => {
-    if (!dateStr) return false;
-    const now = new Date().getTime();
-    const then = new Date(dateStr).getTime();
-    return (now - then) < (7 * 24 * 60 * 60 * 1000);
-  };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -187,12 +179,11 @@ const Customers: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-4">
-                 {/* Type Filter - Icons Only */}
                  <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
                     {[
                       { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tous les profils' },
-                      { id: 'Particulier', icon: <UserIcon size={20} />, label: 'Particuliers uniquement' },
-                      { id: 'Entreprise', icon: <Building2 size={20} />, label: 'B2B uniquement' }
+                      { id: 'Particulier', icon: <UserIcon size={20} />, label: 'Particuliers' },
+                      { id: 'Entreprise', icon: <Building2 size={20} />, label: 'B2B' }
                     ].map(item => (
                       <button 
                         key={item.id}
@@ -251,13 +242,12 @@ const Customers: React.FC = () => {
            )}
         </div>
 
-        {/* CUSTOMERS TABLE */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-[#dadce0] bg-[#f8f9fa] text-[#5f6368] text-[9px] font-black uppercase tracking-[0.2em]">
                 <th className="px-10 py-6">Client & Type</th>
-                <th className="px-10 py-6">Coordonnées Réelles</th>
+                <th className="px-10 py-6">Coordonnées</th>
                 <th className="px-10 py-6 text-center">Historique SAV</th>
                 <th className="px-10 py-6 text-center">Dernière Visite</th>
                 <th className="px-10 py-6 text-right">Statut & Actions</th>
@@ -376,7 +366,6 @@ const Customers: React.FC = () => {
       >
         {selectedCustomer && (
           <div className="space-y-10">
-             {/* CRM INDICATORS */}
              <div className="grid grid-cols-2 gap-4">
                 <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[32px] shadow-sm">
                    <p className="text-[9px] font-black text-blue-700 uppercase mb-2 flex items-center gap-2"><DollarSign size={10}/> Volume d'affaires</p>
@@ -388,7 +377,6 @@ const Customers: React.FC = () => {
                 </div>
              </div>
 
-             {/* CONTACT INFO CARD */}
              <section className="space-y-4">
                 <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Smartphone size={16} /> Profil Vérifié Horizon</h3>
                 <div className="p-8 bg-white border border-[#dadce0] rounded-[40px] space-y-6 shadow-sm">
@@ -407,18 +395,9 @@ const Customers: React.FC = () => {
                          <p className="text-base font-bold text-[#3c4043] truncate">{selectedCustomer.email || 'Non renseigné'}</p>
                       </div>
                    </div>
-                   <div className="h-px bg-gray-100" />
-                   <div className="flex items-center gap-6">
-                      <div className="w-14 h-14 bg-[#f8f9fa] rounded-2xl border flex items-center justify-center text-[#1a73e8] shadow-inner"><MapPin size={24}/></div>
-                      <div>
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Zone de Service</p>
-                         <p className="text-base font-bold text-[#3c4043]">{selectedCustomer.address || 'Libreville'}</p>
-                      </div>
-                   </div>
                 </div>
              </section>
 
-             {/* TICKET TIMELINE */}
              <section className="space-y-4">
                 <div className="flex items-center justify-between">
                    <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><History size={16} /> Journal des Dossiers SAV</h3>
@@ -444,14 +423,6 @@ const Customers: React.FC = () => {
                         <div className="p-4 bg-gray-50 rounded-2xl border border-transparent group-hover:border-gray-200 transition-all mb-4">
                            <p className="text-[11px] text-gray-500 italic leading-relaxed">"{ticket.description}"</p>
                         </div>
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
-                              <Calendar size={12} /> {new Date(ticket.createdAt).toLocaleDateString('fr-FR', {day:'2-digit', month:'long', year:'numeric'})}
-                           </div>
-                           <div className="text-[10px] font-black text-[#1a73e8] flex items-center gap-1 group-hover:translate-x-1 transition-transform uppercase tracking-widest">
-                              Consulter Audit <ArrowUpRight size={14}/>
-                           </div>
-                        </div>
                      </div>
                    ))}
                    {customerTickets.length === 0 && (
@@ -466,7 +437,6 @@ const Customers: React.FC = () => {
         )}
       </Drawer>
 
-      {/* MODAL CRM */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => { setIsModalOpen(false); setEditingCustomer(null); }} 
@@ -520,7 +490,7 @@ const Customers: React.FC = () => {
                <div>
                   <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Conformité RGPD / Horizon Privacy</p>
                   <p className="text-[10px] text-blue-600 mt-2 leading-relaxed font-medium uppercase">
-                    Les données collectées ici sont strictement réservées à l'usage interne de Royal Plaza pour le suivi des prestations SAV et la facturation. Elles sont synchronisées en temps réel sur le cloud sécurisé Horizon.
+                    Les données collectées ici sont strictement réservées à l'usage interne de Royal Plaza. Elles sont synchronisées en temps réel sur le cloud sécurisé Horizon.
                   </p>
                </div>
             </div>
