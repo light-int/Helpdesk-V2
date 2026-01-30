@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   Activity, RefreshCw, Sparkles, BrainCircuit, TrendingUp, DollarSign,
-  AlertTriangle, CheckCircle2, X, Star, ArrowUpRight, ShieldAlert
+  AlertTriangle, CheckCircle2, X, Star, ArrowUpRight, ShieldAlert, ShieldX
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { generateStrategicReport, isAiOperational } from '../services/geminiService';
@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const { 
-    tickets, isLoading, refreshAll, isSyncing 
+    tickets, isLoading, refreshAll, isSyncing, config 
   } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
@@ -21,6 +21,7 @@ const Dashboard: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   
   const aiReady = isAiOperational();
+  const auditAllowed = config.aiEnabled && config.aiStrategicAudit;
 
   useEffect(() => { refreshAll(); }, []);
 
@@ -46,8 +47,16 @@ const Dashboard: React.FC = () => {
     if (!aiReady) {
        addNotification({ 
          title: 'IA Inactive', 
-         message: 'Le moteur Gemini n\'est pas configuré. Accès CRM uniquement.', 
+         message: 'Le moteur Gemini n\'est pas configuré.', 
          type: 'warning' 
+       });
+       return;
+    }
+    if (!auditAllowed) {
+       addNotification({ 
+         title: 'Fonction Désactivée', 
+         message: 'L\'audit stratégique a été désactivé dans les paramètres IA.', 
+         type: 'error' 
        });
        return;
     }
@@ -56,14 +65,14 @@ const Dashboard: React.FC = () => {
        return;
     }
     setIsGenerating(true);
-    addNotification({ title: 'Analyse IA', message: 'Gemini examine les données...', type: 'info' });
+    addNotification({ title: 'Analyse IA', message: `Moteur ${config.aiModel === 'pro' ? 'Visionnaire' : 'Horizon'} en action...`, type: 'info' });
     try {
         const report = await generateStrategicReport({ 
           ticketCount: tickets.length, 
           totalRevenue: stats.totalRevenue,
           marginPercent: stats.marginPercent,
           categories: stats.categoryData,
-        });
+        }, config.aiModel);
         setAiReport(report || null);
     } catch(e) {
         addNotification({ title: 'Erreur IA', message: 'Échec de la communication avec Gemini.', type: 'error' });
@@ -94,11 +103,11 @@ const Dashboard: React.FC = () => {
             <button 
               onClick={handleAiInsights} 
               disabled={isGenerating} 
-              className={`btn-google-outlined h-10 ${aiReady ? 'text-[#1a73e8] border-[#1a73e8] hover:bg-[#e8f0fe]' : 'text-gray-400 border-gray-200 opacity-50'}`}
-              title={!aiReady ? "Clé API Gemini manquante" : "Générer un audit stratégique"}
+              className={`btn-google-outlined h-10 ${(aiReady && auditAllowed) ? 'text-[#1a73e8] border-[#1a73e8] hover:bg-[#e8f0fe]' : 'text-gray-400 border-gray-200 opacity-50'}`}
+              title={!aiReady ? "Clé API Gemini manquante" : !auditAllowed ? "Désactivé dans les réglages" : "Générer un audit stratégique"}
             >
-               <Sparkles size={16} className={isGenerating ? 'animate-pulse' : ''} /> 
-               <span className="ml-2">{aiReady ? 'Audit Stratégique IA' : 'IA Désactivée'}</span>
+               {(!aiReady || !auditAllowed) ? <ShieldX size={16} /> : <Sparkles size={16} className={isGenerating ? 'animate-pulse' : ''} />}
+               <span className="ml-2">{!(aiReady && auditAllowed) ? 'IA Désactivée' : 'Audit Stratégique IA'}</span>
             </button>
           )}
           <button onClick={refreshAll} disabled={isSyncing} className="btn-google-outlined h-10 px-4">

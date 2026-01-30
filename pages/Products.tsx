@@ -101,7 +101,7 @@ const Products: React.FC = () => {
       category: formData.get('category') as string,
       price: parseFloat(formData.get('price') as string || '0'),
       warrantyMonths: parseInt(formData.get('warrantyMonths') as string || '12'),
-      image: previewImageUrl || null
+      image: previewImageUrl || undefined
     };
 
     try {
