@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
             <h2 className="text-sm font-black text-[#3c4043] uppercase tracking-widest mb-8">Urgences Critiques</h2>
             <div className="space-y-4">
                {tickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').slice(0, 4).map((t, i) => (
-                  <Link to="/tickets" key={t.id} className="block p-4 bg-white rounded-2xl border border-red-100 hover:shadow-md transition-all group">
+                  <Link to={`/tickets?id=${t.id}`} key={t.id} className="block p-4 bg-white rounded-2xl border border-red-100 hover:shadow-md transition-all group">
                      <div className="flex justify-between items-start">
                         <p className="text-xs font-black text-red-600">#{t.id}</p>
                         <ArrowUpRight size={14} className="text-red-200 group-hover:text-red-600" />
