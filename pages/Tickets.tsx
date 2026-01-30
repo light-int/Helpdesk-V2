@@ -13,7 +13,7 @@ import {
   SlidersHorizontal, LayoutGrid, ListFilter, MapPinned, ChevronLeft, ArrowUpRight,
   Timer, BarChart3, RotateCcw, Boxes, Shapes, CalendarDays, Sliders, ChevronDown, ChevronUp,
   CreditCard as PaymentIcon, Gauge, CheckCircle, Wallet, Send, PlayCircle, PlusCircle, MinusCircle,
-  CalendarCheck, Target as ImpactIcon, Globe
+  CalendarCheck, Target as ImpactIcon, Globe, TrendingDown
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, TicketStatus, TicketCategory, Showroom, UsedPart, Customer, Technician, FinancialDetail, InterventionReport, Part } from '../types';
@@ -111,7 +111,7 @@ const Tickets: React.FC = () => {
       if (a.priority === 'Urgent' && b.priority !== 'Urgent') return -1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [tickets, searchTerm, statusFilter, priorityFilter, showroomFilter, categoryFilter, currentUser]);
+  }, [tickets, searchTerm, statusFilter, priorityFilter, showroomFilter, categoryFilter, currentUser, isTechnician]);
 
   const paginatedTickets = useMemo(() => {
     const startIndex = (currentPage - 1) * TICKETS_PER_PAGE;
@@ -274,7 +274,7 @@ const Tickets: React.FC = () => {
              <input type="text" placeholder="Recherche client, matériel, ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 h-12 bg-gray-50 border-none text-sm font-bold" />
           </div>
           <div className="flex gap-2">
-             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-12 bg-gray-50 border-none text-[10px] font-black uppercase px-4"><option value="Tous">Tous les statuts</option><option value="Nouveau">Nouveau</option><option value="En cours">En cours</option><option value="Résolu">Résolu</option></select>
+             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-12 bg-gray-50 border-none text-[10px] font-black uppercase px-4"><option value="Tous">Tous les statuts</option><option value="Nouveau">Nouveau</option><option value="En cours">En cours</option><option value="En attente d'approbation">En attente d'approbation</option><option value="Résolu">Résolu</option></select>
              <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="h-12 bg-gray-50 border-none text-[10px] font-black uppercase px-4"><option value="Toutes">Priorité</option><option value="Urgent">Urgent</option><option value="Haute">Haute</option></select>
           </div>
         </div>
@@ -333,7 +333,28 @@ const Tickets: React.FC = () => {
                 {renderStepper(selectedTicket.status)}
              </section>
 
-             {/* 2. DESCRIPTION DES SYMPTÔMES - PRIORITÉ TECHNICIEN */}
+             {/* 2. MANAGER INSIGHTS - RENTABILITÉ VISIBLE UNIQUEMENT POUR LE MANAGEMENT */}
+             {isManager && selectedTicket.financials && (
+                <section className="space-y-4">
+                   <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-[0.2em] flex items-center gap-2"><DollarSign size={14} /> Performance Financière du Dossier</h4>
+                   <div className="grid grid-cols-3 gap-4">
+                      <div className="p-4 bg-white border border-purple-100 shadow-sm text-center">
+                         <p className="text-[8px] font-black text-gray-400 uppercase">Revenu Brut</p>
+                         <p className="text-sm font-black text-purple-700">{(selectedTicket.financials.grandTotal || 0).toLocaleString()} F</p>
+                      </div>
+                      <div className="p-4 bg-white border border-purple-100 shadow-sm text-center">
+                         <p className="text-[8px] font-black text-gray-400 uppercase">Marge Nette</p>
+                         <p className="text-sm font-black text-green-700">{(selectedTicket.financials.netMargin || 0).toLocaleString()} F</p>
+                      </div>
+                      <div className="p-4 bg-white border border-purple-100 shadow-sm text-center">
+                         <p className="text-[8px] font-black text-gray-400 uppercase">Indice Rent.</p>
+                         <p className="text-sm font-black text-blue-700">{selectedTicket.financials.grandTotal > 0 ? ((selectedTicket.financials.netMargin / selectedTicket.financials.grandTotal) * 100).toFixed(0) : 0}%</p>
+                      </div>
+                   </div>
+                </section>
+             )}
+
+             {/* 3. DESCRIPTION DES SYMPTÔMES */}
              <section className="space-y-4">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={14} /> Description & Diagnostic Initial</h4>
                 <div className="p-8 bg-[#fffdf5] border border-[#ffe082] relative shadow-sm">
@@ -342,7 +363,7 @@ const Tickets: React.FC = () => {
                 </div>
              </section>
 
-             {/* 3. DÉTAILS DU MATÉRIEL */}
+             {/* 4. DÉTAILS DU MATÉRIEL */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="p-8 bg-white border-2 border-gray-100 space-y-4 shadow-sm">
                    <div className="flex items-center gap-3">
@@ -384,7 +405,7 @@ const Tickets: React.FC = () => {
                 </div>
              </div>
 
-             {/* 4. BLOC CLIENT - MASQUÉ POUR LE TECHNICIEN */}
+             {/* 5. BLOC CLIENT - MASQUÉ POUR LE TECHNICIEN */}
              {!isTechnician && (
                 <section className="space-y-4">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><User size={14} /> Informations Titulaire</h4>
@@ -413,7 +434,7 @@ const Tickets: React.FC = () => {
                 </section>
              )}
 
-             {/* 5. EXPERT ASSIGNÉ */}
+             {/* 6. EXPERT ASSIGNÉ */}
              <section className="space-y-4">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><Wrench size={14} /> Équipe Assignée</h4>
                 <div className="p-6 bg-white border border-gray-100 shadow-sm">
@@ -429,7 +450,7 @@ const Tickets: React.FC = () => {
                 </div>
              </section>
 
-             {/* 6. RAPPORT TECHNIQUE (VUE RÉCAPITULATIVE) */}
+             {/* 7. RAPPORT TECHNIQUE (VUE RÉCAPITULATIVE) */}
              {selectedTicket.interventionReport && (selectedTicket.interventionReport.actionsTaken?.length || selectedTicket.interventionReport.partsUsed?.length) && (
                 <section className="space-y-4 pt-10 border-t border-gray-100">
                    <h4 className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em] flex items-center gap-2"><ShieldCheck size={16}/> Certification Technique Terrain</h4>
@@ -463,7 +484,6 @@ const Tickets: React.FC = () => {
         )}
       </Drawer>
 
-      {/* MODAL RAPPORT TECHNIQUE (TECHNICIEN UNIQUEMENT) */}
       <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Documentation de l'Intervention Terrain" size="lg">
          <form onSubmit={handleSaveReport} className="space-y-10">
             <section className="space-y-4">
@@ -503,7 +523,6 @@ const Tickets: React.FC = () => {
          </form>
       </Modal>
 
-      {/* MODAL ÉDITION DOSSIER (ADMIN/MANAGER UNIQUEMENT) */}
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTicket(null); }} title={editingTicket ? `Modification Dossier : ${editingTicket.id}` : "Nouveau Dossier SAV Horizon"} size="xl">
         <form onSubmit={handleSave} className="space-y-10">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">

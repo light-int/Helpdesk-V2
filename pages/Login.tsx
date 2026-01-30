@@ -35,6 +35,7 @@ const LoginPage: React.FC = () => {
           showroom: 'Glass'
         };
         await ApiService.users.save(firstAdmin);
+        await ApiService.users.logConnection(firstAdmin.id);
         login(firstAdmin);
         addNotification({ title: 'Initialisation Système', message: 'Compte Super Admin synchronisé avec le Cloud.', type: 'info' });
         return;
@@ -47,6 +48,7 @@ const LoginPage: React.FC = () => {
       );
 
       if (user) {
+        await ApiService.users.logConnection(user.id);
         login(user);
         addNotification({ title: 'Système Horizon', message: `Bienvenue, ${user.name}. Session authentifiée.`, type: 'success' });
       } else {

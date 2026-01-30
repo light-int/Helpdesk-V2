@@ -217,7 +217,7 @@ export const ApiService = {
   },
 
   users: {
-    getAll: async (): Promise<UserProfile[]> => await safeFetch(supabase.from('users').select('*'), []),
+    getAll: async (): Promise<UserProfile[]> => await safeFetch(supabase.from('users').select('*').order('name'), []),
     save: async (user: UserProfile) => {
       const cleaned = cleanObject(user, USER_COLUMNS);
       const { data, error } = await supabase.from('users').upsert(cleaned);
@@ -229,14 +229,18 @@ export const ApiService = {
     },
     delete: async (id: string) => await supabase.from('users').delete().eq('id', id),
     logConnection: async (userId: string) => {
-      return supabase.from('user_connections').insert({
+      const now = new Date().toISOString();
+      // 1. Enregistrer dans le journal d'audit
+      await supabase.from('user_connections').insert({
         user_id: userId,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
         metadata: {
           userAgent: navigator.userAgent,
           platform: navigator.platform
         }
       });
+      // 2. Mettre à jour lastLogin sur l'utilisateur pour le Dashboard
+      await supabase.from('users').update({ lastLogin: now }).eq('id', userId);
     },
     getConnectionLogs: async (userId: string) => {
       return await safeFetch(supabase.from('user_connections').select('*').eq('user_id', userId).order('timestamp', { ascending: false }).limit(20), []);
