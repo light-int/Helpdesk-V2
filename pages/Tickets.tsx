@@ -184,9 +184,9 @@ const Tickets: React.FC = () => {
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management Central Royal Plaza Horizon</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4"><RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /></button>
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser le flux des dossiers SAV"><RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /></button>
           {canCreateTicket && (
-            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
+            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Émettre un nouveau dossier SAV">
               <Plus size={20} /> <span>Nouveau Dossier</span>
             </button>
           )}
@@ -196,12 +196,12 @@ const Tickets: React.FC = () => {
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/> },
-          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/> },
-          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/> },
-          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/> }
+          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/>, title: "Nombre total de dossiers non archivés" },
+          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/>, title: "Dossiers critiques nécessitant une action immédiate" },
+          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/>, title: "Nouveaux dossiers non assignés" },
+          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/>, title: "Volume de dossiers résolus sur la période" }
         ].map((s, i) => (
-          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }}>
+          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }} title={s.title}>
              <div className="flex justify-between items-start">
                <div>
                  <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{s.label}</p>
@@ -217,7 +217,7 @@ const Tickets: React.FC = () => {
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="p-8 space-y-8">
            <div className="flex flex-col xl:flex-row gap-6">
-              <div className="relative flex-1 group">
+              <div className="relative flex-1 group" title="Recherche par client, identifiant ou numéro de série">
                  <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                  <input 
                   type="text" 
@@ -227,7 +227,7 @@ const Tickets: React.FC = () => {
                   onChange={e => setSearchTerm(e.target.value)}
                  />
                  {searchTerm && (
-                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500">
+                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500" title="Effacer le filtre">
                      <X size={22} />
                    </button>
                  )}
@@ -236,9 +236,9 @@ const Tickets: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4">
                  <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
                     {[
-                      { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tout' },
-                      { id: 'Nouveau', icon: <BellRing size={20} />, label: 'Nouveaux' },
-                      { id: 'En cours', icon: <Clock size={20} />, label: 'En cours' }
+                      { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tous les tickets' },
+                      { id: 'Nouveau', icon: <BellRing size={20} />, label: 'Dossiers Nouveaux' },
+                      { id: 'En cours', icon: <Clock size={20} />, label: 'Interventions en cours' }
                     ].map(item => (
                       <button 
                         key={item.id}
@@ -254,13 +254,13 @@ const Tickets: React.FC = () => {
                  <div className="flex items-center gap-4">
                     <button 
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                      title="Filtres avancés"
+                      title={showAdvancedFilters ? "Masquer les options stratégiques" : "Afficher les filtres par showroom et priorité"}
                       className={`p-4.5 border-2 transition-all ${showAdvancedFilters ? 'bg-[#202124] border-[#202124] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}
                     >
                       <Sliders size={22} />
                     </button>
 
-                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group" title="Dossiers correspondants aux critères">
                       <div className="absolute top-0 right-0 w-1 h-full bg-[#1a73e8]" />
                       <div className="shrink-0 mr-4">
                          <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ const Tickets: React.FC = () => {
                  </div>
                  
                  {(searchTerm || statusFilter !== 'Tous' || priorityFilter !== 'Toutes' || showroomFilter !== 'Tous' || categoryFilter !== 'Toutes') && (
-                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser">
+                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser l'ensemble des filtres">
                        <RotateCcw size={24} className="group-hover:rotate-[-180deg] transition-transform duration-700" />
                     </button>
                  )}
@@ -284,11 +284,12 @@ const Tickets: React.FC = () => {
            {showAdvancedFilters && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-[#f1f3f4] animate-in slide-in-from-top-4 duration-500">
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><MapPin size={12} /> Showroom émetteur</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Source géographique de la demande"><MapPin size={12} /> Showroom émetteur</label>
                    <select 
                       value={showroomFilter} 
                       onChange={e => setShowroomFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
+                      title="Choisir un point de vente spécifique"
                    >
                       <option value="Tous">Tous les showrooms</option>
                       {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
@@ -296,11 +297,12 @@ const Tickets: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Zap size={12} /> Niveau d'urgence</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Niveau critique pour le respect du contrat de service"><Zap size={12} /> Niveau d'urgence</label>
                    <select 
                       value={priorityFilter} 
                       onChange={e => setPriorityFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
+                      title="Filtrer par degré d'urgence"
                    >
                       <option value="Toutes">Toutes priorités</option>
                       <option value="Urgent">Urgent SLA</option>
@@ -310,11 +312,12 @@ const Tickets: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Tag size={12} /> Catégorie technique</label>
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2" title="Type d'intervention nécessaire"><Tag size={12} /> Catégorie technique</label>
                    <select 
                       value={categoryFilter} 
                       onChange={e => setCategoryFilter(e.target.value)}
                       className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
+                      title="Filtrer par type de service"
                    >
                       <option value="Toutes">Toutes catégories</option>
                       <option value="SAV">SAV Classique</option>
@@ -344,11 +347,12 @@ const Tickets: React.FC = () => {
                   key={t.id} 
                   onClick={() => setSelectedTicket(t)}
                   className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedTicket?.id === t.id ? 'bg-[#e8f0fe]' : 'bg-white'}`}
+                  title={`Consulter le dossier technique #${t.id}`}
                 >
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-3">
                        <span className="text-sm font-black text-[#1a73e8]">#{t.id}</span>
-                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200">{t.source}</span>
+                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200" title={`Demande reçue via ${t.source}`}>{t.source}</span>
                     </div>
                   </td>
                   <td className="px-10 py-6">
@@ -360,13 +364,13 @@ const Tickets: React.FC = () => {
                     <p className="text-[9px] text-gray-400 font-bold uppercase mt-1.5 tracking-tighter">{t.brand} • S/N: {t.serialNumber || 'NON SPECIFIÉ'}</p>
                   </td>
                   <td className="px-10 py-6">
-                     <div className="flex items-center justify-center gap-3">
+                     <div className="flex items-center justify-center gap-3" title={`Priorité: ${t.priority}`}>
                         <div className={`w-2 h-2 rounded-full ${getPriorityColor(t.priority)} shadow-sm`} />
                         <span className="text-[9px] font-black uppercase tracking-widest text-[#5f6368]">{t.priority}</span>
                      </div>
                   </td>
                   <td className="px-10 py-6 text-right">
-                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`}>
+                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`} title={`État actuel du workflow: ${t.status}`}>
                       {t.status}
                     </span>
                   </td>
@@ -396,6 +400,7 @@ const Tickets: React.FC = () => {
                 disabled={currentPage === 1} 
                 onClick={() => setCurrentPage(p => p - 1)}
                 className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
+                title="Page précédente"
                >
                  <ChevronLeft size={20} />
                </button>
@@ -404,6 +409,7 @@ const Tickets: React.FC = () => {
                 disabled={currentPage === totalPages} 
                 onClick={() => setCurrentPage(p => p + 1)}
                 className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
+                title="Page suivante"
                >
                  <ChevronRight size={20} />
                </button>
@@ -421,12 +427,13 @@ const Tickets: React.FC = () => {
         icon={<TicketIcon size={20} />}
         footer={
           <div className="flex gap-3">
-             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10">
+             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10" title="Consulter ou remplir les rapports de maintenance">
                 <Wrench size={18} /> Rapports d'intervention
              </button>
              <button 
                onClick={() => { if(selectedTicket && window.confirm('Dossier résolu et certifié ?')) { /* Logic */ setSelectedTicket(null); } }}
                className="p-4 bg-green-50 text-green-700 border border-green-100 rounded-none hover:bg-green-600 hover:text-white transition-all shadow-sm"
+               title="Marquer le dossier comme certifié et résolu"
              >
                 <CheckCircle2 size={20} />
              </button>
@@ -435,7 +442,7 @@ const Tickets: React.FC = () => {
       >
         {selectedTicket && (
           <div className="space-y-10">
-             <div className="p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] rounded-none shadow-sm flex flex-col items-center text-center">
+             <div className="p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] rounded-none shadow-sm flex flex-col items-center text-center" title="Identité visuelle du matériel sinistré">
                 <div className={`w-20 h-20 rounded-none flex items-center justify-center mb-6 shadow-xl ${getPriorityColor(selectedTicket.priority)} text-white`}>
                    <ShieldAlert size={40} />
                 </div>
@@ -457,7 +464,7 @@ const Tickets: React.FC = () => {
              <section className="space-y-4">
                 <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><User size={16} /> Informations Titulaire</h4>
                 <div className="p-8 bg-white border border-[#dadce0] space-y-6 shadow-sm">
-                   <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-6" title="Nom complet du client enregistré">
                       <div className="w-14 h-14 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8]"><User size={24}/></div>
                       <div>
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nom du Client</p>
@@ -465,7 +472,7 @@ const Tickets: React.FC = () => {
                       </div>
                    </div>
                    <div className="h-px bg-gray-100" />
-                   <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-6" title="Ligne directe mobile">
                       <div className="w-14 h-14 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8]"><Smartphone size={24}/></div>
                       <div>
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mobile Direct</p>
@@ -477,7 +484,7 @@ const Tickets: React.FC = () => {
 
              <section className="space-y-4">
                 <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={16} /> Description du Sinistre</h4>
-                <div className="p-8 bg-[#fffcf5] border border-[#ffe082] shadow-sm italic text-sm text-gray-700 leading-relaxed font-medium">
+                <div className="p-8 bg-[#fffcf5] border border-[#ffe082] shadow-sm italic text-sm text-gray-700 leading-relaxed font-medium" title="Symptômes et descriptif fournis par le client">
                    "{selectedTicket.description}"
                 </div>
              </section>
@@ -501,11 +508,11 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Identité Complète</label>
-                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Jean Mba" />
+                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Jean Mba" title="Nom et prénom du client" />
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Ligne Mobile</label>
-                       <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-[#f8f9fa] border-none font-black font-mono" placeholder="+241 ..." />
+                       <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-[#f8f9fa] border-none font-black font-mono" placeholder="+241 ..." title="Numéro de téléphone actif" />
                     </div>
                  </div>
               </div>
@@ -514,11 +521,11 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Désignation Produit</label>
-                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Split LG Dual Inverter" />
+                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Split LG Dual Inverter" title="Nom commercial de l'article" />
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">N° de Série (S/N)</label>
-                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" placeholder="ex: SN-LG-..." />
+                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" placeholder="ex: SN-LG-..." title="Le numéro de série unique présent sur l'étiquette du produit" />
                     </div>
                  </div>
               </div>
@@ -527,13 +534,13 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Showroom Émetteur</label>
-                       <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full h-11 bg-[#f8f9fa] border-none font-black text-[10px] uppercase">
+                       <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full h-11 bg-[#f8f9fa] border-none font-black text-[10px] uppercase" title="Point de vente traitant la demande">
                           {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
                        </select>
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Expert Assigné</label>
-                       <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full h-11 bg-[#f8f9fa] border-none text-[#1a73e8] font-black text-[10px] uppercase">
+                       <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full h-11 bg-[#f8f9fa] border-none text-[#1a73e8] font-black text-[10px] uppercase" title="Spécialiste en charge de l'intervention">
                           <option value="">Algorithme Auto-Assign</option>
                           {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                        </select>
@@ -543,10 +550,10 @@ const Tickets: React.FC = () => {
            </div>
            <div className="space-y-2 pt-6 border-t border-[#f1f3f4]">
               <label className="text-[9px] font-black text-gray-400 uppercase ml-1 tracking-widest">Diagnostic Préliminaire / Descriptif</label>
-              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all shadow-inner" placeholder="Décrire avec précision les symptômes signalés par le bénéficiaire..." />
+              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all shadow-inner" placeholder="Décrire avec précision les symptômes signalés par le bénéficiaire..." title="Détail technique de la panne ou du service demandé" />
            </div>
            
-           <div className="p-6 bg-blue-50 border border-dashed border-blue-200 flex items-start gap-4 shadow-sm">
+           <div className="p-6 bg-blue-50 border border-dashed border-blue-200 flex items-start gap-4 shadow-sm" title="Certification de validité cloud">
               <ShieldCheck size={24} className="text-[#1a73e8] mt-1 shrink-0" />
               <div>
                  <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Certification Cloud Horizon</p>
@@ -557,10 +564,10 @@ const Tickets: React.FC = () => {
            </div>
 
            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20">
+              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Enregistrer et notifier l'expert technique">
                  <Save size={20} /> Valider le dossier
               </button>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Annuler la saisie sans sauvegarder">Annuler</button>
            </div>
         </form>
       </Modal>

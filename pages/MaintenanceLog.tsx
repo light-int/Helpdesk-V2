@@ -73,10 +73,10 @@ const MaintenanceLog: React.FC = () => {
   }, [tickets, searchTerm, statusFilter, techFilter, showroomFilter, dateRange, currentUser]);
 
   const stats = useMemo(() => ([
-    { label: 'Opérations Terrain', value: filteredMaintenance.length, icon: <Activity size={20}/>, color: '#1a73e8' },
-    { label: 'Attente Approbation', value: filteredMaintenance.filter(m => m.status === 'En attente d\'approbation').length, icon: <Timer size={20}/>, color: '#a142f4' },
-    { label: 'Experts Actifs', value: technicians.filter(t => t.status === 'En intervention').length, icon: <User size={20}/>, color: '#f9ab00' },
-    { label: 'Urgences Terrain', value: filteredMaintenance.filter(m => m.priority === 'Urgent').length, icon: <AlertTriangle size={20}/>, color: '#d93025' }
+    { label: 'Opérations Terrain', value: filteredMaintenance.length, icon: <Activity size={20}/>, color: '#1a73e8', title: "Volume d'interventions hors showroom" },
+    { label: 'Attente Approbation', value: filteredMaintenance.filter(m => m.status === 'En attente d\'approbation').length, icon: <Timer size={20}/>, color: '#a142f4', title: "Rapports terminés à valider par le management" },
+    { label: 'Experts Actifs', value: technicians.filter(t => t.status === 'En intervention').length, icon: <User size={20}/>, color: '#f9ab00', title: "Techniciens actuellement déployés" },
+    { label: 'Urgences Terrain', value: filteredMaintenance.filter(m => m.priority === 'Urgent').length, icon: <AlertTriangle size={20}/>, color: '#d93025', title: "Dossiers terrain prioritaires" }
   ]), [filteredMaintenance, technicians]);
 
   const getStatusColor = (status: string) => {
@@ -141,17 +141,17 @@ const MaintenanceLog: React.FC = () => {
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management opérationnel Royal Plaza Horizon</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => setIsCalendarOpen(true)} className="btn-google-outlined h-11 px-6 flex items-center gap-3">
+          <button onClick={() => setIsCalendarOpen(true)} className="btn-google-outlined h-11 px-6 flex items-center gap-3" title="Consulter le calendrier des interventions programmées">
             <CalendarDays size={18} /> <span>Planning Expert</span>
           </button>
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4"><RefreshCw size={18} /></button>
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser le journal terrain"><RefreshCw size={18} /></button>
         </div>
       </header>
 
       {/* MONITORING GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
          {stats.map((stat, i) => (
-           <div key={i} className="stats-card border-l-4 border-none shadow-xl bg-white ring-1 ring-black/5" style={{ borderLeft: `4px solid ${stat.color}` }}>
+           <div key={i} className="stats-card border-l-4 border-none shadow-xl bg-white ring-1 ring-black/5" style={{ borderLeft: `4px solid ${stat.color}` }} title={stat.title}>
               <div className="flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">{stat.label}</p>
@@ -166,7 +166,7 @@ const MaintenanceLog: React.FC = () => {
       {/* FILTER CENTER */}
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5 p-8">
          <div className="flex flex-col xl:flex-row gap-8">
-            <div className="relative flex-1 group">
+            <div className="relative flex-1 group" title="Chercher par client ou par quartier de destination">
                <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                <input 
                 type="text" 
@@ -183,6 +183,7 @@ const MaintenanceLog: React.FC = () => {
                       key={st} 
                       onClick={() => setStatusFilter(st)}
                       className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === st ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                      title={st === 'Tous' ? "Afficher toutes les interventions terrain" : st === 'En cours' ? "Dossiers dont l'expert est sur site" : "Dossiers terminés attendant validation"}
                     >
                       {st === 'Tous' ? 'Flux Global' : st === 'En cours' ? 'Sur Site' : 'Rapports'}
                     </button>
@@ -190,6 +191,7 @@ const MaintenanceLog: React.FC = () => {
                </div>
                <button 
                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                 title={showAdvancedFilters ? "Masquer les critères avancés" : "Plus de critères (Showroom, Expert)"}
                  className={`p-4.5 border-2 transition-all ${showAdvancedFilters ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}
                >
                  <SlidersHorizontal size={22} />
@@ -200,15 +202,15 @@ const MaintenanceLog: React.FC = () => {
          {showAdvancedFilters && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-[#f1f3f4] mt-8 animate-in slide-in-from-top-4 duration-500">
                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2"><MapPinned size={12} /> Zone Showroom</label>
-                  <select value={showroomFilter} onChange={e => setShowroomFilter(e.target.value)} className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase focus:ring-2 focus:ring-[#1a73e8] appearance-none px-5">
+                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2" title="Point de vente à l'origine du dossier"><MapPinned size={12} /> Zone Showroom</label>
+                  <select value={showroomFilter} onChange={e => setShowroomFilter(e.target.value)} className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase focus:ring-2 focus:ring-[#1a73e8] appearance-none px-5" title="Sélectionner un site physique">
                       <option value="Tous">Tous les sites</option>
                       {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
                   </select>
                </div>
                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2"><Users size={12} /> Expert Assigné</label>
-                  <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase focus:ring-2 focus:ring-[#1a73e8] appearance-none px-5">
+                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2" title="Technicien assigné à la mission"><Users size={12} /> Expert Assigné</label>
+                  <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase focus:ring-2 focus:ring-[#1a73e8] appearance-none px-5" title="Filtrer par intervenant technique">
                       <option value="Tous">Tous les experts</option>
                       {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -235,6 +237,7 @@ const MaintenanceLog: React.FC = () => {
                   key={t.id} 
                   onClick={() => setSelectedMaintenance(t)}
                   className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedMaintenance?.id === t.id ? 'bg-[#e8f0fe]' : 'bg-white'}`}
+                  title={`Détails techniques de l'intervention #${t.id}`}
                 >
                   <td className="px-10 py-6">
                     <p className="font-black text-[#1a73e8] text-sm">#{t.id}</p>
@@ -247,16 +250,16 @@ const MaintenanceLog: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-10 py-6">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3" title={`Expert: ${technicians.find(tec => tec.id === t.assignedTechnicianId)?.name || 'Non assigné'}`}>
                        <img src={technicians.find(tec => tec.id === t.assignedTechnicianId)?.avatar} className="w-9 h-9 rounded-none border border-[#dadce0] p-0.5 bg-white shadow-sm" alt="" />
                        <span className="text-xs font-black text-[#5f6368]">{technicians.find(tec => tec.id === t.assignedTechnicianId)?.name || 'En attente'}</span>
                     </div>
                   </td>
                   <td className="px-10 py-6 text-center">
-                    <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-tighter">{t.category}</span>
+                    <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-tighter" title={`Catégorie de mission: ${t.category}`}>{t.category}</span>
                   </td>
                   <td className="px-10 py-6 text-right">
-                    <span className={`px-5 py-2 border text-[9px] font-black uppercase tracking-widest inline-block shadow-sm ${getStatusColor(t.status)}`}>
+                    <span className={`px-5 py-2 border text-[9px] font-black uppercase tracking-widest inline-block shadow-sm ${getStatusColor(t.status)}`} title={`État actuel: ${t.status}`}>
                        {t.status}
                     </span>
                   </td>
@@ -280,11 +283,12 @@ const MaintenanceLog: React.FC = () => {
                <button 
                 onClick={openInterventionForm}
                 className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl"
+                title="Rédiger les actions effectuées et pièces remplacées"
                >
                  <Edit3 size={18} /> Documenter le Rapport
                </button>
              ) : (
-               <div className="flex-1 py-4 bg-gray-100 text-gray-400 text-xs font-black uppercase text-center border border-gray-200 flex items-center justify-center gap-2">
+               <div className="flex-1 py-4 bg-gray-100 text-gray-400 text-xs font-black uppercase text-center border border-gray-200 flex items-center justify-center gap-2" title="Ce dossier est verrouillé">
                  <Lock size={16} /> Archive Technique Clôturée
                </div>
              )}
@@ -299,7 +303,7 @@ const MaintenanceLog: React.FC = () => {
                    <div>
                       <span className="text-[9px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 border border-blue-100">{selectedMaintenance.brand}</span>
                       <h4 className="text-lg font-black text-[#202124] mt-2 leading-tight">{selectedMaintenance.productName}</h4>
-                      <p className="text-[10px] font-mono text-[#5f6368] mt-1 font-black uppercase tracking-wider">S/N: {selectedMaintenance.serialNumber || 'NON SPECIFIÉ'}</p>
+                      <p className="text-[10px] font-mono text-[#5f6368] mt-1 font-black uppercase tracking-wider" title="Numéro d'identification unique du châssis">S/N: {selectedMaintenance.serialNumber || 'NON SPECIFIÉ'}</p>
                    </div>
                 </div>
              </section>
@@ -307,7 +311,7 @@ const MaintenanceLog: React.FC = () => {
              <section className="space-y-4">
                 <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><ShieldCheck size={16} /> État du matériel post-opération</h3>
                 {selectedMaintenance.interventionReport?.equipmentStatus ? (
-                   <div className={`p-6 flex items-center justify-between border-l-8 ${selectedMaintenance.interventionReport.equipmentStatus === 'Excellent' ? 'bg-green-50 border-green-600' : 'bg-blue-50 border-blue-600'}`}>
+                   <div className={`p-6 flex items-center justify-between border-l-8 ${selectedMaintenance.interventionReport.equipmentStatus === 'Excellent' ? 'bg-green-50 border-green-600' : 'bg-blue-50 border-blue-600'}`} title="Résultat du diagnostic final">
                       <div>
                          <p className="text-[9px] font-black uppercase text-[#5f6368] mb-1">Condition diagnostiquée</p>
                          <p className="text-xl font-black uppercase tracking-tight text-[#202124]">{selectedMaintenance.interventionReport.equipmentStatus}</p>
@@ -326,7 +330,7 @@ const MaintenanceLog: React.FC = () => {
                 {selectedMaintenance.interventionReport?.actionsTaken?.length ? (
                    <div className="space-y-3">
                       {selectedMaintenance.interventionReport.actionsTaken.map((action, i) => (
-                         <div key={i} className="p-4 bg-white border border-[#dadce0] text-xs font-bold text-[#3c4043] flex items-center gap-4 uppercase tracking-tighter">
+                         <div key={i} className="p-4 bg-white border border-[#dadce0] text-xs font-bold text-[#3c4043] flex items-center gap-4 uppercase tracking-tighter" title="Action technique validée">
                             <div className="w-1.5 h-1.5 bg-[#1a73e8]" /> {action}
                          </div>
                       ))}
@@ -348,28 +352,28 @@ const MaintenanceLog: React.FC = () => {
                <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2"><Activity size={14} className="text-[#1a73e8]" /> Diagnostic Matériel</h4>
                <div className="grid grid-cols-4 gap-3">
                   {(['Excellent', 'Bon', 'Critique', 'À remplacer'] as const).map(status => (
-                    <button key={status} onClick={() => setEquipmentStatus(status)} className={`py-4 border-2 text-[9px] font-black uppercase tracking-tighter transition-all ${equipmentStatus === status ? 'bg-[#1a73e8] border-[#1a73e8] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}>{status}</button>
+                    <button key={status} onClick={() => setEquipmentStatus(status)} className={`py-4 border-2 text-[9px] font-black uppercase tracking-tighter transition-all ${equipmentStatus === status ? 'bg-[#1a73e8] border-[#1a73e8] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`} title={`Évaluation de santé: ${status}`}>{status}</button>
                   ))}
                </div>
             </section>
             <section className="space-y-4">
                <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2"><ClipboardCheck size={14} className="text-[#1a73e8]" /> Travaux Effectués</h4>
                <div className="flex gap-2 bg-[#f8f9fa] p-2 border border-[#dadce0]">
-                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} onKeyDown={e => e.key === 'Enter' && (() => { if(currentAction.trim()) { setActionsTaken([...actionsTaken, currentAction.trim()]); setCurrentAction(''); } })()} placeholder="Ajouter une action (ex: Nettoyage bloc)..." className="flex-1 bg-transparent border-none text-xs font-bold focus:ring-0" />
-                  <button onClick={() => { if(currentAction.trim()) { setActionsTaken([...actionsTaken, currentAction.trim()]); setCurrentAction(''); } }} className="w-10 h-10 bg-[#1a73e8] text-white border-none flex items-center justify-center shadow-lg"><Plus size={20}/></button>
+                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} onKeyDown={e => e.key === 'Enter' && (() => { if(currentAction.trim()) { setActionsTaken([...actionsTaken, currentAction.trim()]); setCurrentAction(''); } })()} placeholder="Ajouter une action (ex: Nettoyage bloc)..." className="flex-1 bg-transparent border-none text-xs font-bold focus:ring-0" title="Saisir manuellement une tâche technique effectuée" />
+                  <button onClick={() => { if(currentAction.trim()) { setActionsTaken([...actionsTaken, currentAction.trim()]); setCurrentAction(''); } }} className="w-10 h-10 bg-[#1a73e8] text-white border-none flex items-center justify-center shadow-lg" title="Enregistrer cette action technique"><Plus size={20}/></button>
                </div>
                <div className="space-y-2">
                   {actionsTaken.map((action, i) => (
                     <div key={i} className="flex items-center justify-between p-4 bg-white border border-[#dadce0] group hover:border-[#1a73e8] transition-all shadow-sm">
                        <span className="text-[10px] text-[#3c4043] font-black uppercase">{action}</span>
-                       <button onClick={() => setActionsTaken(actionsTaken.filter((_, idx) => idx !== i))} className="text-[#dadce0] hover:text-red-600 transition-colors"><Trash2 size={16}/></button>
+                       <button onClick={() => setActionsTaken(actionsTaken.filter((_, idx) => idx !== i))} className="text-[#dadce0] hover:text-red-600 transition-colors" title="Retirer cette action"><Trash2 size={16}/></button>
                     </div>
                   ))}
                </div>
             </section>
             <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-               <button onClick={handleSaveIntervention} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20"><Save size={20} /> Valider le Rapport Expert</button>
-               <button onClick={() => setIsInterventionModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Abandonner</button>
+               <button onClick={handleSaveIntervention} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Transmettre le rapport technique pour archivage et validation management"><Save size={20} /> Valider le Rapport Expert</button>
+               <button onClick={() => setIsInterventionModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Quitter sans enregistrer le rapport">Abandonner</button>
             </div>
          </div>
       </Modal>
@@ -380,8 +384,8 @@ const MaintenanceLog: React.FC = () => {
             <div className="flex items-center justify-between bg-[#f8f9fa] p-6 border border-[#dadce0]">
                <h3 className="text-xl font-light text-[#202124] capitalize">{currentDate.toLocaleString('fr-FR', { month: 'long', year: 'numeric' })}</h3>
                <div className="flex gap-1 border border-[#dadce0] bg-white">
-                  <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 hover:bg-gray-100 transition-colors border-none"><ChevronLeft size={20}/></button>
-                  <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 hover:bg-gray-100 transition-colors border-l border-[#dadce0]"><ChevronRight size={20}/></button>
+                  <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 hover:bg-gray-100 transition-colors border-none" title="Mois précédent"><ChevronLeft size={20}/></button>
+                  <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 hover:bg-gray-100 transition-colors border-l border-[#dadce0]" title="Mois suivant"><ChevronRight size={20}/></button>
                </div>
             </div>
             <div className="grid grid-cols-7 gap-px bg-[#dadce0] border border-[#dadce0] shadow-xl">
@@ -389,7 +393,7 @@ const MaintenanceLog: React.FC = () => {
                  <div key={d} className="bg-[#f8f9fa] py-3 text-center text-[10px] font-black text-[#5f6368] uppercase tracking-[0.2em] border-b border-[#dadce0]">{d}</div>
                ))}
                {Array.from({ length: 35 }).map((_, idx) => (
-                 <div key={idx} className="bg-white min-h-[120px] p-2 hover:bg-[#f8f9ff] transition-colors relative group border border-transparent hover:border-blue-100">
+                 <div key={idx} className="bg-white min-h-[120px] p-2 hover:bg-[#f8f9ff] transition-colors relative group border border-transparent hover:border-blue-100" title={`Cliquer pour programmer une intervention le ${idx + 1}`}>
                     <span className="text-[10px] font-black text-[#dadce0] group-hover:text-[#1a73e8]">{idx + 1}</span>
                  </div>
                ))}

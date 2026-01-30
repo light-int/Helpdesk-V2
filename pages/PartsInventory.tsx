@@ -119,22 +119,22 @@ const PartsInventory: React.FC = () => {
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management global de l'inventaire Royal Plaza Horizon</p>
         </div>
         <div className="flex items-center gap-3">
-           <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
+           <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Référencer un nouveau composant ou pièce détachée">
              <Plus size={20} /> <span>Nouvelle Référence</span>
            </button>
-           <button onClick={refreshAll} className="btn-google-outlined h-11 px-4"><RefreshCw size={18} /></button>
+           <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser les niveaux de stock"><RefreshCw size={18} /></button>
         </div>
       </header>
 
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
          {[
-           { label: 'Catalogue Actif', value: inventoryStats.totalRefs, icon: <Layers size={20}/>, color: '#1a73e8' },
-           { label: 'Flux Critique', value: inventoryStats.lowStockCount, icon: <TrendingDown size={20}/>, color: '#f9ab00' },
-           { label: 'Ruptures Totales', value: inventoryStats.outOfStockCount, icon: <Zap size={20}/>, color: '#d93025' },
-           { label: 'Valorisation Stock', value: `${(inventoryStats.totalValue / 1000000).toFixed(1)}M`, icon: <BarChart3 size={20}/>, color: '#188038' }
+           { label: 'Catalogue Actif', value: inventoryStats.totalRefs, icon: <Layers size={20}/>, color: '#1a73e8', title: "Nombre total de pièces référencées" },
+           { label: 'Flux Critique', value: inventoryStats.lowStockCount, icon: <TrendingDown size={20}/>, color: '#f9ab00', title: "Articles sous le seuil d'alerte" },
+           { label: 'Ruptures Totales', value: inventoryStats.outOfStockCount, icon: <Zap size={20}/>, color: '#d93025', title: "Articles épuisés" },
+           { label: 'Valorisation Stock', value: `${(inventoryStats.totalValue / 1000000).toFixed(1)}M`, icon: <BarChart3 size={20}/>, color: '#188038', title: "Valeur marchande totale de l'inventaire HT" }
          ].map((stat, i) => (
-           <div key={i} className="stats-card border-l-4 border-none shadow-xl bg-white ring-1 ring-black/5" style={{ borderLeft: `4px solid ${stat.color}` }}>
+           <div key={i} className="stats-card border-l-4 border-none shadow-xl bg-white ring-1 ring-black/5" style={{ borderLeft: `4px solid ${stat.color}` }} title={stat.title}>
               <div className="flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">{stat.label}</p>
@@ -149,7 +149,7 @@ const PartsInventory: React.FC = () => {
       {/* SEARCH & FILTERS */}
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5 p-8">
         <div className="flex flex-col xl:flex-row gap-6">
-           <div className="relative flex-1 group">
+           <div className="relative flex-1 group" title="Recherche par désignation ou référence fabriquant">
               <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
               <input 
                 type="text" 
@@ -162,14 +162,15 @@ const PartsInventory: React.FC = () => {
            <div className="flex items-center gap-4">
               <div className="flex bg-[#f1f3f4] p-1 shadow-inner">
                  {[
-                   { id: 'all', label: 'Tout' },
-                   { id: 'critical', label: 'Alertes' },
-                   { id: 'out', label: 'Ruptures' }
+                   { id: 'all', label: 'Tout', title: "Voir tout le catalogue" },
+                   { id: 'critical', label: 'Alertes', title: "Voir uniquement les pièces à commander" },
+                   { id: 'out', label: 'Ruptures', title: "Voir les articles hors stock" }
                  ].map(st => (
                    <button 
                      key={st.id} 
                      onClick={() => setStockStatus(st.id as any)}
                      className={`px-8 py-3.5 text-[10px] font-black uppercase tracking-widest transition-all ${stockStatus === st.id ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                     title={st.title}
                    >
                      {st.label}
                    </button>
@@ -197,7 +198,7 @@ const PartsInventory: React.FC = () => {
                  const isCrit = p.currentStock <= p.minStock && p.currentStock > 0;
                  const isOut = p.currentStock === 0;
                  return (
-                   <tr key={p.id} onClick={() => setSelectedPart(p)} className="hover:bg-[#f8faff] transition-colors group cursor-pointer bg-white">
+                   <tr key={p.id} onClick={() => setSelectedPart(p)} className="hover:bg-[#f8faff] transition-colors group cursor-pointer bg-white" title={`Inspecter la fiche de: ${p.name}`}>
                      <td className="px-10 py-6">
                         <div className="flex items-center gap-5">
                            <div className={`w-12 h-12 flex items-center justify-center border ${isOut ? 'bg-red-50 text-red-300' : 'bg-gray-50 text-gray-400 group-hover:text-blue-600'} transition-colors`}>
@@ -210,25 +211,25 @@ const PartsInventory: React.FC = () => {
                         </div>
                      </td>
                      <td className="px-10 py-6">
-                        <span className="text-[10px] font-black text-[#5f6368] uppercase bg-gray-100 px-3 py-1 border border-gray-200">{p.brand}</span>
+                        <span className="text-[10px] font-black text-[#5f6368] uppercase bg-gray-100 px-3 py-1 border border-gray-200" title={`Constructeur: ${p.brand}`}>{p.brand}</span>
                      </td>
                      <td className="px-10 py-6" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-6">
-                           <button onClick={() => handleAdjustStock(p.id, -1)} className="w-10 h-10 border border-[#dadce0] flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all shadow-sm"><Minus size={18} /></button>
-                           <span className={`text-2xl font-black min-w-[50px] text-center tracking-tighter ${isOut ? 'text-red-600' : isCrit ? 'text-[#f9ab00]' : 'text-[#202124]'}`}>{p.currentStock}</span>
-                           <button onClick={() => handleAdjustStock(p.id, 1)} className="w-10 h-10 border border-[#dadce0] flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"><Plus size={18} /></button>
+                           <button onClick={() => handleAdjustStock(p.id, -1)} className="w-10 h-10 border border-[#dadce0] flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all shadow-sm" title="Diminuer le stock de 1 unité (Sortie directe)"><Minus size={18} /></button>
+                           <span className={`text-2xl font-black min-w-[50px] text-center tracking-tighter ${isOut ? 'text-red-600' : isCrit ? 'text-[#f9ab00]' : 'text-[#202124]'}`} title="Quantité actuelle en magasin">{p.currentStock}</span>
+                           <button onClick={() => handleAdjustStock(p.id, 1)} className="w-10 h-10 border border-[#dadce0] flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm" title="Augmenter le stock de 1 unité (Entrée directe)"><Plus size={18} /></button>
                         </div>
                      </td>
                      <td className="px-10 py-6 text-center">
-                        <div className="inline-flex items-center gap-3 px-5 py-2 border border-[#dadce0] bg-white shadow-sm">
+                        <div className="inline-flex items-center gap-3 px-5 py-2 border border-[#dadce0] bg-white shadow-sm" title={`État logistique: ${isOut ? 'RUPTURE' : isCrit ? 'ALERTE' : 'DISPONIBLE'}`}>
                            <div className={`w-2 h-2 rounded-full ${isOut ? 'bg-red-600 animate-pulse' : isCrit ? 'bg-[#f9ab00]' : 'bg-[#188038]'}`} />
                            <span className="text-[10px] font-black uppercase tracking-widest text-[#5f6368]">{isOut ? 'RUPTURE' : isCrit ? 'ALERTE' : 'DISPONIBLE'}</span>
                         </div>
                      </td>
                      <td className="px-10 py-6 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                           <button onClick={(e) => { e.stopPropagation(); setEditingPart(p); setIsModalOpen(true); }} className="p-2.5 bg-white border border-[#dadce0] hover:border-[#1a73e8] text-[#1a73e8] transition-colors shadow-sm"><Edit3 size={18}/></button>
-                           <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Supprimer cet article ?')) deletePart(p.id); }} className="p-2.5 bg-white border border-[#dadce0] hover:border-red-600 text-red-600 transition-colors shadow-sm"><Trash2 size={18}/></button>
+                           <button onClick={(e) => { e.stopPropagation(); setEditingPart(p); setIsModalOpen(true); }} className="p-2.5 bg-white border border-[#dadce0] hover:border-[#1a73e8] text-[#1a73e8] transition-colors shadow-sm" title="Modifier la référence technique"><Edit3 size={18}/></button>
+                           <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Supprimer cet article ?')) deletePart(p.id); }} className="p-2.5 bg-white border border-[#dadce0] hover:border-red-600 text-red-600 transition-colors shadow-sm" title="Supprimer définitivement l'article"><Trash2 size={18}/></button>
                         </div>
                      </td>
                    </tr>
@@ -250,10 +251,10 @@ const PartsInventory: React.FC = () => {
                      <span className="text-[10px] font-black text-[#1a73e8] uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 border border-blue-100">{selectedPart.brand}</span>
                      <h3 className="text-3xl font-black text-[#202124] leading-none tracking-tighter uppercase">{selectedPart.name}</h3>
                      <div className="flex items-center gap-6 pt-2">
-                        <div className="flex items-center gap-2 text-xs font-bold text-[#5f6368]">
+                        <div className="flex items-center gap-2 text-xs font-bold text-[#5f6368]" title="Emplacement physique dans l'entrepôt">
                            <MapPin size={16} className="text-[#1a73e8]" /> {selectedPart.location}
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#9aa0a6]">
+                        <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#9aa0a6]" title="Catégorie de composant">
                            <Tag size={16} /> {selectedPart.category}
                         </div>
                      </div>
@@ -261,7 +262,7 @@ const PartsInventory: React.FC = () => {
                </section>
 
                <div className="grid grid-cols-2 gap-6">
-                  <div className="p-8 bg-white border border-[#dadce0] shadow-sm space-y-6">
+                  <div className="p-8 bg-white border border-[#dadce0] shadow-sm space-y-6" title="Indicateurs de seuils de commande">
                      <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Activity size={16} className="text-[#1a73e8]" /> État Stocks</h4>
                      <div className="flex justify-between items-end">
                         <div>
@@ -274,7 +275,7 @@ const PartsInventory: React.FC = () => {
                         </div>
                      </div>
                   </div>
-                  <div className="p-8 bg-gradient-to-br from-white to-green-50 border border-green-100 shadow-sm space-y-6">
+                  <div className="p-8 bg-gradient-to-br from-white to-green-50 border border-green-100 shadow-sm space-y-6" title="Estimation financière de l'actif immobilisé">
                      <h4 className="text-[10px] font-black text-green-700 uppercase tracking-[0.2em] flex items-center gap-2"><DollarSign size={16} /> Valorisation</h4>
                      <div>
                         <p className="text-3xl font-black text-green-900 tracking-tighter">{(selectedPart.unitPrice * selectedPart.currentStock).toLocaleString()} F</p>
@@ -291,21 +292,21 @@ const PartsInventory: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Désignation</label>
-                  <input name="name" type="text" defaultValue={editingPart?.name} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" />
+                  <input name="name" type="text" defaultValue={editingPart?.name} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" title="Nom technique de la pièce" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">SKU Unique</label>
-                  <input name="sku" type="text" defaultValue={editingPart?.sku} required className="w-full bg-[#f8f9fa] border-none font-black font-mono uppercase h-12" />
+                  <input name="sku" type="text" defaultValue={editingPart?.sku} required className="w-full bg-[#f8f9fa] border-none font-black font-mono uppercase h-12" title="Référence constructeur ou interne unique" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Constructeur</label>
-                  <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full bg-[#f8f9fa] border-none font-black h-12">
+                  <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full bg-[#f8f9fa] border-none font-black h-12" title="Marque de la pièce">
                     {brands.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Catégorie</label>
-                  <select name="category" defaultValue={editingPart?.category || 'Consommable'} className="w-full bg-[#f8f9fa] border-none font-black h-12">
+                  <select name="category" defaultValue={editingPart?.category || 'Consommable'} className="w-full bg-[#f8f9fa] border-none font-black h-12" title="Type de pièce">
                     <option value="Électronique">Électronique</option>
                     <option value="Mécanique">Mécanique</option>
                     <option value="Consommable">Consommable</option>
@@ -314,24 +315,24 @@ const PartsInventory: React.FC = () => {
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Stock Actuel</label>
-                  <input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" />
+                  <input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" title="Quantité physiquement présente" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Seuil Alerte</label>
-                  <input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" />
+                  <input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" title="Niveau déclenchant une alerte de réapprovisionnement" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Prix Unitaire (F)</label>
-                  <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" />
+                  <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" title="Prix d'achat unitaire HT" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Position Rayon</label>
-                  <input name="location" type="text" defaultValue={editingPart?.location || 'Stock Central'} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" />
+                  <input name="location" type="text" defaultValue={editingPart?.location || 'Stock Central'} required className="w-full bg-[#f8f9fa] border-none font-bold h-12" title="Coordonnées de l'emplacement de stockage" />
                </div>
             </div>
             <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-               <button type="submit" className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20"><Save size={20} /> Certifier la fiche</button>
-               <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
+               <button type="submit" className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Valider et synchroniser la pièce avec le cloud"><Save size={20} /> Certifier la fiche</button>
+               <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Annuler sans sauvegarder">Annuler</button>
             </div>
          </form>
       </Modal>

@@ -161,15 +161,15 @@ const Products: React.FC = () => {
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls, .csv" className="hidden" />
           {isEditor && (
             <>
-              <button onClick={() => fileInputRef.current?.click()} className="btn-google-outlined h-11 px-6">
+              <button onClick={() => fileInputRef.current?.click()} className="btn-google-outlined h-11 px-6" title="Importer un catalogue massif depuis un fichier Excel">
                 <FileSpreadsheet size={18} className="text-[#188038]" /> <span>Import Excel</span>
               </button>
-              <button onClick={() => { setEditingProduct(null); setPreviewImageUrl(''); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
+              <button onClick={() => { setEditingProduct(null); setPreviewImageUrl(''); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Ajouter manuellement une nouvelle référence">
                 <Plus size={20} /> <span>Nouveau Produit</span>
               </button>
             </>
           )}
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4">
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser la liste des produits">
             <RefreshCw size={18} />
           </button>
         </div>
@@ -177,15 +177,15 @@ const Products: React.FC = () => {
 
       {/* KPIS RAPIDES */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="stats-card border-l-4 border-blue-600">
+        <div className="stats-card border-l-4 border-blue-600" title="Nombre total de modèles au catalogue">
           <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">Total Références</p>
           <h3 className="text-3xl font-bold text-[#202124]">{products.length}</h3>
         </div>
-        <div className="stats-card border-l-4 border-green-600">
+        <div className="stats-card border-l-4 border-green-600" title="Nombre de constructeurs partenaires">
           <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">Constructeurs</p>
           <h3 className="text-3xl font-bold text-[#202124]">{brands.length}</h3>
         </div>
-        <div className="stats-card border-l-4 border-amber-500">
+        <div className="stats-card border-l-4 border-amber-500" title="Volume total de tickets SAV liés à ces produits">
           <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">En Sav Associé</p>
           <h3 className="text-3xl font-bold text-[#202124]">{tickets.length}</h3>
         </div>
@@ -194,7 +194,7 @@ const Products: React.FC = () => {
       {/* RECHERCHE & FILTRES */}
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="p-8 flex flex-col md:flex-row gap-6 items-center">
-          <div className="relative flex-1 w-full group">
+          <div className="relative flex-1 w-full group" title="Rechercher par SKU, désignation ou marque">
              <Search className="absolute left-6 top-4 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
              <input 
               type="text" 
@@ -205,7 +205,7 @@ const Products: React.FC = () => {
              />
           </div>
           <div className="flex gap-4 w-full md:w-auto">
-             <div className="relative flex-1 md:min-w-[220px]">
+             <div className="relative flex-1 md:min-w-[220px]" title="Filtrer les produits par rayon">
                 <select 
                   value={selectedCategory} 
                   onChange={(e) => setSelectedCategory(e.target.value)} 
@@ -226,6 +226,7 @@ const Products: React.FC = () => {
             key={product.id} 
             onClick={() => setSelectedProduct(product)}
             className="group bg-white border border-[#dadce0] cursor-pointer hover:border-[#1a73e8] transition-all flex flex-col relative overflow-hidden"
+            title={`Consulter la fiche technique de: ${product.name}`}
           >
             <div className="aspect-square bg-[#f8f9fa] flex items-center justify-center overflow-hidden border-b border-[#f1f3f4] relative">
               {product.image ? (
@@ -260,9 +261,9 @@ const Products: React.FC = () => {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-6 pt-10">
-           <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm"><ChevronLeft size={24} /></button>
+           <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm" title="Page précédente"><ChevronLeft size={24} /></button>
            <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Page {currentPage} de {totalPages}</span>
-           <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm"><ChevronRight size={24} /></button>
+           <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm" title="Page suivante"><ChevronRight size={24} /></button>
         </div>
       )}
 
@@ -279,21 +280,22 @@ const Products: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {[
-                 { id: 'reference', label: 'Référence / SKU', required: true },
-                 { id: 'name', label: 'Désignation Commerciale', required: true },
-                 { id: 'brand', label: 'Marque / Constructeur', required: false },
-                 { id: 'price', label: 'Prix de Vente (TTC)', required: false },
-                 { id: 'category', label: 'Catégorie Produit', required: false },
-                 { id: 'warrantyMonths', label: 'Garantie (Mois)', required: false }
+                 { id: 'reference', label: 'Référence / SKU', required: true, title: "Identifiant unique du produit" },
+                 { id: 'name', label: 'Désignation Commerciale', required: true, title: "Nom complet du produit tel qu'il apparaîtra" },
+                 { id: 'brand', label: 'Marque / Constructeur', required: false, title: "Nom de la marque (LG, Samsung...)" },
+                 { id: 'price', label: 'Prix de Vente (TTC)', required: false, title: "Valeur monétaire en FCFA" },
+                 { id: 'category', label: 'Catégorie Produit', required: false, title: "Classification magasin" },
+                 { id: 'warrantyMonths', label: 'Garantie (Mois)', required: false, title: "Nombre de mois de protection" }
                ].map(field => (
                  <div key={field.id} className="space-y-2">
-                    <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">
+                    <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1" title={field.title}>
                       {field.label} {field.required && <span className="text-red-500">*</span>}
                     </label>
                     <select 
                       value={mapping[field.id]} 
                       onChange={e => setMapping({...mapping, [field.id]: e.target.value})}
                       className="w-full h-11 bg-white border-[#dadce0] font-bold text-xs"
+                      title="Choisir la colonne correspondante dans l'Excel"
                     >
                        <option value="">-- Ignorer ce champ --</option>
                        {excelHeaders.map(h => <option key={h} value={h}>{h}</option>)}
@@ -303,10 +305,10 @@ const Products: React.FC = () => {
             </div>
 
             <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-               <button onClick={handleFinalImport} disabled={isSaving || !mapping.reference || !mapping.name} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
+               <button onClick={handleFinalImport} disabled={isSaving || !mapping.reference || !mapping.name} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl" title="Traiter les données et synchroniser avec le cloud">
                  {isSaving ? <Loader2 size={20} className="animate-spin" /> : <><Upload size={20} /> Lancer l'injection Cloud</>}
                </button>
-               <button onClick={() => setIsMappingModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]">Annuler</button>
+               <button onClick={() => setIsMappingModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]" title="Annuler le processus d'importation">Annuler</button>
             </div>
          </div>
       </Modal>
@@ -320,9 +322,9 @@ const Products: React.FC = () => {
         icon={<ShoppingBag size={20} />}
         footer={
           <div className="flex gap-3">
-             <button onClick={() => setSelectedProduct(null)} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest">Fermer</button>
+             <button onClick={() => setSelectedProduct(null)} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest" title="Fermer le volet de détails">Fermer</button>
              {isEditor && (
-               <button onClick={() => { if(selectedProduct) { setEditingProduct(selectedProduct); setPreviewImageUrl(selectedProduct.image || ''); setIsModalOpen(true); setSelectedProduct(null); } }} className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
+               <button onClick={() => { if(selectedProduct) { setEditingProduct(selectedProduct); setPreviewImageUrl(selectedProduct.image || ''); setIsModalOpen(true); setSelectedProduct(null); } }} className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl" title="Éditer cette fiche produit">
                  <Edit3 size={18} /> Modifier
                </button>
              )}
@@ -331,20 +333,20 @@ const Products: React.FC = () => {
       >
         {selectedProduct && (
           <div className="space-y-10">
-             <div className="w-full aspect-video bg-[#f8f9fa] border border-[#dadce0] flex items-center justify-center overflow-hidden shadow-inner">
+             <div className="w-full aspect-video bg-[#f8f9fa] border border-[#dadce0] flex items-center justify-center overflow-hidden shadow-inner" title="Aperçu HD du matériel">
                 {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" /> : <ImageIcon size={80} className="text-[#dadce0] opacity-20" />}
              </div>
              <div className="space-y-6">
                 <div>
-                   <span className="text-[10px] font-black text-[#1a73e8] uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 border border-blue-100">{selectedProduct.brand}</span>
+                   <span className="text-[10px] font-black text-[#1a73e8] uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 border border-blue-100" title="Marque constructeur certifiée">{selectedProduct.brand}</span>
                    <h3 className="text-3xl font-black text-[#202124] tracking-tighter leading-tight mt-4">{selectedProduct.name}</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                   <div className="p-6 bg-blue-50 border border-blue-100 rounded-none shadow-sm">
+                   <div className="p-6 bg-blue-50 border border-blue-100 rounded-none shadow-sm" title="Durée de la garantie standard applicable">
                       <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-2 flex items-center gap-2"><ShieldCheck size={10}/> Protection</p>
                       <p className="text-2xl font-black text-blue-900">{selectedProduct.warrantyMonths} <span className="text-xs font-bold uppercase">Mois</span></p>
                    </div>
-                   <div className="p-6 bg-green-50 border border-green-100 rounded-none shadow-sm">
+                   <div className="p-6 bg-green-50 border border-green-100 rounded-none shadow-sm" title="Prix de vente public conseillé">
                       <p className="text-[9px] font-black text-green-700 uppercase tracking-widest mb-2 flex items-center gap-2"><DollarSign size={10}/> Prix TTC</p>
                       <p className="text-2xl font-black text-green-900">{selectedProduct.price.toLocaleString()} <span className="text-xs font-bold uppercase">F</span></p>
                    </div>
@@ -360,32 +362,32 @@ const Products: React.FC = () => {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Référence Unique</label>
-                 <input name="reference" type="text" defaultValue={editingProduct?.reference} required className="h-12 bg-[#f8f9fa] border-none font-mono uppercase font-black" />
+                 <input name="reference" type="text" defaultValue={editingProduct?.reference} required className="h-12 bg-[#f8f9fa] border-none font-mono uppercase font-black" title="Le SKU ou code article unique" />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Constructeur</label>
-                 <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="h-12 bg-[#f8f9fa] border-none font-black px-4">
+                 <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="h-12 bg-[#f8f9fa] border-none font-black px-4" title="Marque partenaire">
                     {brands.map(b => <option key={b} value={b}>{b}</option>)}
                  </select>
               </div>
               <div className="md:col-span-2 space-y-2">
                  <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Nom Commercial</label>
-                 <input name="name" type="text" defaultValue={editingProduct?.name} required className="h-12 bg-[#f8f9fa] border-none font-black" />
+                 <input name="name" type="text" defaultValue={editingProduct?.name} required className="h-12 bg-[#f8f9fa] border-none font-black" title="Nom de l'article" />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">URL Visuel HD</label>
-                 <input type="url" value={previewImageUrl} onChange={e => setPreviewImageUrl(e.target.value)} className="h-12 bg-[#f8f9fa] border-none text-xs" placeholder="https://..." />
+                 <input type="url" value={previewImageUrl} onChange={e => setPreviewImageUrl(e.target.value)} className="h-12 bg-[#f8f9fa] border-none text-xs" placeholder="https://..." title="Lien direct vers l'image du produit" />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Prix Public (F)</label>
-                 <input name="price" type="number" defaultValue={editingProduct?.price} className="h-12 bg-[#f8f9fa] border-none font-black text-blue-600" />
+                 <input name="price" type="number" defaultValue={editingProduct?.price} className="h-12 bg-[#f8f9fa] border-none font-black text-blue-600" title="Prix de vente TTC" />
               </div>
            </div>
            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-              <button type="submit" disabled={isSaving} className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20">
+              <button type="submit" disabled={isSaving} className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Enregistrer les modifications">
                 {isSaving ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20} /> Valider la fiche</>}
               </button>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Ignorer les changements">Annuler</button>
            </div>
         </form>
       </Modal>

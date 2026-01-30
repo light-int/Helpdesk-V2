@@ -129,10 +129,10 @@ const Customers: React.FC = () => {
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Intelligence Clientèle Royal Plaza Horizon</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4">
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser la base CRM">
             <RefreshCw size={18} />
           </button>
-          <button onClick={() => { setEditingCustomer(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
+          <button onClick={() => { setEditingCustomer(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Inscrire un nouveau client">
             <UserPlus size={20} /> <span>Ajouter un client</span>
           </button>
         </div>
@@ -141,12 +141,12 @@ const Customers: React.FC = () => {
       {/* CRM KPIS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Base Totale', value: stats.total, icon: <Users size={20}/>, color: '#1a73e8' },
-          { label: 'Segments B2B', value: stats.b2b, icon: <Building2 size={20}/>, color: '#188038' },
-          { label: 'Comptes VIP', value: stats.vips, icon: <Trophy size={20}/>, color: '#f9ab00' },
-          { label: 'Top Investisseurs', value: stats.highValue, icon: <Star size={20}/>, color: '#a142f4' }
+          { label: 'Base Totale', value: stats.total, icon: <Users size={20}/>, color: '#1a73e8', title: "Volume total de fiches actives" },
+          { label: 'Segments B2B', value: stats.b2b, icon: <Building2 size={20}/>, color: '#188038', title: "Clients de type Entreprise" },
+          { label: 'Comptes VIP', value: stats.vips, icon: <Trophy size={20}/>, color: '#f9ab00', title: "Clients à haute priorité" },
+          { label: 'Top Investisseurs', value: stats.highValue, icon: <Star size={20}/>, color: '#a142f4', title: "Clients avec un CA > 1M FCFA" }
         ].map((s, i) => (
-          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }}>
+          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }} title={s.title}>
              <div className="flex justify-between items-start">
                <div>
                  <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{s.label}</p>
@@ -162,7 +162,7 @@ const Customers: React.FC = () => {
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="p-8 space-y-8">
            <div className="flex flex-col xl:flex-row gap-6">
-              <div className="relative flex-1 group">
+              <div className="relative flex-1 group" title="Recherche globale par nom, mobile ou entreprise">
                  <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                  <input 
                   type="text" 
@@ -172,7 +172,7 @@ const Customers: React.FC = () => {
                   onChange={e => setSearchTerm(e.target.value)}
                  />
                  {searchTerm && (
-                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500">
+                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500" title="Effacer la recherche">
                      <X size={22} />
                    </button>
                  )}
@@ -182,8 +182,8 @@ const Customers: React.FC = () => {
                  <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
                     {[
                       { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tous les profils' },
-                      { id: 'Particulier', icon: <UserIcon size={20} />, label: 'Particuliers' },
-                      { id: 'Entreprise', icon: <Building2 size={20} />, label: 'B2B' }
+                      { id: 'Particulier', icon: <UserIcon size={20} />, label: 'Comptes Particuliers' },
+                      { id: 'Entreprise', icon: <Building2 size={20} />, label: 'Comptes Entreprise (B2B)' }
                     ].map(item => (
                       <button 
                         key={item.id}
@@ -199,13 +199,13 @@ const Customers: React.FC = () => {
                  <div className="flex items-center gap-4">
                     <button 
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                      title="Filtres par statut"
+                      title={showAdvancedFilters ? "Masquer les filtres de statut" : "Afficher les filtres de statut"}
                       className={`p-4.5 border-2 transition-all ${showAdvancedFilters ? 'bg-[#202124] border-[#202124] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#202124]'}`}
                     >
                       <SlidersHorizontal size={22} />
                     </button>
 
-                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group" title="Nombre total de clients filtrés">
                       <div className="absolute top-0 right-0 w-1 h-full bg-[#1a73e8]" />
                       <div className="shrink-0 mr-4">
                          <div className="flex items-center gap-2">
@@ -219,7 +219,7 @@ const Customers: React.FC = () => {
                  </div>
                  
                  {(searchTerm || typeFilter !== 'Tous' || statusFilter !== 'Tous') && (
-                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser">
+                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser tous les filtres">
                        <RotateCcw size={24} className="group-hover:rotate-[-180deg] transition-transform duration-700" />
                     </button>
                  )}
@@ -234,6 +234,7 @@ const Customers: React.FC = () => {
                     key={status}
                     onClick={() => setStatusFilter(status as any)}
                     className={`px-6 py-2 border-2 text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === status ? 'bg-[#1a73e8] border-[#1a73e8] text-white' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}
+                    title={`Filtrer par statut: ${status}`}
                   >
                     {status}
                   </button>
@@ -299,8 +300,8 @@ const Customers: React.FC = () => {
                          {customer.status}
                        </span>
                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                          <button onClick={(e) => { e.stopPropagation(); openEdit(customer); }} className="p-2.5 text-[#5f6368] hover:bg-white hover:text-[#1a73e8] border border-transparent hover:border-[#dadce0] transition-all"><Edit3 size={18} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Archiver ce client ?')) deleteCustomer(customer.id); }} className="p-2.5 text-[#5f6368] hover:bg-red-50 hover:text-red-600 transition-all"><Trash2 size={18}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); openEdit(customer); }} className="p-2.5 text-[#5f6368] hover:bg-white hover:text-[#1a73e8] border border-transparent hover:border-[#dadce0] transition-all" title="Modifier le profil"><Edit3 size={18} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Archiver ce client ?')) deleteCustomer(customer.id); }} className="p-2.5 text-[#5f6368] hover:bg-red-50 hover:text-red-600 transition-all" title="Archiver la fiche client"><Trash2 size={18}/></button>
                        </div>
                     </div>
                   </td>
@@ -330,6 +331,7 @@ const Customers: React.FC = () => {
                 disabled={currentPage === 1} 
                 onClick={() => setCurrentPage(p => p - 1)}
                 className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
+                title="Page précédente"
                >
                  <ChevronLeft size={20} />
                </button>
@@ -338,6 +340,7 @@ const Customers: React.FC = () => {
                 disabled={currentPage === totalPages} 
                 onClick={() => setCurrentPage(p => p + 1)}
                 className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
+                title="Page suivante"
                >
                  <ChevronRight size={20} />
                </button>
@@ -355,10 +358,10 @@ const Customers: React.FC = () => {
         icon={<Users size={20} />}
         footer={
           <div className="flex gap-3">
-             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
+             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl" title="Initier une demande d'assistance technique">
                 <Plus size={16} /> Créer un Ticket SAV
              </button>
-             <button onClick={() => selectedCustomer && openEdit(selectedCustomer)} className="p-4 bg-white border border-[#dadce0] text-[#5f6368] hover:bg-[#e8eaed] transition-all">
+             <button onClick={() => selectedCustomer && openEdit(selectedCustomer)} className="p-4 bg-white border border-[#dadce0] text-[#5f6368] hover:bg-[#e8eaed] transition-all" title="Mettre à jour les informations">
                 <Edit3 size={20} />
              </button>
           </div>
@@ -367,11 +370,11 @@ const Customers: React.FC = () => {
         {selectedCustomer && (
           <div className="space-y-10">
              <div className="grid grid-cols-2 gap-4">
-                <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[32px] shadow-sm">
+                <div className="p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-[32px] shadow-sm" title="Montant total des achats cumulés">
                    <p className="text-[9px] font-black text-blue-700 uppercase mb-2 flex items-center gap-2"><DollarSign size={10}/> Volume d'affaires</p>
                    <p className="text-xl font-black text-blue-900">{selectedCustomer.totalSpent.toLocaleString()} <span className="text-xs">FCFA</span></p>
                 </div>
-                <div className="p-6 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[32px] shadow-sm">
+                <div className="p-6 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-[32px] shadow-sm" title="Nombre d'interactions techniques">
                    <p className="text-[9px] font-black text-green-700 uppercase tracking-widest mb-2 flex items-center gap-2"><BadgeCheck size={10}/> Fidélité</p>
                    <p className="text-xl font-black text-green-900">{selectedCustomer.ticketsCount} <span className="text-xs">OPÉRATIONS</span></p>
                 </div>
@@ -380,7 +383,7 @@ const Customers: React.FC = () => {
              <section className="space-y-4">
                 <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Smartphone size={16} /> Profil Vérifié Horizon</h3>
                 <div className="p-8 bg-white border border-[#dadce0] rounded-[40px] space-y-6 shadow-sm">
-                   <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-6" title="Appeler le client">
                       <div className="w-14 h-14 bg-[#f8f9fa] rounded-2xl border flex items-center justify-center text-[#1a73e8] shadow-inner"><Phone size={24}/></div>
                       <div>
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mobile GSM</p>
@@ -388,7 +391,7 @@ const Customers: React.FC = () => {
                       </div>
                    </div>
                    <div className="h-px bg-gray-100" />
-                   <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-6" title="Envoyer un email">
                       <div className="w-14 h-14 bg-[#f8f9fa] rounded-2xl border flex items-center justify-center text-[#1a73e8] shadow-inner"><Mail size={24}/></div>
                       <div className="flex-1 min-w-0">
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Canal Email</p>
@@ -405,11 +408,11 @@ const Customers: React.FC = () => {
                 </div>
                 <div className="space-y-4">
                    {customerTickets.map(ticket => (
-                     <div key={ticket.id} className="p-6 bg-white border border-[#dadce0] rounded-[32px] shadow-sm hover:border-[#1a73e8] transition-all group cursor-pointer">
+                     <div key={ticket.id} className="p-6 bg-white border border-[#dadce0] rounded-[32px] shadow-sm hover:border-[#1a73e8] transition-all group cursor-pointer" title="Voir les détails de l'intervention">
                         <div className="flex justify-between items-start mb-4">
                            <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                 <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-100 rounded">#{ticket.id}</span>
+                                 <span className="text-[10px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 border border-blue-100 rounded">#{ticket.id}</span>
                                  <span className="text-[10px] font-bold text-gray-400 uppercase">• {ticket.category}</span>
                               </div>
                               <h4 className="text-sm font-black text-[#3c4043]">{ticket.productName}</h4>
@@ -445,34 +448,34 @@ const Customers: React.FC = () => {
       >
          <form onSubmit={handleSave} className="space-y-10">
             <div className="flex p-1.5 bg-[#f1f3f4] shadow-inner rounded-2xl">
-               <button type="button" onClick={() => setCustomerType('Particulier')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${customerType === 'Particulier' ? 'bg-white shadow-md text-[#1a73e8]' : 'text-[#5f6368] hover:text-[#202124]'}`}>Compte Particulier</button>
-               <button type="button" onClick={() => setCustomerType('Entreprise')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${customerType === 'Entreprise' ? 'bg-white shadow-md text-purple-700' : 'text-[#5f6368] hover:text-[#202124]'}`}>Compte Entreprise (B2B)</button>
+               <button type="button" onClick={() => setCustomerType('Particulier')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${customerType === 'Particulier' ? 'bg-white shadow-md text-[#1a73e8]' : 'text-[#5f6368] hover:text-[#202124]'}`} title="Client de type personne physique">Compte Particulier</button>
+               <button type="button" onClick={() => setCustomerType('Entreprise')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${customerType === 'Entreprise' ? 'bg-white shadow-md text-purple-700' : 'text-[#5f6368] hover:text-[#202124]'}`} title="Client de type personne morale / professionnel">Compte Entreprise (B2B)</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Identité du Contact</label>
-                  <input name="name" type="text" defaultValue={editingCustomer?.name} required className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="Nom complet" />
+                  <input name="name" type="text" defaultValue={editingCustomer?.name} required className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="Nom complet" title="Nom et prénom du contact principal" />
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Ligne Directe GSM</label>
                   <div className="relative">
                     <Smartphone className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                    <input name="phone" type="tel" defaultValue={editingCustomer?.phone} required placeholder="+241 ..." className="h-12 bg-[#f8f9fa] border-none pl-11 text-sm font-black tracking-tight" />
+                    <input name="phone" type="tel" defaultValue={editingCustomer?.phone} required placeholder="+241 ..." className="h-12 bg-[#f8f9fa] border-none pl-11 text-sm font-black tracking-tight" title="Numéro de téléphone mobile actif" />
                   </div>
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Adresse de Correspondance</label>
-                  <input name="email" type="email" defaultValue={editingCustomer?.email} className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="expert@exemple.ga" />
+                  <input name="email" type="email" defaultValue={editingCustomer?.email} className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="expert@exemple.ga" title="Adresse email pour les notifications et rapports" />
                </div>
                {customerType === 'Entreprise' ? (
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Dénomination Sociale</label>
-                    <input name="companyName" type="text" defaultValue={editingCustomer?.companyName} required className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="ex: CFAO Gabon SA" />
+                    <input name="companyName" type="text" defaultValue={editingCustomer?.companyName} required className="h-12 bg-[#f8f9fa] border-none text-sm font-bold" placeholder="ex: CFAO Gabon SA" title="Nom de la société / organisation" />
                   </div>
                ) : (
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Classification Client</label>
-                    <select name="status" defaultValue={editingCustomer?.status || 'Actif'} className="h-12 bg-[#f8f9fa] border-none text-[10px] font-black uppercase tracking-widest w-full px-4">
+                    <select name="status" defaultValue={editingCustomer?.status || 'Actif'} className="h-12 bg-[#f8f9fa] border-none text-[10px] font-black uppercase tracking-widest w-full px-4" title="Niveau de fidélité ou statut administratif">
                        <option value="Actif">Client Standard</option>
                        <option value="VIP">Membre VIP Gold</option>
                        <option value="Litige">Suivi Contentieux</option>
@@ -481,11 +484,11 @@ const Customers: React.FC = () => {
                )}
                <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 tracking-widest">Localisation Résidence / Siège</label>
-                  <input name="address" type="text" defaultValue={editingCustomer?.address} placeholder="Quartier, Villa, Rue, Ville..." className="h-12 bg-[#f8f9fa] border-none text-sm font-bold w-full" />
+                  <input name="address" type="text" defaultValue={editingCustomer?.address} placeholder="Quartier, Villa, Rue, Ville..." className="h-12 bg-[#f8f9fa] border-none text-sm font-bold w-full" title="Adresse physique complète pour les livraisons et interventions" />
                </div>
             </div>
 
-            <div className="p-6 bg-blue-50 border border-dashed border-blue-200 rounded-3xl flex items-start gap-4">
+            <div className="p-6 bg-blue-50 border border-dashed border-blue-200 rounded-3xl flex items-start gap-4" title="Note d'information sur la confidentialité">
                <ShieldAlert size={24} className="text-[#1a73e8] mt-1 shrink-0" />
                <div>
                   <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Conformité RGPD / Horizon Privacy</p>
@@ -496,10 +499,10 @@ const Customers: React.FC = () => {
             </div>
 
             <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-               <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20">
+               <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Valider les modifications et synchroniser">
                   <Save size={20} /> Valider la fiche CRM
                </button>
-               <button type="button" onClick={() => { setIsModalOpen(false); setEditingCustomer(null); }} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
+               <button type="button" onClick={() => { setIsModalOpen(false); setEditingCustomer(null); }} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Annuler sans enregistrer">Annuler</button>
             </div>
          </form>
       </Modal>
