@@ -42,7 +42,6 @@ const Tickets: React.FC = () => {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   
-  // États pour le Rapport d'Intervention
   const [reportActions, setReportActions] = useState<string[]>([]);
   const [reportParts, setReportParts] = useState<UsedPart[]>([]);
   const [reportStatus, setReportStatus] = useState<InterventionReport['equipmentStatus']>('Bon');
@@ -54,7 +53,6 @@ const Tickets: React.FC = () => {
   const isManager = currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN';
   const isTechnician = currentUser?.role === 'TECHNICIAN';
 
-  // Helper colors
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'Urgent': return 'bg-red-600';
@@ -269,7 +267,6 @@ const Tickets: React.FC = () => {
         </div>
       </header>
 
-      {/* TABLEAU DES TICKETS */}
       <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="p-8 border-b border-gray-100 flex flex-col md:flex-row gap-6">
           <div className="relative flex-1">
@@ -305,7 +302,6 @@ const Tickets: React.FC = () => {
         </div>
       </div>
 
-      {/* DOSSIER TECHNIQUE DRAWER */}
       <Drawer
         isOpen={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
@@ -316,16 +312,16 @@ const Tickets: React.FC = () => {
           <div className="flex gap-3">
              {isTechnician && (selectedTicket?.status === 'Nouveau' || selectedTicket?.status === 'En cours') && (
                 <button onClick={handleIntervene} className="flex-[2] btn-google-primary bg-blue-600 hover:bg-blue-700 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
-                   <PlayCircle size={18} /> {selectedTicket.status === 'Nouveau' ? 'Intervenir (Démarrer)' : 'Rédiger le Rapport'}
+                   <PlayCircle size={18} /> {selectedTicket.status === 'Nouveau' ? 'Démarrer l\'Intervention' : 'Rédiger le Rapport Technique'}
                 </button>
              )}
              {isManager && selectedTicket?.status === 'En attente d\'approbation' && (
                 <button onClick={() => saveTicket({...selectedTicket, status: 'Résolu', lastUpdate: new Date().toISOString()})} className="flex-[2] btn-google-primary bg-purple-600 hover:bg-purple-700 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
-                   <ShieldCheck size={18} /> Certifier & Approuver
+                   <ShieldCheck size={18} /> Certifier & Approuver le Dossier
                 </button>
              )}
              {!isTechnician && (
-               <button onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"><Edit3 size={18} /> Modifier</button>
+               <button onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"><Edit3 size={18} /> Modifier le Dossier</button>
              )}
           </div>
         }
@@ -337,21 +333,31 @@ const Tickets: React.FC = () => {
                 {renderStepper(selectedTicket.status)}
              </section>
 
-             {/* 2. ENTETE MATÉRIEL */}
+             {/* 2. DESCRIPTION DES SYMPTÔMES - PRIORITÉ TECHNICIEN */}
+             <section className="space-y-4">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={14} /> Description & Diagnostic Initial</h4>
+                <div className="p-8 bg-[#fffdf5] border border-[#ffe082] relative shadow-sm">
+                   <div className="absolute top-0 left-0 w-1.5 h-full bg-[#f9ab00]" />
+                   <p className="text-[#3c4043] italic text-base font-bold leading-relaxed uppercase">"{selectedTicket.description}"</p>
+                </div>
+             </section>
+
+             {/* 3. DÉTAILS DU MATÉRIEL */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="p-8 bg-white border-2 border-gray-100 space-y-4">
+                <div className="p-8 bg-white border-2 border-gray-100 space-y-4 shadow-sm">
                    <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 flex items-center justify-center text-white ${getPriorityColor(selectedTicket.priority)}`}>
                          <AlertTriangle size={20} />
                       </div>
                       <div>
-                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Urgence Dossier</p>
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Niveau d'Urgence</p>
                          <p className="text-sm font-black text-gray-800 uppercase">{selectedTicket.priority}</p>
                       </div>
                    </div>
                    <div className="pt-4 border-t border-gray-50">
-                      <h3 className="text-xl font-black text-gray-900 leading-tight">{selectedTicket.productName}</h3>
-                      <p className="text-xs font-bold text-blue-600 uppercase mt-1">{selectedTicket.brand} • S/N {selectedTicket.serialNumber || 'Non renseigné'}</p>
+                      <p className="text-[9px] font-black text-gray-400 uppercase">Désignation Matériel</p>
+                      <h3 className="text-xl font-black text-gray-900 leading-tight mt-1 uppercase">{selectedTicket.productName}</h3>
+                      <p className="text-xs font-bold text-blue-600 uppercase mt-2">{selectedTicket.brand} • S/N: {selectedTicket.serialNumber || 'ABSENT'}</p>
                    </div>
                 </div>
 
@@ -361,11 +367,11 @@ const Tickets: React.FC = () => {
                       <span className={`text-[10px] font-black uppercase px-2 py-0.5 ${selectedTicket.clientImpact === 'Critique' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{selectedTicket.clientImpact || 'Modéré'}</span>
                    </div>
                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-black text-gray-400 uppercase">Ouverture</span>
+                      <span className="text-[9px] font-black text-gray-400 uppercase">Date d'Ouverture</span>
                       <span className="text-[10px] font-bold text-gray-700">{new Date(selectedTicket.createdAt).toLocaleString()}</span>
                    </div>
                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-black text-gray-400 uppercase">Source du Flux</span>
+                      <span className="text-[9px] font-black text-gray-400 uppercase">Canal d'Origine</span>
                       <div className="flex items-center gap-2">
                         <Globe size={12} className="text-blue-500" />
                         <span className="text-[10px] font-black text-gray-700 uppercase">{selectedTicket.source}</span>
@@ -378,10 +384,10 @@ const Tickets: React.FC = () => {
                 </div>
              </div>
 
-             {/* 3. BLOC CLIENT & LOCALISATION - MASQUÉ POUR LE TECHNICIEN */}
+             {/* 4. BLOC CLIENT - MASQUÉ POUR LE TECHNICIEN */}
              {!isTechnician && (
                 <section className="space-y-4">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><User size={14} /> Titulaire du Dossier</h4>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><User size={14} /> Informations Titulaire</h4>
                   <div className="p-8 bg-white border border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-10">
                     <div className="space-y-6">
                         <div className="flex items-center gap-4">
@@ -400,26 +406,17 @@ const Tickets: React.FC = () => {
                         </div>
                     </div>
                     <div className="bg-blue-50/50 p-6 border-l-4 border-blue-200">
-                        <p className="text-[9px] font-black text-blue-600 uppercase mb-2 flex items-center gap-2"><MapPin size={12}/> Zone d'intervention</p>
+                        <p className="text-[9px] font-black text-blue-600 uppercase mb-2 flex items-center gap-2"><MapPin size={12}/> Localisation Intervention</p>
                         <p className="text-sm font-bold text-gray-700 uppercase leading-relaxed">{selectedTicket.location || 'Showroom d\'origine'}</p>
                     </div>
                   </div>
                 </section>
              )}
 
-             {/* 4. DIAGNOSTIC INITIAL */}
-             <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={14} /> Symptômes & Diagnostic Initial</h4>
-                <div className="p-8 bg-[#fffdf5] border border-[#ffe082] relative shadow-sm">
-                   <div className="absolute top-0 left-0 w-1.5 h-full bg-[#f9ab00]" />
-                   <p className="text-[#3c4043] italic text-base font-medium leading-relaxed">"{selectedTicket.description}"</p>
-                </div>
-             </section>
-
              {/* 5. EXPERT ASSIGNÉ */}
              <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><Wrench size={14} /> Expertise Terrain</h4>
-                <div className="p-6 bg-white border border-gray-100">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2"><Wrench size={14} /> Équipe Assignée</h4>
+                <div className="p-6 bg-white border border-gray-100 shadow-sm">
                    {selectedTicket.assignedTechnicianId ? (
                       <div className="flex items-center gap-5">
                          <img src={technicians.find(t => t.id === selectedTicket.assignedTechnicianId)?.avatar} className="w-14 h-14 border p-1" alt="" />
@@ -428,17 +425,17 @@ const Tickets: React.FC = () => {
                             <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1">Expert Horizon Certifié</p>
                          </div>
                       </div>
-                   ) : <p className="text-xs font-bold text-gray-400 uppercase italic py-4">Aucun expert assigné pour le moment</p>}
+                   ) : <p className="text-xs font-bold text-gray-400 uppercase italic py-4">Dossier en attente d'attribution expert</p>}
                 </div>
              </section>
 
-             {/* 6. RAPPORT TECHNIQUE SI EXISTANT */}
+             {/* 6. RAPPORT TECHNIQUE (VUE RÉCAPITULATIVE) */}
              {selectedTicket.interventionReport && (selectedTicket.interventionReport.actionsTaken?.length || selectedTicket.interventionReport.partsUsed?.length) && (
                 <section className="space-y-4 pt-10 border-t border-gray-100">
-                   <h4 className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em] flex items-center gap-2"><ShieldCheck size={16}/> Certification Technique</h4>
+                   <h4 className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em] flex items-center gap-2"><ShieldCheck size={16}/> Certification Technique Terrain</h4>
                    <div className="p-8 bg-green-50/30 border border-green-100">
                       <div className="flex justify-between items-center mb-6">
-                         <span className="text-[9px] font-black text-green-700 uppercase">État de Santé Final</span>
+                         <span className="text-[9px] font-black text-green-700 uppercase">Verdict Matériel</span>
                          <span className="text-xs font-black bg-white border px-3 py-1 text-green-800 uppercase tracking-tighter shadow-sm">{selectedTicket.interventionReport.equipmentStatus}</span>
                       </div>
                       <div className="space-y-3 mb-6">
@@ -448,7 +445,7 @@ const Tickets: React.FC = () => {
                       </div>
                       {selectedTicket.interventionReport.partsUsed?.length ? (
                          <div className="pt-6 border-t border-green-100">
-                            <p className="text-[9px] font-black text-green-700 uppercase mb-4">Matériaux Utilisés</p>
+                            <p className="text-[9px] font-black text-green-700 uppercase mb-4">Pièces et Matériaux Prélevés</p>
                             <div className="grid grid-cols-1 gap-2">
                                {selectedTicket.interventionReport.partsUsed.map((p, i) => (
                                   <div key={i} className="flex justify-between items-center p-3 bg-white border border-green-50">
@@ -466,11 +463,11 @@ const Tickets: React.FC = () => {
         )}
       </Drawer>
 
-      {/* MODAL RAPPORT TECHNIQUE */}
-      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Saisie des Matériaux & Rapport Technique" size="lg">
+      {/* MODAL RAPPORT TECHNIQUE (TECHNICIEN UNIQUEMENT) */}
+      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Documentation de l'Intervention Terrain" size="lg">
          <form onSubmit={handleSaveReport} className="space-y-10">
             <section className="space-y-4">
-               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2"><Activity size={14} className="text-[#1a73e8]" /> Diagnostic Final</h4>
+               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2"><Activity size={14} className="text-[#1a73e8]" /> Diagnostic Final de l'Équipement</h4>
                <div className="grid grid-cols-4 gap-3">
                   {(['Excellent', 'Bon', 'Critique', 'À remplacer'] as const).map(s => (
                     <button type="button" key={s} onClick={() => setReportStatus(s)} className={`py-4 border-2 text-[9px] font-black uppercase transition-all ${reportStatus === s ? 'bg-[#1a73e8] border-[#1a73e8] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}>{s}</button>
@@ -478,22 +475,22 @@ const Tickets: React.FC = () => {
                </div>
             </section>
             <section className="space-y-4">
-               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Actions Effectuées</h4>
+               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Opérations Techniques Réalisées</h4>
                <div className="flex gap-2">
-                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), currentAction.trim() && (setReportActions([...reportActions, currentAction.trim()]), setCurrentAction('')))} placeholder="ex: Nettoyage bloc évaporateur..." className="flex-1 bg-gray-50 border-none text-xs font-bold" />
+                  <input type="text" value={currentAction} onChange={e => setCurrentAction(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), currentAction.trim() && (setReportActions([...reportActions, currentAction.trim()]), setCurrentAction('')))} placeholder="Saisir une action technique..." className="flex-1 bg-gray-50 border-none text-xs font-bold" />
                   <button type="button" onClick={() => { if(currentAction.trim()) { setReportActions([...reportActions, currentAction.trim()]); setCurrentAction(''); } }} className="w-10 h-10 bg-[#1a73e8] text-white flex items-center justify-center shadow-lg"><Plus size={20}/></button>
                </div>
-               <div className="space-y-2">{reportActions.map((a, i) => (<div key={i} className="flex justify-between p-3 bg-white border border-gray-100 text-[10px] font-black uppercase"><span>{a}</span><button type="button" onClick={() => setReportActions(reportActions.filter((_, idx) => idx !== i))} className="text-red-400"><Trash2 size={14}/></button></div>))}</div>
+               <div className="space-y-2">{reportActions.map((a, i) => (<div key={i} className="flex justify-between p-3 bg-white border border-gray-100 text-[10px] font-black uppercase shadow-sm"><span>{a}</span><button type="button" onClick={() => setReportActions(reportActions.filter((_, idx) => idx !== i))} className="text-red-400"><Trash2 size={14}/></button></div>))}</div>
             </section>
             <section className="space-y-4">
-               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Pièces Débitées du Stock</h4>
-               <select onChange={(e) => { const p = parts.find(it => it.id === e.target.value); if(p) setReportParts([...reportParts, { id: p.id, name: p.name, quantity: 1, unitPrice: p.unitPrice }]); }} className="w-full h-11 bg-gray-50 border-none text-xs font-bold" value=""><option value="">Sélectionner un article du catalogue...</option>{parts.filter(p => p.currentStock > 0).map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku}) - Dispo: {p.currentStock}</option>)}</select>
+               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest">Matériaux Débités du Stock Horizon</h4>
+               <select onChange={(e) => { const p = parts.find(it => it.id === e.target.value); if(p) setReportParts([...reportParts, { id: p.id, name: p.name, quantity: 1, unitPrice: p.unitPrice }]); }} className="w-full h-11 bg-gray-50 border-none text-xs font-bold" value=""><option value="">Choisir une pièce dans la base...</option>{parts.filter(p => p.currentStock > 0).map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku}) - Stock: {p.currentStock}</option>)}</select>
                <div className="space-y-2">
                   {reportParts.map(p => (
                     <div key={p.id} className="flex justify-between items-center p-4 bg-white border-2 border-[#f1f3f4] shadow-sm">
                        <div className="flex-1">
                           <p className="text-[10px] font-black text-[#202124] uppercase">{p.name}</p>
-                          <p className="text-[9px] text-blue-600 font-bold uppercase mt-1">Référentiel Cloud Horizon</p>
+                          <p className="text-[9px] text-blue-600 font-bold uppercase mt-1">Référentiel Cloud Plaza</p>
                        </div>
                        <div className="flex items-center gap-6">
                           <button type="button" onClick={() => setReportParts(reportParts.filter(item => item.id !== p.id))} className="text-red-300 hover:text-red-600 ml-4"><X size={20}/></button>
@@ -502,41 +499,41 @@ const Tickets: React.FC = () => {
                   ))}
                </div>
             </section>
-            <div className="flex gap-3 pt-6 border-t border-gray-100"><button type="submit" className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Valider & Mettre à jour les stocks</button><button type="button" onClick={() => setIsReportModalOpen(false)} className="btn-google-outlined px-8 text-[10px] font-black uppercase">Abandonner</button></div>
+            <div className="flex gap-3 pt-6 border-t border-gray-100"><button type="submit" className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Valider & Synchroniser le Rapport</button><button type="button" onClick={() => setIsReportModalOpen(false)} className="btn-google-outlined px-8 text-[10px] font-black uppercase">Abandonner</button></div>
          </form>
       </Modal>
 
-      {/* MODAL ÉDITION DOSSIER */}
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTicket(null); }} title={editingTicket ? `Édition : ${editingTicket.id}` : "Nouveau Dossier SAV"} size="xl">
+      {/* MODAL ÉDITION DOSSIER (ADMIN/MANAGER UNIQUEMENT) */}
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTicket(null); }} title={editingTicket ? `Modification Dossier : ${editingTicket.id}` : "Nouveau Dossier SAV Horizon"} size="xl">
         <form onSubmit={handleSave} className="space-y-10">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
               <div className="space-y-6">
-                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Client</h3>
+                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Identification Client</h3>
                  <div className="space-y-4">
                     <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Nom Complet</label><input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full bg-gray-50 border-none font-bold" /></div>
                     <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Mobile GSM</label><input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full bg-gray-50 border-none font-black font-mono" /></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Localisation</label><input name="location" type="text" defaultValue={editingTicket?.location} className="w-full bg-gray-50 border-none font-bold" /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Localisation Géo</label><input name="location" type="text" defaultValue={editingTicket?.location} className="w-full bg-gray-50 border-none font-bold" /></div>
                  </div>
               </div>
               <div className="space-y-6">
-                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Matériel</h3>
+                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Spécifications Matériel</h3>
                  <div className="space-y-4">
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Désignation</label><input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full bg-gray-50 border-none font-bold" /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Modèle / Désignation</label><input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full bg-gray-50 border-none font-bold" /></div>
                     <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Marque</label><input name="brand" type="text" defaultValue={editingTicket?.brand} required className="w-full bg-gray-50 border-none font-bold" /></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">N° de Série</label><input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full bg-gray-50 border-none font-mono font-black" /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">N° de Série (S/N)</label><input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full bg-gray-50 border-none font-mono font-black" /></div>
                  </div>
               </div>
               <div className="space-y-6">
-                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Config</h3>
+                 <h3 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">Paramètres Cloud</h3>
                  <div className="space-y-4">
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Impact</label><select name="clientImpact" defaultValue={editingTicket?.clientImpact || 'Modéré'} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="Faible">Faible</option><option value="Modéré">Modéré</option><option value="Critique">Critique</option></select></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Expert</label><select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="">Non assigné</option>{technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Source</label><select name="source" defaultValue={editingTicket?.source || 'Phone'} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="Phone">Phone</option><option value="WhatsApp">WhatsApp</option><option value="Messenger">Messenger</option><option value="Interne">Interne</option></select></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Niveau d'Impact</label><select name="clientImpact" defaultValue={editingTicket?.clientImpact || 'Modéré'} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="Faible">Faible</option><option value="Modéré">Modéré</option><option value="Critique">Critique</option></select></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Expert Assigné</label><select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="">Non assigné</option>{technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-500">Source du Flux</label><select name="source" defaultValue={editingTicket?.source || 'Phone'} className="w-full bg-gray-50 border-none font-black text-[10px] uppercase"><option value="Phone">Phone</option><option value="WhatsApp">WhatsApp</option><option value="Messenger">Messenger</option><option value="Interne">Interne</option></select></div>
                  </div>
               </div>
            </div>
-           <div className="space-y-2 pt-6 border-t border-gray-100"><label className="text-[9px] font-black uppercase text-gray-500">Description des Symptômes</label><textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 p-4 bg-gray-50 border-none font-medium" /></div>
-           <div className="flex gap-4 pt-8 border-t border-gray-200"><button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl"><Save size={20} /> Valider le dossier</button><button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]">Annuler</button></div>
+           <div className="space-y-2 pt-6 border-t border-gray-100"><label className="text-[9px] font-black uppercase text-gray-500">Diagnostic Préliminaire / Symptômes</label><textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 p-4 bg-gray-50 border-none font-bold uppercase text-xs" /></div>
+           <div className="flex gap-4 pt-8 border-t border-gray-200"><button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl"><Save size={20} /> Valider les Modifications</button><button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button></div>
         </form>
       </Modal>
     </div>
