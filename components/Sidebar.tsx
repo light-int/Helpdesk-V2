@@ -1,19 +1,30 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 // Fix: Ensure standard imports for react-router-dom v6
 import { Link, useLocation } from 'react-router-dom';
 import { NAVIGATION } from '../constants';
 import { LogOut, Menu, Languages } from 'lucide-react';
-import { useUser, useNotifications } from '../App';
+import { useUser, useNotifications, useData } from '../App';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { currentUser, logout } = useUser();
   const { addNotification } = useNotifications();
+  const { tickets, parts } = useData();
   const [lang, setLang] = useState<'FR' | 'EN'>('FR');
   const [isTranslating, setIsTranslating] = useState(false);
 
   if (!currentUser) return null;
+
+  // Calcul des badges de notification dynamiques
+  const badges = useMemo(() => {
+    return {
+      '/tickets': tickets.filter(t => t.priority === 'Urgent' || t.status === 'Nouveau').length,
+      '/maintenance': tickets.filter(t => t.category === 'Maintenance' && t.status === "En attente d'approbation").length,
+      '/parts': parts.filter(p => p.currentStock <= p.minStock).length,
+      '/inbox': 0 // À synchroniser plus tard avec les conversations si globalisé
+    };
+  }, [tickets, parts]);
 
   // Logique de filtrage RBAC pour la navigation
   const filteredNavigation = NAVIGATION.filter(item => {
@@ -71,24 +82,37 @@ const Sidebar: React.FC = () => {
         </button>
       </div>
       
-      {/* NAVIGATION FILTRÉE */}
+      {/* NAVIGATION FILTRÉE AVEC BADGES */}
       <nav className="flex-1 mt-2 px-3 space-y-0.5 overflow-y-auto custom-scrollbar">
         {filteredNavigation.map((item) => {
           const isActive = location.pathname === item.path;
+          const badgeCount = (badges as any)[item.path] || 0;
+
           return (
             <Link
               key={item.name}
               to={item.path}
-              className={`flex items-center gap-4 px-4 py-2.5 rounded-r-full transition-colors text-sm font-medium ${
+              className={`flex items-center justify-between px-4 py-2.5 rounded-r-full transition-colors text-sm font-medium group ${
                 isActive 
                   ? 'bg-[#e8f0fe] text-[#1a73e8]' 
                   : 'text-[#3c4043] hover:bg-[#f1f3f4]'
               }`}
             >
-              <span className={`${isActive ? 'text-[#1a73e8]' : 'text-[#5f6368]'}`}>
-                {React.cloneElement(item.icon as React.ReactElement<any>, { size: 20 })}
-              </span>
-              <span>{item.name}</span>
+              <div className="flex items-center gap-4">
+                <span className={`${isActive ? 'text-[#1a73e8]' : 'text-[#5f6368]'}`}>
+                  {React.cloneElement(item.icon as React.ReactElement<any>, { size: 20 })}
+                </span>
+                <span>{item.name}</span>
+              </div>
+              
+              {badgeCount > 0 && (
+                <span className={`px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center rounded-full text-[9px] font-black text-white shadow-sm transition-transform group-hover:scale-110 ${
+                  item.path === '/tickets' ? 'bg-[#d93025]' : 
+                  item.path === '/parts' ? 'bg-[#fbbc04]' : 'bg-[#1a73e8]'
+                }`}>
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
             </Link>
           );
         })}

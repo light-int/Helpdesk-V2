@@ -265,44 +265,52 @@ const App: React.FC = () => {
     setCurrentUser(updated);
     PlazaDB.save('auth_user', updated);
     await ApiService.users.save(updated);
+    addNotification({ title: 'Profil mis à jour', message: 'Vos informations ont été synchronisées.', type: 'success' });
   };
 
   const saveTicket = async (ticket: Ticket) => {
     await ApiService.tickets.saveAll([ticket]);
     await refreshAll();
+    addNotification({ title: 'Dossier SAV', message: `Le ticket #${ticket.id} a été enregistré avec succès.`, type: 'success' });
   };
 
   const deleteTicket = async (id: string) => {
     setTickets(prev => prev.filter(t => t.id !== id));
     await ApiService.tickets.delete(id);
     await refreshAll();
+    addNotification({ title: 'Suppression', message: `Le dossier #${id} a été retiré du cloud.`, type: 'info' });
   };
 
   const saveProduct = async (product: Product) => {
     await ApiService.products.saveAll([product]);
     await refreshAll();
+    addNotification({ title: 'Catalogue Produits', message: `Référence ${product.reference} synchronisée.`, type: 'success' });
   };
 
   const saveProductsBulk = async (newProducts: Product[]) => {
     await ApiService.products.saveAll(newProducts);
     await refreshAll();
+    addNotification({ title: 'Importation', message: `${newProducts.length} produits ajoutés.`, type: 'success' });
   };
 
   const deleteProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
     await ApiService.products.delete(id);
     await refreshAll();
+    addNotification({ title: 'Catalogue', message: 'Produit retiré du catalogue.', type: 'info' });
   };
 
   const saveTechnician = async (tech: Technician) => {
     await ApiService.technicians.saveAll([tech]);
     await refreshAll();
+    addNotification({ title: 'Équipe Technique', message: `Fiche de ${tech.name} mise à jour.`, type: 'success' });
   };
 
   const deleteTechnician = async (id: string) => {
     setTechnicians(prev => prev.filter(t => t.id !== id));
     await ApiService.technicians.delete(id);
     await refreshAll();
+    addNotification({ title: 'Personnel', message: 'Technicien retiré de la base.', type: 'info' });
   };
 
   const deletePart = async (id: string) => {
@@ -311,11 +319,12 @@ const App: React.FC = () => {
     try {
       await ApiService.parts.delete(id);
       await refreshAll();
+      addNotification({ title: 'Stock', message: 'Référence supprimée de l\'inventaire.', type: 'success' });
     } catch (err: any) {
       setParts(originalParts); // Rollback
       addNotification({ 
         title: 'Erreur Serveur', 
-        message: err.message || 'Impossible de supprimer cette pièce. Vérifiez les dépendances.', 
+        message: err.message || 'Impossible de supprimer cette pièce.', 
         type: 'error' 
       });
       throw err;
@@ -328,11 +337,12 @@ const App: React.FC = () => {
     try {
       await ApiService.parts.deleteBulk(ids);
       await refreshAll();
+      addNotification({ title: 'Stock', message: `${ids.length} articles supprimés.`, type: 'success' });
     } catch (err: any) {
       setParts(originalParts); // Rollback
       addNotification({ 
         title: 'Erreur de Masse', 
-        message: 'Échec de la suppression groupée sur le Cloud.', 
+        message: 'Échec de la suppression groupée.', 
         type: 'error' 
       });
       throw err;
@@ -348,33 +358,39 @@ const App: React.FC = () => {
       await ApiService.parts.saveAll([{ ...part, currentStock: newStock }]);
     }
     await refreshAll();
+    addNotification({ title: 'Mouvement Stock', message: `Stock ${movement.type === 'IN' ? 'réapprovisionné' : 'décompté'} pour ${movement.partName}.`, type: 'info' });
   };
 
   const saveWarranty = async (warranty: WarrantyRecord) => {
     await ApiService.warranties.saveAll([warranty]);
     await refreshAll();
+    addNotification({ title: 'Garanties', message: 'Nouveau contrat enregistré.', type: 'success' });
   };
 
   const saveCustomer = async (customer: Customer) => {
     await ApiService.customers.saveAll([customer]);
     await refreshAll();
+    addNotification({ title: 'CRM Client', message: `Fiche client de ${customer.name} synchronisée.`, type: 'success' });
   };
 
   const deleteCustomer = async (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
     await ApiService.customers.delete(id);
     await refreshAll();
+    addNotification({ title: 'CRM Client', message: 'Client archivé.', type: 'info' });
   };
 
   const saveShowroom = async (showroom: ShowroomConfig) => {
     await ApiService.showrooms.save(showroom);
     await refreshAll();
+    addNotification({ title: 'Paramètres Site', message: `Showroom ${showroom.id} mis à jour.`, type: 'success' });
   };
 
   const deleteShowroom = async (id: string) => {
     setShowrooms(prev => prev.filter(s => s.id !== id));
     await ApiService.showrooms.delete(id);
     await refreshAll();
+    addNotification({ title: 'Sites', message: 'Point de vente retiré.', type: 'info' });
   };
 
   const saveUser = async (user: UserProfile, techMeta?: { phone?: string, specialties?: TicketCategory[] }) => {
@@ -406,6 +422,7 @@ const App: React.FC = () => {
       }
     }
     await refreshAll();
+    addNotification({ title: 'Gestion Accès', message: `Compte de ${user.name} enregistré.`, type: 'success' });
   };
 
   const deleteUser = async (id: string) => {
@@ -413,6 +430,7 @@ const App: React.FC = () => {
     await ApiService.users.delete(id);
     await ApiService.technicians.delete(id);
     await refreshAll();
+    addNotification({ title: 'Sécurité', message: 'Accès utilisateur révoqué.', type: 'warning' });
   };
 
   const saveReport = async (report: StrategicReport) => {
@@ -424,6 +442,7 @@ const App: React.FC = () => {
     setReports(prev => prev.filter(r => r.id !== id));
     await ApiService.reports.delete(id);
     await refreshAll();
+    addNotification({ title: 'Archives', message: 'Rapport supprimé.', type: 'info' });
   };
 
   const updateConfig = (updates: Partial<SystemConfig>) => {
@@ -431,6 +450,7 @@ const App: React.FC = () => {
     setConfig(updated);
     PlazaDB.save('system_config', updated);
     ApiService.config.update(updated);
+    addNotification({ title: 'Système', message: 'Configuration globale mise à jour.', type: 'success' });
   };
 
   const addAuditLog = (action: string, target: string, details: string) => {
@@ -449,7 +469,7 @@ const App: React.FC = () => {
       ApiService.brands.saveAll(['LG', 'Beko', 'Samsung', 'Hisense', 'Royal Plaza'])
     ]);
     await refreshAll();
-    addNotification({ title: 'Données Démo', message: 'L\'environnement a été réinitialisé avec les données de test.', type: 'info' });
+    addNotification({ title: 'Initialisation', message: 'Données de démonstration chargées.', type: 'info' });
     setIsSyncing(false);
   };
 
