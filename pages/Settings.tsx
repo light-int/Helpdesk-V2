@@ -54,6 +54,7 @@ const Settings: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   // States pour la partie Technicien dynamique
   const [selectedRole, setSelectedRole] = useState<UserRole>('AGENT');
@@ -92,6 +93,20 @@ const Settings: React.FC = () => {
       setIntegrationConfigs(data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleClearDatabase = async () => {
+    if (!window.confirm("CRITIQUE : Cette action supprimera TOUTES les données de Royal Plaza (Tickets, Clients, Produits, Users). Voulez-vous vraiment continuer ?")) return;
+    setIsClearing(true);
+    try {
+      await ApiService.dangerouslyClearAll();
+      addNotification({ title: 'Maintenance Cloud', message: 'La base de données a été réinitialisée.', type: 'info' });
+      window.location.reload();
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Réinitialisation échouée.', type: 'error' });
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -614,6 +629,21 @@ const Settings: React.FC = () => {
                         <span className={`text-[10px] font-black uppercase ${syncMetrics.status === 'CONNECTED' ? 'text-green-600' : 'text-red-600'}`}>{syncMetrics.status}</span>
                      </div>
                   </div>
+               </div>
+
+               <div className="google-card p-8 border-l-4 border-red-600 bg-red-50/10">
+                  <h3 className="text-sm font-black text-red-700 uppercase flex items-center gap-2">
+                    <Database size={18} /> Zone Critique de Maintenance
+                  </h3>
+                  <p className="text-xs text-[#5f6368] mt-2 mb-6">Réinitialisez l'ensemble de l'instance Horizon pour repartir d'une base vierge. Cette action est irréversible.</p>
+                  <button 
+                    onClick={handleClearDatabase}
+                    disabled={isClearing}
+                    className="btn-google-primary bg-red-600 hover:bg-red-700 shadow-xl shadow-red-600/20"
+                  >
+                    {isClearing ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                    Vider le Cloud Horizon
+                  </button>
                </div>
 
                <div className="google-card">

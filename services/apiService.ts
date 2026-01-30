@@ -24,7 +24,7 @@ const safeFetch = async <T>(promise: any, fallback: T): Promise<T> => {
 const cleanObject = (obj: any, allowedKeys: string[]) => {
   const cleaned: any = {};
   allowedKeys.forEach(key => {
-    if (obj[key] !== undefined) cleaned[key] = obj[key];
+    if (obj[key] !== undefined && obj[key] !== null) cleaned[key] = obj[key];
   });
   return cleaned;
 };
@@ -147,7 +147,6 @@ export const ApiService = {
   products: {
     getAll: async (): Promise<Product[]> => {
       const data = await safeFetch(supabase.from('products').select('*').order('name'), []);
-      // Normalisation des champs d'images (aliasing image_url -> image)
       return (data as any[]).map(p => ({
         ...p,
         image: p.image || p.image_url || null
@@ -196,7 +195,6 @@ export const ApiService = {
   technicians: {
     getAll: async (): Promise<Technician[]> => {
       const data = await safeFetch(supabase.from('technicians').select('*').order('name'), []);
-      // Normalisation des avatars (aliasing avatar_url -> avatar)
       return (data as any[]).map(t => ({
         ...t,
         avatar: t.avatar || t.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}&background=1a73e8&color=ffffff`

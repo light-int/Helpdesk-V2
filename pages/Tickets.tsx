@@ -12,10 +12,10 @@ import {
   Zap, Map, Layers, Target, Headphones, Receipt, Info as InfoIcon, FilterX, BellRing,
   SlidersHorizontal, LayoutGrid, ListFilter, MapPinned, ChevronLeft, ArrowUpRight,
   Timer, BarChart3, RotateCcw, Boxes, Shapes, CalendarDays, Sliders, ChevronDown, ChevronUp,
-  CreditCard as PaymentIcon, Gauge
+  CreditCard as PaymentIcon, Gauge, CheckCircle, Wallet, Send
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { Ticket, TicketStatus, TicketCategory, Showroom, UsedPart, Customer } from '../types';
+import { Ticket, TicketStatus, TicketCategory, Showroom, UsedPart, Customer, Technician, FinancialDetail } from '../types';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 
@@ -40,11 +40,13 @@ const Tickets: React.FC = () => {
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFinancesModalOpen, setIsFinancesModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
 
   const canCreateTicket = currentUser?.role !== 'TECHNICIAN';
+  const isManager = currentUser?.role === 'MANAGER' || currentUser?.role === 'ADMIN';
 
   useEffect(() => { refreshAll(); }, []);
 
@@ -52,7 +54,7 @@ const Tickets: React.FC = () => {
 
   useEffect(() => {
     const ticketId = searchParams.get('id');
-    if (ticketId && tickets.length > 0) {
+    if (ticketId && (tickets || []).length > 0) {
       const found = tickets.find(t => t.id === ticketId);
       if (found) {
         setSelectedTicket(found);
@@ -62,17 +64,12 @@ const Tickets: React.FC = () => {
   }, [searchParams, tickets, setSearchParams]);
 
   const allFilteredTickets = useMemo(() => {
-    return tickets.filter(t => {
+    return (tickets || []).filter(t => {
       if (t.isArchived) return false;
       
-      // VISIBILITÉ TECHNIQUE AMÉLIORÉE
       if (currentUser?.role === 'TECHNICIAN') {
-        // Le technicien voit :
-        // 1. Ce qui lui est assigné
         const isMine = t.assignedTechnicianId === currentUser.id;
-        // 2. Les nouveaux tickets de son showroom (pour auto-assignation)
         const isNewInMyShowroom = t.status === 'Nouveau' && t.showroom === currentUser.showroom;
-        
         if (!isMine && !isNewInMyShowroom) return false;
       }
       
@@ -117,7 +114,7 @@ const Tickets: React.FC = () => {
   const totalPages = Math.ceil(allFilteredTickets.length / TICKETS_PER_PAGE);
 
   const stats = useMemo(() => {
-    const relevant = tickets.filter(t => {
+    const relevant = (tickets || []).filter(t => {
       if (t.isArchived) return false;
       if (currentUser?.role === 'TECHNICIAN') return t.assignedTechnicianId === currentUser.id;
       return true;
@@ -136,6 +133,7 @@ const Tickets: React.FC = () => {
       case 'Fermé': return 'bg-gray-50 text-gray-500 border-gray-300';
       case 'Nouveau': return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'En cours': return 'bg-amber-50 text-amber-700 border-amber-300';
+      case 'En attente d\'approbation': return 'bg-purple-50 text-purple-700 border-purple-200';
       default: return 'bg-gray-50 text-gray-700 border-gray-300';
     }
   };
@@ -152,25 +150,70 @@ const Tickets: React.FC = () => {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const customerPhone = formData.get('customerPhone') as string;
+    const customerName = formData.get('customerName') as string;
     const rawTechId = formData.get('assignedTechnicianId') as string;
-    const finalTechId = rawTechId && technicians.some(t => t.id === rawTechId) ? rawTechId : undefined;
 
+    // 1. GESTION DU CLIENT (Création automatique)
+    let targetCustomerId = editingTicket?.customerId;
+    const existingCustomer = (customers || []).find(c => c.phone === customerPhone);
+    
+    if (existingCustomer) {
+      targetCustomerId = existingCustomer.id;
+    } else {
+      const newCustomerId = `C-${Math.floor(10000 + Math.random() * 89999)}`;
+      const newCustomer: Customer = {
+        id: newCustomerId,
+        name: customerName,
+        phone: customerPhone,
+        email: formData.get('email') as string || '',
+        type: 'Particulier',
+        address: formData.get('location') as string || '',
+        status: 'Actif',
+        totalSpent: 0,
+        ticketsCount: 1,
+        lastVisit: new Date().toISOString()
+      };
+      await saveCustomer(newCustomer);
+      targetCustomerId = newCustomerId;
+      addNotification({ title: 'CRM Cloud', message: `Nouveau profil client créé pour ${customerName}`, type: 'info' });
+    }
+
+    // 2. ALGORITHME AUTO-ASSIGN (Basé sur la charge réelle)
+    let finalTechId = rawTechId && technicians.some(t => t.id === rawTechId) ? rawTechId : undefined;
+
+    if (!finalTechId && !editingTicket) {
+      const availableTechs = technicians.filter(t => t.status === 'Disponible');
+      if (availableTechs.length > 0) {
+        // Calcul de charge dynamique
+        const bestTech = [...availableTechs].sort((a, b) => {
+          const loadA = tickets.filter(t => t.assignedTechnicianId === a.id && (t.status === 'En cours' || t.status === 'Nouveau')).length;
+          const loadB = tickets.filter(t => t.assignedTechnicianId === b.id && (t.status === 'En cours' || t.status === 'Nouveau')).length;
+          if (loadA !== loadB) return loadA - loadB;
+          return (b.rating || 0) - (a.rating || 0);
+        })[0];
+        finalTechId = bestTech.id;
+      }
+    }
+
+    // 3. ENREGISTREMENT DU TICKET
     const ticketData: Ticket = {
       ...(editingTicket || {}),
       id: editingTicket?.id || `T-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: formData.get('customerName') as string,
-      customerPhone: formData.get('customerPhone') as string,
+      customerId: targetCustomerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
       brand: formData.get('brand') as string,
       productName: formData.get('productName') as string,
       serialNumber: formData.get('serialNumber') as string,
       location: formData.get('location') as string,
-      source: (formData.get('source') as any) || 'WhatsApp',
-      showroom: (formData.get('showroom') as any) || 'Glass',
-      category: (formData.get('category') as any) || 'SAV',
-      status: (formData.get('status') as any) || 'Nouveau',
+      source: (formData.get('source') as any) || (editingTicket?.source || 'Phone'),
+      showroom: (formData.get('showroom') as any) || (editingTicket?.showroom || 'Glass'),
+      category: (formData.get('category') as any) || (editingTicket?.category || 'SAV'),
+      status: (formData.get('status') as any) || (editingTicket?.status || 'Nouveau'),
       priority: (formData.get('priority') as any) || 'Moyenne',
       description: formData.get('description') as string,
-      assignedTechnicianId: finalTechId,
+      assignedTechnicianId: finalTechId || editingTicket?.assignedTechnicianId,
       createdAt: editingTicket?.createdAt || new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
     } as Ticket;
@@ -178,10 +221,28 @@ const Tickets: React.FC = () => {
     try {
       await saveTicket(ticketData);
       setIsModalOpen(false);
-      addNotification({ title: 'Horizon Sync', message: 'Dossier enregistré.', type: 'success' });
-    } catch (err: any) {
-      addNotification({ title: 'Erreur', message: 'Échec de la sauvegarde.', type: 'error' });
+      setEditingTicket(null);
+      if (selectedTicket?.id === ticketData.id) setSelectedTicket(ticketData);
+      addNotification({ title: 'Horizon Sync', message: 'Dossier SAV synchronisé.', type: 'success' });
+    } catch (err) {
+      addNotification({ title: 'Erreur Cloud', message: 'Échec de la sauvegarde.', type: 'error' });
     }
+  };
+
+  const handleApprove = async () => {
+    if (!selectedTicket || !isManager) return;
+    const updated: Ticket = { ...selectedTicket, status: 'Résolu', lastUpdate: new Date().toISOString() };
+    await saveTicket(updated);
+    setSelectedTicket(updated);
+    addNotification({ title: 'Management', message: 'Intervention validée et certifiée.', type: 'success' });
+  };
+
+  const handleCloseTicket = async () => {
+    if (!selectedTicket || !isManager) return;
+    const updated: Ticket = { ...selectedTicket, status: 'Fermé', lastUpdate: new Date().toISOString() };
+    await saveTicket(updated);
+    setSelectedTicket(updated);
+    addNotification({ title: 'Archive Cloud', message: 'Dossier clos administrativement.', type: 'info' });
   };
 
   const resetFilters = () => {
@@ -193,13 +254,40 @@ const Tickets: React.FC = () => {
     setDateRange('all');
   };
 
+  const renderStepper = (status: TicketStatus) => {
+    const steps: TicketStatus[] = ['Nouveau', 'En cours', 'En attente d\'approbation', 'Résolu', 'Fermé'];
+    const currentIdx = steps.indexOf(status);
+
+    return (
+      <div className="flex items-center justify-between w-full px-4 py-8 overflow-hidden">
+        {steps.map((step, idx) => (
+          <React.Fragment key={step}>
+            <div className="flex flex-col items-center relative z-10">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                idx <= currentIdx ? 'bg-[#1a73e8] border-[#1a73e8] text-white' : 'bg-white border-gray-200 text-gray-300'
+              }`}>
+                {idx < currentIdx ? <CheckCircle size={16} /> : <span className="text-[10px] font-black">{idx + 1}</span>}
+              </div>
+              <p className={`text-[8px] font-black uppercase tracking-tighter mt-2 absolute -bottom-6 w-20 text-center ${
+                idx <= currentIdx ? 'text-[#1a73e8]' : 'text-gray-300'
+              }`}>{step}</p>
+            </div>
+            {idx < steps.length - 1 && (
+              <div className={`flex-1 h-[2px] mx-2 transition-all ${idx < currentIdx ? 'bg-[#1a73e8]' : 'bg-gray-100'}`} />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 animate-page-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-light text-[#202124]">Tickets & SAV</h1>
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">
-             {currentUser?.role === 'TECHNICIAN' ? `Missions pour ${currentUser.name}` : 'Management Central Royal Plaza Horizon'}
+             {currentUser?.role === 'TECHNICIAN' ? `Missions de : ${currentUser.name}` : 'Management Central Royal Plaza Horizon'}
           </p>
         </div>
         <div className="flex gap-3">
@@ -215,12 +303,12 @@ const Tickets: React.FC = () => {
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/>, tooltip: "Nombre total de dossiers non archivés" },
-          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/>, tooltip: "Tickets prioritaires en attente de résolution" },
-          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/>, tooltip: "Dossiers n'ayant pas encore d'expert assigné" },
-          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/>, tooltip: "Tickets résolus cette semaine" }
+          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/> },
+          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/> },
+          { label: 'En Attente', value: stats.new, color: '#f9ab00', icon: <BellRing size={20}/> },
+          { label: 'Clôtures Hebdo', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/> }
         ].map((s, i) => (
-          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }} title={s.tooltip}>
+          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }}>
              <div className="flex justify-between items-start">
                <div>
                  <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{s.label}</p>
@@ -232,11 +320,10 @@ const Tickets: React.FC = () => {
         ))}
       </div>
 
-      {/* FILTER CONTROL CENTER */}
-      <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
-        <div className="p-8 space-y-8">
+      {/* FILTER CENTER */}
+      <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5 p-8">
            <div className="flex flex-col xl:flex-row gap-6">
-              <div className="relative flex-1 group" title="Rechercher par client, ticket ID ou S/N">
+              <div className="relative flex-1 group">
                  <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                  <input 
                   type="text" 
@@ -245,27 +332,17 @@ const Tickets: React.FC = () => {
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                  />
-                 {searchTerm && (
-                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500">
-                     <X size={22} />
-                   </button>
-                 )}
               </div>
 
               <div className="flex flex-wrap items-center gap-4">
                  <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
-                    {[
-                      { id: 'Tous', icon: <ListFilter size={20} />, label: 'Tous les tickets' },
-                      { id: 'Nouveau', icon: <BellRing size={20} />, label: 'Nouveaux dossiers' },
-                      { id: 'En cours', icon: <Clock size={20} />, label: 'Dossiers en cours' }
-                    ].map(item => (
+                    {['Tous', 'Nouveau', 'En cours'].map(item => (
                       <button 
-                        key={item.id}
-                        title={item.label}
-                        onClick={() => setStatusFilter(item.id)}
-                        className={`p-3.5 transition-all ${statusFilter === item.id ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                        key={item}
+                        onClick={() => setStatusFilter(item)}
+                        className={`px-6 py-3.5 text-[10px] font-black uppercase transition-all ${statusFilter === item ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
                       >
-                        {item.icon}
+                        {item}
                       </button>
                     ))}
                  </div>
@@ -273,84 +350,31 @@ const Tickets: React.FC = () => {
                  <div className="flex items-center gap-4">
                     <button 
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                      title={showAdvancedFilters ? "Masquer les filtres avancés" : "Afficher filtres par Showroom / Urgence"}
                       className={`p-4.5 border-2 transition-all ${showAdvancedFilters ? 'bg-[#202124] border-[#202124] text-white shadow-lg' : 'bg-white border-[#dadce0] text-[#5f6368] hover:border-[#1a73e8]'}`}
                     >
                       <Sliders size={22} />
                     </button>
-
-                    <div className="h-16 min-w-[180px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 w-1 h-full bg-[#1a73e8]" />
-                      <div className="shrink-0 mr-4">
-                         <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Base de Données</span>
-                         </div>
-                         <p className="text-lg font-black text-[#202124] leading-none mt-1">{allFilteredTickets.length} <span className="text-[10px] text-gray-400 font-bold uppercase">Résultats</span></p>
-                      </div>
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl"><LayoutGrid size={18}/></div>
+                    <div className="h-16 min-w-[150px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm">
+                      <p className="text-lg font-black text-[#202124]">{allFilteredTickets.length} <span className="text-[10px] text-gray-400 font-bold uppercase">Résultats</span></p>
                     </div>
                  </div>
                  
-                 {(searchTerm || statusFilter !== 'Tous' || priorityFilter !== 'Toutes' || showroomFilter !== 'Tous' || categoryFilter !== 'Toutes') && (
-                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group" title="Réinitialiser tous les filtres">
+                 {(searchTerm || statusFilter !== 'Tous') && (
+                    <button onClick={resetFilters} className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent transition-all group">
                        <RotateCcw size={24} className="group-hover:rotate-[-180deg] transition-transform duration-700" />
                     </button>
                  )}
               </div>
            </div>
-
-           {showAdvancedFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-[#f1f3f4] animate-in slide-in-from-top-4 duration-500">
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><MapPin size={12} /> Showroom émetteur</label>
-                   <select 
-                      value={showroomFilter} 
-                      onChange={e => setShowroomFilter(e.target.value)}
-                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                   >
-                      <option value="Tous">Tous les showrooms</option>
-                      {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
-                   </select>
-                </div>
-
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Zap size={12} /> Niveau d'urgence</label>
-                   <select 
-                      value={priorityFilter} 
-                      onChange={e => setPriorityFilter(e.target.value)}
-                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                   >
-                      <option value="Toutes">Toutes priorités</option>
-                      <option value="Urgent">Urgent SLA</option>
-                      <option value="Haute">Haute</option>
-                      <option value="Moyenne">Moyenne</option>
-                   </select>
-                </div>
-
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2"><Tag size={12} /> Catégorie technique</label>
-                   <select 
-                      value={categoryFilter} 
-                      onChange={e => setCategoryFilter(e.target.value)}
-                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] px-5"
-                   >
-                      <option value="Toutes">Toutes catégories</option>
-                      <option value="SAV">SAV Classique</option>
-                      <option value="Installation">Installation Magasin</option>
-                      <option value="Maintenance">Maintenance préventive</option>
-                   </select>
-                </div>
-              </div>
-           )}
         </div>
 
         {/* LOG TABLE */}
+        <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-[#dadce0] bg-[#f8f9fa] text-[#5f6368] text-[9px] font-black uppercase tracking-[0.2em]">
-                <th className="px-10 py-6">Dossier & Canal</th>
+                <th className="px-10 py-6">Dossier</th>
                 <th className="px-10 py-6">Client Bénéfiaciaire</th>
                 <th className="px-10 py-6">Matériel & S/N</th>
                 <th className="px-10 py-6 text-center">Urgence</th>
@@ -358,18 +382,14 @@ const Tickets: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#dadce0]">
-              {paginatedTickets.map((t) => (
+              {(paginatedTickets || []).map((t) => (
                 <tr 
                   key={t.id} 
                   onClick={() => setSelectedTicket(t)}
                   className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedTicket?.id === t.id ? 'bg-[#e8f0fe]' : 'bg-white'}`}
-                  title="Cliquer pour les détails complets"
                 >
                   <td className="px-10 py-6">
-                    <div className="flex items-center gap-3">
-                       <span className="text-sm font-black text-[#1a73e8]">#{t.id}</span>
-                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200" title={`Source: ${t.source}`}>{t.source}</span>
-                    </div>
+                    <span className="text-sm font-black text-[#1a73e8]">#{t.id}</span>
                   </td>
                   <td className="px-10 py-6">
                     <p className="text-sm font-black text-[#3c4043] group-hover:text-[#1a73e8] transition-colors">{t.customerName}</p>
@@ -380,13 +400,13 @@ const Tickets: React.FC = () => {
                     <p className="text-[9px] text-gray-400 font-bold uppercase mt-1.5 tracking-tighter">{t.brand} • S/N: {t.serialNumber || 'NON SPECIFIÉ'}</p>
                   </td>
                   <td className="px-10 py-6">
-                     <div className="flex items-center justify-center gap-3" title={`Priorité: ${t.priority}`}>
+                     <div className="flex items-center justify-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${getPriorityColor(t.priority)} shadow-sm`} />
                         <span className="text-[9px] font-black uppercase tracking-widest text-[#5f6368]">{t.priority}</span>
                      </div>
                   </td>
                   <td className="px-10 py-6 text-right">
-                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`} title={`État du dossier: ${t.status}`}>
+                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(t.status)}`}>
                       {t.status}
                     </span>
                   </td>
@@ -395,98 +415,77 @@ const Tickets: React.FC = () => {
               {allFilteredTickets.length === 0 && (
                 <tr>
                    <td colSpan={5} className="py-40 text-center bg-white">
-                      <div className="w-24 h-24 bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center mx-auto mb-8">
-                        <Archive size={48} className="text-gray-200" />
-                      </div>
+                      <Archive size={48} className="text-gray-200 mx-auto mb-8" />
                       <p className="text-xs font-black text-gray-300 uppercase tracking-[0.4em]">Aucun dossier identifié</p>
-                      <button onClick={resetFilters} className="text-[#1a73e8] text-[10px] font-black uppercase mt-6 hover:underline underline-offset-4 decoration-2">Effacer les filtres</button>
                    </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-
-        {/* PAGINATION */}
-        {totalPages > 1 && (
-          <div className="px-10 py-6 bg-[#f8f9fa] border-t border-[#dadce0] flex items-center justify-between">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Affichage de {paginatedTickets.length} sur {allFilteredTickets.length} dossiers</p>
-            <div className="flex items-center gap-2">
-               <button 
-                disabled={currentPage === 1} 
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
-                title="Page précédente"
-               >
-                 <ChevronLeft size={20} />
-               </button>
-               <div className="px-4 font-black text-xs">{currentPage} / {totalPages}</div>
-               <button 
-                disabled={currentPage === totalPages} 
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="p-2 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all"
-                title="Page suivante"
-               >
-                 <ChevronRight size={20} />
-               </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* DETAIL DRAWER - ENHANCED */}
+      {/* DETAIL DRAWER */}
       <Drawer
         isOpen={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
-        title="Commandement Technique SAV"
+        title="Dossier Technique Expert"
         subtitle={`Ticket #${selectedTicket?.id} • Showroom ${selectedTicket?.showroom}`}
         icon={<TicketIcon size={20} />}
         footer={
           <div className="flex gap-3">
-             <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/10">
-                <Edit3 size={18} /> Modifier le Dossier
-             </button>
+             {selectedTicket?.status === 'En attente d\'approbation' && isManager && (
+                <button 
+                  onClick={handleApprove}
+                  className="flex-[2] btn-google-primary bg-purple-600 hover:bg-purple-700 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl"
+                >
+                   <ShieldCheck size={18} /> Approuver l'intervention
+                </button>
+             )}
+             {selectedTicket?.status === 'Résolu' && isManager && (
+                <button 
+                  onClick={handleCloseTicket}
+                  className="flex-[2] btn-google-primary bg-gray-800 hover:bg-black justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl"
+                >
+                   <Lock size={18} /> Clôturer Administrativement
+                </button>
+             )}
+             {selectedTicket?.status === 'En cours' && currentUser?.id === selectedTicket.assignedTechnicianId && (
+                <button 
+                  onClick={() => { if(selectedTicket) saveTicket({...selectedTicket, status: 'En attente d\'approbation'}); }}
+                  className="flex-[2] btn-google-primary bg-amber-600 hover:bg-amber-700 justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl"
+                >
+                   <Send size={18} /> Soumettre le rapport
+                </button>
+             )}
              <button 
-               onClick={() => { if(selectedTicket && window.confirm('Marquer ce dossier comme résolu et certifié ?')) { /* Logic */ setSelectedTicket(null); } }}
-               className="p-4 bg-green-50 text-green-700 border border-green-100 rounded-none hover:bg-green-600 hover:text-white transition-all shadow-sm"
-               title="Certifier la résolution"
+               onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }}
+               className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest"
              >
-                <CheckCircle2 size={20} />
+                <Edit3 size={18} /> Modifier
              </button>
           </div>
         }
       >
         {selectedTicket && (
           <div className="space-y-12 pb-20">
+             {/* Stepper */}
+             <section className="bg-[#f8f9fa] border border-[#dadce0] p-6 shadow-inner">
+                {renderStepper(selectedTicket.status)}
+             </section>
+
              {/* HEADER INFO TECH */}
              <div className="flex flex-col md:flex-row gap-8 items-start">
-                <div className={`p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] rounded-none shadow-sm flex-1 text-center`}>
+                <div className={`p-8 bg-gradient-to-br from-white to-[#f8f9fa] border border-[#dadce0] flex-1 text-center`}>
                    <div className={`w-16 h-16 rounded-none flex items-center justify-center mx-auto mb-4 shadow-xl ${getPriorityColor(selectedTicket.priority)} text-white`}>
                       <ShieldAlert size={32} />
                    </div>
                    <h3 className="text-xl font-black text-[#202124] tracking-tight">{selectedTicket.productName}</h3>
                    <p className="text-[9px] font-black text-[#1a73e8] uppercase tracking-[0.2em] mt-1">{selectedTicket.brand} • S/N {selectedTicket.serialNumber || 'Non Saisie'}</p>
-                   
-                   <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
-                      <div>
-                         <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Impact Client</p>
-                         <span className={`px-2 py-0.5 text-[9px] font-black uppercase border ${
-                            selectedTicket.clientImpact === 'Critique' ? 'bg-red-50 text-red-700 border-red-200' : 
-                            selectedTicket.clientImpact === 'Modéré' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
-                            'bg-blue-50 text-blue-700 border-blue-200'
-                         }`}>
-                           {selectedTicket.clientImpact || 'Faible'}
-                         </span>
-                      </div>
-                      <div>
-                         <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Délai SLA</p>
-                         <span className="text-[10px] font-bold text-[#3c4043]">{selectedTicket.status === 'Nouveau' ? 'J+0' : 'En cours'}</span>
-                      </div>
-                   </div>
                 </div>
 
                 <div className="w-full md:w-72 p-6 bg-white border border-[#dadce0] space-y-4">
-                   <h4 className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2"><User size={14} /> Expert Assigné</h4>
+                   <h4 className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest flex items-center gap-2"><User size={14} /> Expert Horizon</h4>
                    {selectedTicket.assignedTechnicianId ? (
                       <div className="flex items-center gap-4">
                          <img src={technicians.find(t => t.id === selectedTicket.assignedTechnicianId)?.avatar} className="w-12 h-12 rounded-none border p-0.5 bg-white shadow-sm" alt="" />
@@ -496,24 +495,15 @@ const Tickets: React.FC = () => {
                          </div>
                       </div>
                    ) : (
-                      <button className="w-full py-3 bg-blue-50 text-[#1a73e8] text-[9px] font-black uppercase tracking-widest hover:bg-[#1a73e8] hover:text-white transition-all border border-blue-100 flex items-center justify-center gap-2">
-                         <UserPlus size={14}/> Assigner un expert
-                      </button>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase">Non assigné</p>
                    )}
-                   <div className="pt-4 border-t border-gray-100">
-                      <p className="text-[8px] font-black text-gray-400 uppercase mb-2">Canal d'ouverture</p>
-                      <div className="flex items-center gap-2">
-                         <span className="p-1.5 bg-gray-50 text-gray-600 border"><MessageSquare size={12}/></span>
-                         <span className="text-[10px] font-black text-[#3c4043] uppercase tracking-tighter">{selectedTicket.source}</span>
-                      </div>
-                   </div>
                 </div>
              </div>
 
              {/* CLIENT & DESCRIPTION */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <section className="space-y-4">
-                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Briefcase size={16} /> Titulaire du Contrat</h4>
+                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Briefcase size={16} /> Titulaire du Dossier</h4>
                    <div className="p-8 bg-white border border-[#dadce0] space-y-6 shadow-sm">
                       <div className="flex items-center gap-6">
                          <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><User size={20}/></div>
@@ -526,129 +516,26 @@ const Tickets: React.FC = () => {
                       <div className="flex items-center gap-6">
                          <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><Smartphone size={20}/></div>
                          <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Contact Urgent</p>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Contact GSM</p>
                             <p className="text-base font-black text-[#3c4043] font-mono tracking-tighter">{selectedTicket.customerPhone}</p>
-                         </div>
-                      </div>
-                      <div className="h-px bg-gray-100" />
-                      <div className="flex items-center gap-6">
-                         <div className="w-12 h-12 bg-[#f8f9fa] border flex items-center justify-center text-[#1a73e8] shadow-inner"><MapPin size={20}/></div>
-                         <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Localisation Site</p>
-                            <p className="text-xs font-bold text-[#5f6368] uppercase leading-tight">{selectedTicket.location || selectedTicket.showroom}</p>
                          </div>
                       </div>
                    </div>
                 </section>
 
                 <section className="space-y-4">
-                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={16} /> Diagnostic Client & Sinistre</h4>
+                   <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><FileText size={16} /> Diagnostic & Descriptif</h4>
                    <div className="p-8 bg-[#fffcf5] border border-[#ffe082] shadow-sm italic text-sm text-gray-700 leading-relaxed font-medium relative h-full">
-                      <div className="absolute top-4 right-4 text-amber-300 opacity-30"><Play size={40} fill="currentColor"/></div>
                       "{selectedTicket.description}"
-                      {selectedTicket.purchaseDate && (
-                         <div className="mt-10 pt-6 border-t border-amber-100 flex justify-between items-center not-italic">
-                            <div>
-                               <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Date d'Acquisition</p>
-                               <p className="text-xs font-bold text-[#3c4043]">{new Date(selectedTicket.purchaseDate).toLocaleDateString()}</p>
-                            </div>
-                            <div className="text-right">
-                               <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Protection</p>
-                               <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[9px] font-black uppercase border border-green-100">Garantie Plaza Care</span>
-                            </div>
-                         </div>
-                      )}
                    </div>
                 </section>
              </div>
-
-             {/* FINANCIALS - ONLY IF SAV */}
-             {selectedTicket.financials && (
-               <section className="space-y-4">
-                  <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><DollarSign size={16} /> Expertise Financière Horizon</h4>
-                  <div className="p-10 bg-white border border-[#dadce0] shadow-sm relative overflow-hidden">
-                     <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rotate-45 translate-x-16 -translate-y-16" />
-                     <div className="grid grid-cols-1 md:grid-cols-4 gap-10 relative z-10">
-                        <div>
-                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Composants & Pièces</p>
-                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.partsTotal.toLocaleString()} <span className="text-[10px]">F</span></p>
-                        </div>
-                        <div>
-                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Main d'œuvre Expert</p>
-                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.laborTotal.toLocaleString()} <span className="text-[10px]">F</span></p>
-                        </div>
-                        <div>
-                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Logistique & Dépl.</p>
-                           <p className="text-xl font-black text-[#3c4043]">{selectedTicket.financials.travelFee.toLocaleString()} <span className="text-[10px]">F</span></p>
-                        </div>
-                        <div className="p-4 bg-blue-50 border border-blue-100">
-                           <p className="text-[9px] font-black text-[#1a73e8] uppercase tracking-widest mb-2">Total Intervention HT</p>
-                           <p className="text-2xl font-black text-[#1a73e8] tracking-tighter">{selectedTicket.financials.grandTotal.toLocaleString()} <span className="text-xs">F</span></p>
-                           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-blue-100">
-                              <PaymentIcon size={12} className={selectedTicket.financials.isPaid ? 'text-green-600' : 'text-red-500'} />
-                              <span className={`text-[9px] font-black uppercase ${selectedTicket.financials.isPaid ? 'text-green-600' : 'text-red-500'}`}>
-                                 {selectedTicket.financials.isPaid ? 'Règlement Certifié' : 'En attente Paiement'}
-                              </span>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               </section>
-             )}
-
-             {/* INTERVENTION REPORT */}
-             <section className="space-y-4">
-                <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Wrench size={16} /> Rapport d'Intervention Expert</h4>
-                {selectedTicket.interventionReport?.actionsTaken?.length ? (
-                   <div className="p-8 bg-[#f8faff] border border-[#d2e3fc] space-y-8 shadow-sm">
-                      <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-                            <p className="text-[10px] font-black text-blue-700 uppercase tracking-[0.3em]">Actions Certifiées Cloud</p>
-                         </div>
-                         <div className="text-right">
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Condition Finale</p>
-                            <span className="text-sm font-black text-[#202124] uppercase">{selectedTicket.interventionReport.equipmentStatus || 'Vérifié'}</span>
-                         </div>
-                      </div>
-                      <div className="space-y-4">
-                         {selectedTicket.interventionReport.actionsTaken.map((action, idx) => (
-                            <div key={idx} className="flex gap-4 items-start group">
-                               <div className="w-8 h-8 bg-white border border-[#dadce0] flex items-center justify-center shrink-0 text-[#1a73e8] shadow-sm"><CheckCircle2 size={16}/></div>
-                               <div className="flex-1 pt-1.5 border-b border-gray-100 pb-4 group-last:border-none">
-                                  <p className="text-xs font-bold text-[#3c4043] uppercase tracking-tighter leading-relaxed">{action}</p>
-                               </div>
-                            </div>
-                         ))}
-                      </div>
-
-                      {selectedTicket.interventionReport.partsUsed?.length ? (
-                         <div className="mt-10 p-6 bg-white border border-[#dadce0]">
-                            <h5 className="text-[9px] font-black text-[#5f6368] uppercase tracking-widest mb-4 flex items-center gap-2"><Package size={14}/> Pièces Extraites de l'Inventaire</h5>
-                            <div className="space-y-3">
-                               {selectedTicket.interventionReport.partsUsed.map((part, pidx) => (
-                                  <div key={pidx} className="flex justify-between items-center text-xs font-bold p-3 bg-gray-50 border-l-4 border-[#1a73e8]">
-                                     <span className="text-[#3c4043]">{part.name}</span>
-                                     <span className="text-[#1a73e8] uppercase font-black tracking-widest">Qty: {part.quantity} • {(part.unitPrice * part.quantity).toLocaleString()} F</span>
-                                  </div>
-                               ))}
-                            </div>
-                         </div>
-                      ) : null}
-                   </div>
-                ) : (
-                   <div className="py-20 text-center border-2 border-dashed border-[#dadce0] bg-gray-50/50">
-                      <Clock size={40} className="mx-auto text-gray-200 mb-4 opacity-50" />
-                      <p className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-widest">Aucune donnée technique transmise</p>
-                      <p className="text-[9px] text-gray-400 mt-2 font-medium">L'expert n'a pas encore validé son rapport terrain.</p>
-                   </div>
-                )}
-             </section>
           </div>
         )}
       </Drawer>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Émission Dossier SAV Cloud" size="xl">
+      {/* TICKET EDIT MODAL */}
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTicket(null); }} title={editingTicket ? `Expertise Dossier : ${editingTicket.id}` : "Émission Dossier SAV Cloud"} size="xl">
         <form onSubmit={handleSave} className="space-y-10">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
               <div className="space-y-6">
@@ -656,10 +543,10 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Identité Complète</label>
-                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Jean Mba" />
+                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" />
                     </div>
                     <div className="space-y-1.5">
-                       <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Ligne Mobile</label>
+                       <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Ligne Mobile (Synchronisation)</label>
                        <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-[#f8f9fa] border-none font-black font-mono" placeholder="+241 ..." />
                     </div>
                  </div>
@@ -669,11 +556,15 @@ const Tickets: React.FC = () => {
                  <div className="space-y-4">
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Désignation Produit</label>
-                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" placeholder="ex: Split LG Dual Inverter" />
+                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" />
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Constructeur / Marque</label>
+                       <input name="brand" type="text" defaultValue={editingTicket?.brand} required className="w-full h-11 bg-[#f8f9fa] border-none font-bold" />
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1">N° de Série (S/N)</label>
-                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" placeholder="ex: SN-LG-..." />
+                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-[#f8f9fa] border-none font-mono font-black" />
                     </div>
                  </div>
               </div>
@@ -698,24 +589,14 @@ const Tickets: React.FC = () => {
            </div>
            <div className="space-y-2 pt-6 border-t border-[#f1f3f4]">
               <label className="text-[9px] font-black text-gray-400 uppercase ml-1 tracking-widest">Diagnostic Préliminaire / Descriptif</label>
-              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all shadow-inner" placeholder="Décrire avec précision les symptômes signalés par le bénéficiaire..." />
-           </div>
-           
-           <div className="p-6 bg-blue-50 border border-dashed border-blue-200 flex items-start gap-4 shadow-sm">
-              <ShieldCheck size={24} className="text-[#1a73e8] mt-1 shrink-0" />
-              <div>
-                 <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Certification Cloud Horizon</p>
-                 <p className="text-[10px] text-blue-600 mt-2 leading-relaxed uppercase font-medium">
-                   Ce dossier sera immédiatement notifié à l'expert assigné et archivé dans le flux décisionnel stratégique. Assurez-vous de la validité des coordonnées clients pour le suivi SLA.
-                 </p>
-              </div>
+              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 text-sm p-5 bg-[#f8f9fa] border-none font-medium" />
            </div>
 
            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20">
-                 <Save size={20} /> Valider le dossier
+              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
+                 <Save size={20} /> {editingTicket ? 'Actualiser le dossier' : 'Valider le nouveau dossier'}
               </button>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Annuler</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]">Annuler</button>
            </div>
         </form>
       </Modal>
