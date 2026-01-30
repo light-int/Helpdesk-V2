@@ -47,7 +47,7 @@ const USER_COLUMNS = [
 
 const TECHNICIAN_COLUMNS = [
   'id', 'name', 'specialty', 'avatar', 'phone', 'email', 'status', 'rating', 'nps', 
-  'firstFixRate', 'completedTickets', 'activeTickets', 'avgResolutionTime', 'performanceHistory', 'showroom'
+  'first_fix_rate', 'completed_tickets', 'active_tickets', 'avg_resolution_time', 'performance_history', 'showroom'
 ];
 
 export const ApiService = {
@@ -61,8 +61,48 @@ export const ApiService = {
   },
 
   integrations: {
-    getConfigs: async (): Promise<IntegrationConfig[]> => await safeFetch(supabase.from('integration_configs').select('*').order('name'), []),
-    saveConfig: async (config: IntegrationConfig) => supabase.from('integration_configs').upsert(config)
+    getConfigs: async (): Promise<IntegrationConfig[]> => {
+      const data = await safeFetch(supabase.from('integration_configs').select('*').order('name'), []);
+      return data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        enabled: item.enabled,
+        apiKey: item.api_key,
+        webhookUrl: item.webhook_url,
+        settings: item.settings,
+        lastSync: item.last_sync
+      }));
+    },
+    saveConfig: async (config: IntegrationConfig) => {
+      const payload = {
+        id: config.id,
+        name: config.name,
+        enabled: config.enabled,
+        api_key: config.apiKey,
+        webhook_url: config.webhookUrl,
+        settings: config.settings,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('integration_configs').upsert(payload);
+      if (error) throw error;
+    },
+    create: async (config: Omit<IntegrationConfig, 'lastSync'>) => {
+      const payload = {
+        id: config.id,
+        name: config.name,
+        enabled: config.enabled,
+        api_key: config.apiKey,
+        webhook_url: config.webhookUrl,
+        settings: config.settings,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('integration_configs').insert(payload);
+      if (error) throw error;
+    },
+    delete: async (id: string) => {
+      const { error } = await supabase.from('integration_configs').delete().eq('id', id);
+      if (error) throw error;
+    }
   },
 
   inbox: {
@@ -101,6 +141,14 @@ export const ApiService = {
     getAll: async (): Promise<string[]> => {
       const data = await safeFetch(supabase.from('brands').select('name').order('name'), []);
       return (data as any[]).map(item => typeof item === 'object' && item !== null ? item.name : item);
+    },
+    add: async (name: string) => {
+      const { error } = await supabase.from('brands').insert({ name });
+      if (error) throw error;
+    },
+    delete: async (name: string) => {
+      const { error } = await supabase.from('brands').delete().eq('name', name);
+      if (error) throw error;
     },
     saveAll: async (brands: string[]) => {
       await supabase.from('brands').delete().not('name', 'is', null);

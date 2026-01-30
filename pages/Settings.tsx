@@ -11,7 +11,8 @@ import {
   Facebook, Mail, FileCode, Layers, Gauge, Radio, 
   Microscope, DatabaseZap, Signal, Box, HeartPulse, 
   GlobeLock, Terminal, Network, Cpu, Rocket, BarChart3,
-  PlusCircle, Bot, Share2, MessageSquare, CloudLightning
+  PlusCircle, Bot, Share2, MessageSquare, CloudLightning,
+  Workflow, HardDrive, Key, Power, AlertCircle, Tag, Info
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { UserRole, ShowroomConfig, UserProfile, IntegrationConfig } from '../types';
@@ -32,14 +33,17 @@ const Settings: React.FC = () => {
   const { 
     users, showrooms, refreshAll, isSyncing, config, 
     updateConfig, saveShowroom, deleteShowroom, syncMetrics, 
-    saveUser, deleteUser, tickets, customers, parts 
+    saveUser, deleteUser, tickets, customers, parts,
+    brands, addBrand, deleteBrand
   } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   
-  const [activeTab, setActiveTab] = useState<'governance' | 'security' | 'ai' | 'integrations' | 'infrastructure' | 'showrooms'>('governance');
+  const [activeTab, setActiveTab] = useState<'governance' | 'integrations' | 'ai' | 'infrastructure' | 'showrooms' | 'security' | 'brands'>('governance');
   const [userSearch, setUserSearch] = useState('');
   const [connectionLogs, setConnectionLogs] = useState<any[]>([]);
+  const [newBrandName, setNewBrandName] = useState('');
+  const [isAddingBrand, setIsAddingBrand] = useState(false);
   
   // States for Modals
   const [isShowroomModalOpen, setIsShowroomModalOpen] = useState(false);
@@ -58,18 +62,19 @@ const Settings: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isSavingIntegration, setIsSavingIntegration] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>('AGENT');
 
   const aiReady = isAiOperational();
 
-  // Changed BarChart4 to BarChart3 as BarChart4 does not exist in lucide-react
   const tabs = useMemo(() => [
     { id: 'governance', label: 'Gouvernance Root', icon: <Terminal size={18} />, desc: 'Souveraineté Cloud' },
-    { id: 'integrations', label: 'Fluent Gateway', icon: <Network size={18} />, desc: 'API, Social & AI' },
-    { id: 'ai', label: 'Gemini Intelligence', icon: <BrainCircuit size={18} />, desc: 'Inférence & Modèles' },
+    { id: 'integrations', label: 'Fluent Gateway', icon: <Network size={18} />, desc: 'WhatsApp, FB, Mail & IA' },
+    { id: 'brands', label: 'Catalogue Marques', icon: <Tag size={18} />, desc: 'Référentiel Constructeurs' },
+    { id: 'ai', label: 'Gemini Intelligence', icon: <BrainCircuit size={18} />, desc: 'Moteur IA Horizon' },
     { id: 'infrastructure', label: 'Cloud & Vitalité', icon: <DatabaseZap size={18} />, desc: 'Santé Supabase' },
-    { id: 'showrooms', label: 'Réseau Physique', icon: <Store size={18} />, desc: 'Showrooms GAB-LBV' },
-    { id: 'security', label: 'Identités & IAM', icon: <ShieldCheck size={18} />, desc: 'Gestion des Accès' },
+    { id: 'showrooms', label: 'Réseau Physique', icon: <Store size={18} />, desc: 'Exploitation Sites' },
+    { id: 'security', label: 'Identités & IAM', icon: <ShieldCheck size={18} />, desc: 'Accès & Permissions' },
   ], []);
 
   useEffect(() => {
@@ -89,6 +94,29 @@ const Settings: React.FC = () => {
       const data = await ApiService.integrations.getConfigs();
       setIntegrationConfigs(data);
     } catch (e) { console.error(e); }
+  };
+
+  const handleAddBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    setIsAddingBrand(true);
+    try {
+      await addBrand(newBrandName.trim());
+      setNewBrandName('');
+      addNotification({ title: 'Référentiel', message: `Marque "${newBrandName}" ajoutée.`, type: 'success' });
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Impossible d\'ajouter la marque.', type: 'error' });
+    } finally { setIsAddingBrand(false); }
+  };
+
+  const handleDeleteBrand = async (name: string) => {
+    if (!window.confirm(`Voulez-vous supprimer la marque "${name}" ? Cela l'enlèvera des options de sélection.`)) return;
+    try {
+      await deleteBrand(name);
+      addNotification({ title: 'Référentiel', message: `Marque "${name}" supprimée.`, type: 'info' });
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Échec de la suppression.', type: 'error' });
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -131,6 +159,41 @@ const Settings: React.FC = () => {
     } catch (err) {
       addNotification({ title: 'Erreur', message: 'Échec de la sauvegarde IAM.', type: 'error' });
     } finally { setIsSavingUser(false); }
+  };
+
+  const provisionIntegration = async (type: string, label: string) => {
+    setIsSavingIntegration(true);
+    const newConfig: Omit<IntegrationConfig, 'lastSync'> = {
+      id: `${type}_${Date.now()}`,
+      name: label,
+      enabled: false,
+      apiKey: '',
+      webhookUrl: '',
+      settings: { type, provisioned_at: new Date().toISOString() }
+    };
+
+    try {
+      await ApiService.integrations.create(newConfig);
+      await fetchIntegrations();
+      setIsAddIntegrationModalOpen(false);
+      addNotification({ title: 'Provisionnement', message: `Slot ${label} créé sur la Gateway.`, type: 'success' });
+    } catch (e) {
+      console.error("Provisioning Error:", e);
+      addNotification({ title: 'Erreur Cloud', message: 'Échec du provisionnement du slot. Vérifiez la structure DB.', type: 'error' });
+    } finally {
+      setIsSavingIntegration(false);
+    }
+  };
+
+  const deleteIntegration = async (id: string) => {
+    if (!window.confirm("Décommissionner définitivement ce connecteur ? Cette action est irréversible sur le réseau Fluent Gateway.")) return;
+    try {
+      await ApiService.integrations.delete(id);
+      await fetchIntegrations();
+      addNotification({ title: 'Gateway Hub', message: 'Connecteur décommissionné.', type: 'warning' });
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Échec de la suppression.', type: 'error' });
+    }
   };
 
   return (
@@ -193,8 +256,8 @@ const Settings: React.FC = () => {
                      <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-blue-50 flex items-center justify-center text-[#1a73e8] shadow-inner"><Terminal size={24}/></div>
                         <div>
-                           <h2 className="text-xl font-black text-[#202124] uppercase tracking-tighter leading-none">Souveraineté & Résidence Cloud</h2>
-                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Conformité des données Horizon Royal Plaza</p>
+                           <h2 className="text-xl font-black text-[#202124] uppercase tracking-tighter leading-none">Identité & Souveraineté Cloud</h2>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Paramètres de résidence des données Horizon</p>
                         </div>
                      </div>
                      <span className="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-black uppercase tracking-widest">Kernel v2.8-stable</span>
@@ -205,20 +268,19 @@ const Settings: React.FC = () => {
                         <div className="space-y-2">
                            <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Alias Instance Corporate</label>
                            <input type="text" className="w-full h-12 bg-gray-50 border-none font-black text-sm" defaultValue="Royal Plaza - Libreville HQ" />
-                           <p className="text-[9px] text-gray-400 font-bold uppercase ml-1 italic">Utilisé pour l'identification des rapports financiers.</p>
                         </div>
                         <div className="p-6 bg-[#f8f9ff] border border-blue-100 space-y-4 shadow-sm">
                            <div className="flex items-center gap-3">
                               <GlobeLock size={20} className="text-[#1a73e8]"/>
-                              <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Conformité Territoriale</h4>
+                              <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Compliance Régionale</h4>
                            </div>
                            <p className="text-xs font-bold text-blue-900 leading-relaxed uppercase">Zone : GABON CENTRAL LBV-1 (CERTIFIÉ)</p>
-                           <p className="text-[10px] text-blue-600 font-medium leading-relaxed">Infrastructure cloud conforme aux directives de souveraineté des données de l'ANINF.</p>
+                           <p className="text-[10px] text-blue-600 font-medium leading-relaxed">Conforme aux directives de l'ANINF sur la résidence des données critiques.</p>
                         </div>
                      </section>
                      <section className="space-y-6">
                         <div className="space-y-2">
-                           <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Fréquence du Heartbeat (Sync)</label>
+                           <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Fréquence Heartbeat (Sync)</label>
                            <select value={config.syncFrequency} onChange={(e) => updateConfig({ syncFrequency: e.target.value as any })} className="w-full h-12 bg-gray-50 border-none font-black text-sm">
                               <option value="realtime">WebSocket Temps Réel (0.5s)</option>
                               <option value="hourly">Batch Horaire (Lissage)</option>
@@ -242,7 +304,7 @@ const Settings: React.FC = () => {
                   <div className="flex items-center gap-6 relative z-10">
                      <div className="w-14 h-14 bg-white border border-[#ffe082] text-[#f57c00] flex items-center justify-center shadow-lg"><ShieldAlert size={32}/></div>
                      <div>
-                        <p className="text-sm font-black text-[#202124] uppercase tracking-tighter leading-none">Verrouillage de Maintenance Global</p>
+                        <p className="text-sm font-black text-[#202124] uppercase tracking-tighter leading-none">Verrouillage de Maintenance Horizon</p>
                         <p className="text-[10px] text-[#5f6368] font-medium leading-relaxed mt-2 uppercase tracking-tight">Si activé, l'écriture sur le Cloud est réservée aux Administrateurs Root.</p>
                      </div>
                   </div>
@@ -253,7 +315,61 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {/* TAB: FLUENT GATEWAY (CONNECTIONS) */}
+          {/* TAB: BRANDS (CATALOGUE MARQUES) */}
+          {activeTab === 'brands' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+               <div className="google-card p-10 space-y-12 bg-white shadow-2xl border-t-8 border-[#1a73e8]">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-10">
+                     <div className="flex items-center gap-5">
+                        <div className="w-16 h-16 bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1a73e8] shadow-inner"><Tag size={32}/></div>
+                        <div>
+                           <h2 className="text-2xl font-black text-[#202124] uppercase tracking-tighter leading-none">Référentiel des Marques</h2>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Gestion des constructeurs pour les produits et rechanges</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  <form onSubmit={handleAddBrand} className="flex gap-4">
+                     <div className="relative flex-1">
+                        <Tag className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                        <input 
+                          type="text" 
+                          placeholder="Nom de la nouvelle marque (ex: LG, BEKO...)" 
+                          value={newBrandName}
+                          onChange={e => setNewBrandName(e.target.value)}
+                          className="w-full h-12 pl-12 bg-gray-50 border-none font-black text-sm uppercase"
+                        />
+                     </div>
+                     <button type="submit" disabled={isAddingBrand || !newBrandName.trim()} className="btn-google-primary px-8 h-12 text-[10px] font-black uppercase shadow-lg shadow-blue-600/20 disabled:opacity-50">
+                        {isAddingBrand ? <Loader2 className="animate-spin" size={20}/> : <><Plus size={20}/> Ajouter au Référentiel</>}
+                     </button>
+                  </form>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                     {brands.map((brand) => (
+                        <div key={brand} className="group p-4 bg-white border border-[#dadce0] hover:border-[#1a73e8] transition-all flex items-center justify-between shadow-sm hover:shadow-md">
+                           <span className="text-[10px] font-black text-[#3c4043] uppercase tracking-widest truncate mr-2">{brand}</span>
+                           <button onClick={() => handleDeleteBrand(brand)} className="p-1.5 text-gray-300 hover:text-red-600 transition-colors">
+                              <Trash2 size={14} />
+                           </button>
+                        </div>
+                     ))}
+                  </div>
+
+                  <div className="p-6 bg-blue-50 border border-blue-100 flex items-start gap-4">
+                     <Info size={20} className="text-[#1a73e8] shrink-0 mt-0.5" />
+                     <div>
+                        <p className="text-[10px] text-blue-700 font-black uppercase tracking-widest">Impact sur le Catalogue</p>
+                        <p className="text-[9px] text-blue-600 font-bold uppercase mt-1 leading-relaxed">
+                           Les marques définies ici sont immédiatement disponibles dans les formulaires de création de tickets, de produits et de pièces détachées. La suppression d'une marque n'affecte pas les données historiques mais l'empêchera pour les nouveaux dossiers.
+                        </p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* TAB: FLUENT GATEWAY (FINALIZED) */}
           {activeTab === 'integrations' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                <div className="google-card p-10 space-y-12 bg-white shadow-2xl">
@@ -262,45 +378,65 @@ const Settings: React.FC = () => {
                         <div className="w-16 h-16 bg-gray-50 border border-[#dadce0] flex items-center justify-center text-[#1a73e8] shadow-inner"><Radio size={32} className="animate-pulse"/></div>
                         <div>
                            <h2 className="text-2xl font-black text-[#202124] uppercase tracking-tighter leading-none">Fluent Gateway Hub</h2>
-                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Passerelle omnicanale Social, Messagerie & AI</p>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Passerelle omnicanale Social, Messagerie & IA</p>
                         </div>
                      </div>
-                     <button onClick={() => setIsAddIntegrationModalOpen(true)} className="btn-google-primary h-12 px-8 text-[11px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">
+                     <button onClick={() => setIsAddIntegrationModalOpen(true)} className="btn-google-primary h-12 px-8 text-[11px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 transition-transform active:scale-95">
                         <PlusCircle size={20}/> Connecter AI/API
                      </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                      {integrationConfigs.map(integration => (
-                        <div key={integration.id} className="p-10 bg-white border border-[#dadce0] hover:border-[#1a73e8] transition-all flex flex-col group shadow-lg relative">
-                           <div className="flex items-center justify-between mb-10">
+                        <div key={integration.id} className="p-10 bg-white border border-[#dadce0] hover:border-[#1a73e8] transition-all flex flex-col group shadow-lg relative overflow-hidden">
+                           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 -mr-16 -mt-16 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                           <div className="flex items-center justify-between mb-10 relative z-10">
                               <div className={`w-16 h-16 border flex items-center justify-center shadow-md ${integration.enabled ? 'bg-blue-50 text-[#1a73e8] border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
-                                 {integration.id === 'whatsapp' ? <Smartphone size={32}/> : integration.id === 'messenger' ? <Facebook size={32}/> : <Mail size={32}/>}
+                                 {integration.id.includes('whatsapp') ? <Smartphone size={32}/> : integration.id.includes('messenger') ? <Facebook size={32}/> : integration.id.includes('mail') ? <Mail size={32}/> : <Bot size={32}/>}
                               </div>
                               <div className="flex flex-col items-end">
-                                 <span className={`text-[9px] font-black uppercase px-3 py-1 border shadow-sm ${integration.enabled ? 'bg-green-50 text-green-600 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>{integration.enabled ? 'Streaming' : 'Pipeline Inhibé'}</span>
-                                 <p className="text-[10px] text-gray-300 font-bold mt-3 uppercase tracking-tighter">Latence: {Math.floor(Math.random() * 20) + 10}ms</p>
+                                 <span className={`text-[9px] font-black uppercase px-3 py-1 border shadow-sm ${integration.enabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>{integration.enabled ? 'Streaming' : 'Pipeline Inhibé'}</span>
+                                 <p className="text-[10px] text-gray-300 font-bold mt-3 uppercase tracking-tighter">Uptime: 99.9%</p>
                               </div>
                            </div>
-                           <h3 className="text-base font-black text-[#202124] uppercase tracking-tight mb-2">{integration.name}</h3>
-                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-10">Protocole: JSON/HTTPS Gateway</p>
+                           <h3 className="text-base font-black text-[#202124] uppercase tracking-tight mb-2 relative z-10">{integration.name}</h3>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-10 relative z-10">Slot: {integration.id.split('_')[0].toUpperCase()}</p>
                            
-                           <div className="mt-auto space-y-4">
-                              <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest"><span>Débit (Throughput)</span><span className="text-blue-600">{integration.enabled ? '8.4 req/s' : '0.0 req/s'}</span></div>
+                           <div className="mt-auto space-y-4 relative z-10">
+                              <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest"><span>Débit (Throughput)</span><span className="text-blue-600">{integration.enabled ? (Math.random() * 5 + 3).toFixed(1) + ' req/s' : '0.0 req/s'}</span></div>
                               <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden shadow-inner"><div className={`h-full bg-blue-500 transition-all duration-1000 ${integration.enabled ? 'w-3/4 animate-pulse' : 'w-0'}`} /></div>
-                              <button onClick={() => { setEditingIntegration(integration); setIsIntegrationModalOpen(true); }} className="w-full py-4 bg-[#f8f9fa] text-[10px] font-black uppercase tracking-[0.2em] border border-transparent hover:border-[#dadce0] transition-all group-hover:bg-[#1a73e8] group-hover:text-white group-hover:shadow-xl shadow-blue-600/20">Paramétrer la Connectivité</button>
+                              <div className="flex gap-2">
+                                <button onClick={() => { setEditingIntegration(integration); setIsIntegrationModalOpen(true); }} className="flex-1 py-4 bg-[#f8f9fa] text-[10px] font-black uppercase tracking-[0.2em] border border-transparent hover:border-[#dadce0] transition-all hover:bg-[#1a73e8] hover:text-white hover:shadow-xl">Certifier</button>
+                                <button onClick={() => deleteIntegration(integration.id)} className="p-4 bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors border border-transparent hover:border-red-100"><Trash2 size={16}/></button>
+                              </div>
                            </div>
                         </div>
                      ))}
                      
-                     {/* OTHER AI CONNECTOR CARD */}
-                     <div className="p-10 bg-gray-50 border border-dashed border-[#dadce0] hover:border-[#1a73e8] transition-all flex flex-col items-center justify-center text-center group shadow-sm opacity-60 hover:opacity-100">
+                     {/* ADD OTHER AI / EXTERNAL CONNECTOR SLOT */}
+                     <div className="p-10 bg-gray-50 border border-dashed border-[#dadce0] hover:border-[#1a73e8] transition-all flex flex-col items-center justify-center text-center group shadow-sm opacity-60 hover:opacity-100 cursor-pointer" onClick={() => setIsAddIntegrationModalOpen(true)}>
                         <div className="w-16 h-16 bg-white border border-gray-100 flex items-center justify-center text-gray-300 group-hover:text-[#1a73e8] shadow-sm mb-6 transition-colors">
-                           <Bot size={32}/>
+                           <Plus size={32}/>
                         </div>
-                        <h3 className="text-[11px] font-black text-[#3c4043] uppercase tracking-[0.2em]">Add AI Provider</h3>
-                        <p className="text-[9px] text-[#9aa0a6] font-bold uppercase mt-2">Connecter un modèle de langage tiers (OpenAI, Claude, Llama)</p>
-                        <button onClick={() => setIsAddIntegrationModalOpen(true)} className="mt-8 px-6 py-3 border border-[#dadce0] text-[8px] font-black uppercase tracking-widest hover:bg-white transition-all">Provisionner AI Slot</button>
+                        <h3 className="text-[11px] font-black text-[#3c4043] uppercase tracking-[0.2em]">Add Endpoint</h3>
+                        <p className="text-[9px] text-[#9aa0a6] font-bold uppercase mt-2">Connecter un nouveau flux externe à la Gateway</p>
+                        <button className="mt-8 px-6 py-3 border border-[#dadce0] text-[8px] font-black uppercase tracking-widest hover:bg-white transition-all">Provisionner Slot</button>
+                     </div>
+                  </div>
+
+                  <div className="p-10 bg-[#202124] border-none shadow-2xl relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-32 -mt-32" />
+                     <div className="flex flex-col md:flex-row items-center justify-between relative z-10 gap-10">
+                        <div className="flex items-center gap-6">
+                           <div className="p-4 bg-white/5 border border-white/10 text-blue-400">
+                             <FileCode size={32} />
+                           </div>
+                           <div>
+                             <p className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">Debugger Payload Webhook</p>
+                             <p className="text-[10px] text-gray-500 font-bold mt-2 uppercase leading-relaxed max-w-md">Surveillance en temps réel des trames JSON circulantes sur le réseau Fluent Gateway pour débogage expert.</p>
+                           </div>
+                        </div>
+                        <button className="px-8 py-4 bg-white/5 border border-white/10 text-[10px] font-black text-white uppercase tracking-[0.3em] hover:bg-white/10 transition-all shadow-xl">S'abonner au Flux Dev</button>
                      </div>
                   </div>
                </div>
@@ -377,7 +513,7 @@ const Settings: React.FC = () => {
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-5">
                         <DatabaseZap size={32} className="text-[#1a73e8]" />
-                        <div><h2 className="text-xl font-black text-[#202124] uppercase tracking-tighter leading-none">Statut Vital Instance Supabase Cloud</h2><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Surveillance temps réel de l'architecture Horizon</p></div>
+                        <div><h2 className="text-xl font-black text-[#202124] uppercase tracking-tighter leading-none">Cloud Health & Vitalité</h2><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Santé vitale des micro-services Supabase Horizon</p></div>
                      </div>
                      <div className="flex items-center gap-3 px-4 py-2 bg-green-50 border border-green-100 text-green-700 shadow-sm">
                         <HeartPulse size={16} className="animate-pulse"/>
@@ -402,7 +538,7 @@ const Settings: React.FC = () => {
 
                   <section className="space-y-8 pt-10 border-t border-gray-100">
                      <div className="flex items-center justify-between border-b border-gray-50 pb-4">
-                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em]">Répartition des Enregistrements Cloud</h3>
+                        <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em]">Saturation Stockage par Entité</h3>
                         <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Total: {(tickets.length + customers.length + parts.length).toLocaleString()} Objets</span>
                      </div>
                      <div className="space-y-6">
@@ -423,7 +559,7 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {/* TAB: SHOWROOMS (PHYSIQUE) */}
+          {/* TAB: RÉSEAU PHYSIQUE */}
           {activeTab === 'showrooms' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                <div className="google-card p-10 bg-white shadow-2xl space-y-12">
@@ -531,8 +667,9 @@ const Settings: React.FC = () => {
                               </div>
                            </div>
                            <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
-                              <div className={`flex items-center gap-1.5 px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest ${user.mfaEnabled ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                 {user.mfaEnabled ? <ShieldCheck size={10}/> : <ShieldAlert size={10}/>} {user.mfaEnabled ? 'MFA ACTIVE' : 'NO MFA'}
+                              <div className={`flex items-center gap-1.5 px-2 py-0.5 border text-[8px] font-black uppercase tracking-widest ${user.mfaEnabled ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                 {user.mfaEnabled ? <ShieldCheck size={10}/> : <ShieldAlert size={10}/>}
+                                 <span>{user.mfaEnabled ? 'MFA ACTIVE' : 'NO MFA'}</span>
                               </div>
                               <span className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">Last Login: {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Jamais'}</span>
                            </div>
@@ -584,25 +721,39 @@ const Settings: React.FC = () => {
         {editingIntegration && (
           <form onSubmit={async (e) => {
              e.preventDefault();
+             setIsSavingIntegration(true);
              const formData = new FormData(e.currentTarget);
              const updated = { ...editingIntegration, enabled: formData.get('enabled') === 'on', apiKey: formData.get('apiKey') as string, webhookUrl: formData.get('webhookUrl') as string };
-             await ApiService.integrations.saveConfig(updated);
-             setIsIntegrationModalOpen(false);
-             fetchIntegrations();
-             addNotification({ title: 'Gateway Sync', message: 'Paramètres réseau synchronisés.', type: 'success' });
+             try {
+               await ApiService.integrations.saveConfig(updated);
+               setIsIntegrationModalOpen(false);
+               fetchIntegrations();
+               addNotification({ title: 'Gateway Sync', message: 'Paramètres réseau synchronisés.', type: 'success' });
+             } catch(err) {
+               addNotification({ title: 'Erreur', message: 'Échec de la synchronisation réseau.', type: 'error' });
+             } finally {
+               setIsSavingIntegration(false);
+             }
           }} className="space-y-12 animate-in slide-in-from-bottom-4">
              <div className="p-10 bg-blue-50 border border-blue-100 flex items-center justify-between shadow-inner">
                 <div className="flex items-center gap-6">
                    <div className="w-16 h-16 bg-white border border-blue-200 flex items-center justify-center text-[#1a73e8] shadow-2xl"><Globe size={32} className="animate-spin [animation-duration:8s]"/></div>
                    <div><p className="text-sm font-black text-[#202124] uppercase tracking-tighter">Statut de la Transmission</p><p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-2">{editingIntegration.enabled ? 'Streaming actif vers GAB-LBV' : 'Pipeline Inhibé'}</p></div>
                 </div>
-                <input type="checkbox" name="enabled" defaultChecked={editingIntegration.enabled} className="w-8 h-8 rounded text-[#1a73e8] border-2 border-blue-200 shadow-md" />
+                <div className="flex items-center gap-3">
+                   <label className="text-[10px] font-black uppercase text-blue-700">ACTIVER</label>
+                   <input type="checkbox" name="enabled" defaultChecked={editingIntegration.enabled} className="w-8 h-8 rounded text-[#1a73e8] border-2 border-blue-200 shadow-md" />
+                </div>
              </div>
              <div className="space-y-8">
                 <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] ml-1">Clé Privée de Sécurité (Bearer Token)</label><input name="apiKey" type="password" defaultValue={editingIntegration.apiKey} className="h-14 bg-gray-50 border-none font-mono text-base shadow-inner tracking-[0.2em]" placeholder="••••••••••••••••" /></div>
                 <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] ml-1">Endpoint Destination Webhook (Target URL)</label><input name="webhookUrl" type="url" defaultValue={editingIntegration.webhookUrl} className="h-14 bg-gray-50 border-none font-bold text-sm shadow-inner" placeholder="https://api.gateway.ga/v1/..." /></div>
              </div>
-             <div className="flex gap-4 pt-10 border-t border-gray-100"><button type="submit" className="flex-1 btn-google-primary justify-center py-6 text-xs font-black uppercase tracking-[0.3em] shadow-2xl shadow-blue-600/30 transition-transform active:scale-95"><RefreshCw size={24}/> Certifier le Connecteur</button></div>
+             <div className="flex gap-4 pt-10 border-t border-gray-100">
+               <button type="submit" disabled={isSavingIntegration} className="flex-1 btn-google-primary justify-center py-6 text-xs font-black uppercase tracking-[0.3em] shadow-2xl shadow-blue-600/30 transition-transform active:scale-95">
+                 {isSavingIntegration ? <Loader2 size={24} className="animate-spin"/> : <><RefreshCw size={24}/> Certifier le Connecteur</>}
+               </button>
+             </div>
           </form>
         )}
       </Modal>
@@ -612,18 +763,23 @@ const Settings: React.FC = () => {
          <div className="space-y-10">
             <div className="p-8 bg-[#f8f9ff] border border-blue-100 space-y-4 shadow-inner">
                <div className="flex items-center gap-3"><CloudLightning size={24} className="text-[#1a73e8]"/><h4 className="text-[11px] font-black text-blue-700 uppercase tracking-widest">Connecteur Cloud Externe</h4></div>
-               <p className="text-xs font-bold text-blue-900 leading-relaxed uppercase">Provisionner un slot pour un service de messagerie ou un moteur d'IA tiers.</p>
+               <p className="text-xs font-bold text-blue-900 leading-relaxed uppercase">Provisionner un slot pour un service de messagerie ou un moteur d'IA tiers via la passerelle Royal Plaza.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {[
-                  { id: 'whatsapp_new', label: 'WhatsApp Business API', icon: <Smartphone/>, color: 'text-green-600' },
-                  { id: 'fb_new', label: 'Meta Messenger Gateway', icon: <Facebook/>, color: 'text-blue-600' },
-                  { id: 'mail_new', label: 'Enterprise SMTP/IMAP', icon: <Mail/>, color: 'text-red-500' },
-                  { id: 'ai_new', label: 'LLM Agent (Other AI)', icon: <Bot/>, color: 'text-purple-600' },
+                  { id: 'whatsapp', label: 'WhatsApp Business API', icon: <Smartphone/>, color: 'text-green-600', desc: 'Canal de support WhatsApp' },
+                  { id: 'messenger', label: 'Meta Messenger Gateway', icon: <Facebook/>, color: 'text-blue-600', desc: 'Messagerie Facebook' },
+                  { id: 'mail', label: 'Enterprise SMTP/IMAP', icon: <Mail/>, color: 'text-red-500', desc: 'Gestion des emails SAV' },
+                  { id: 'openai', label: 'OpenAI GPT-4o Connector', icon: <Bot/>, color: 'text-purple-600', desc: 'Intelligence tierce via API' },
+                  { id: 'claude', label: 'Anthropic Claude Engine', icon: <Cpu/>, color: 'text-amber-600', desc: 'Moteur de raisonnement expert' },
+                  { id: 'custom_ai', label: 'Custom LLM Endpoint', icon: <HardDrive/>, color: 'text-gray-600', desc: 'Votre propre instance IA' },
                ].map(item => (
-                  <button key={item.id} className="p-8 bg-white border border-[#dadce0] hover:border-[#1a73e8] transition-all flex items-center gap-5 group shadow-sm">
-                     <div className={`p-4 bg-gray-50 ${item.color} border border-transparent shadow-inner group-hover:bg-white transition-colors`}>{item.icon}</div>
-                     <span className="text-[10px] font-black text-[#202124] uppercase tracking-widest">{item.label}</span>
+                  <button key={item.id} disabled={isSavingIntegration} onClick={() => provisionIntegration(item.id, item.label)} className="p-6 bg-white border border-[#dadce0] hover:border-[#1a73e8] transition-all flex flex-col gap-4 group shadow-sm text-left active:scale-95 disabled:opacity-50">
+                     <div className="flex items-center gap-4">
+                        <div className={`p-4 bg-gray-50 ${item.color} border border-transparent shadow-inner group-hover:bg-white transition-colors`}>{item.icon}</div>
+                        <span className="text-[10px] font-black text-[#202124] uppercase tracking-widest">{item.label}</span>
+                     </div>
+                     <p className="text-[9px] text-[#9aa0a6] font-bold uppercase ml-1">{item.desc}</p>
                   </button>
                ))}
             </div>

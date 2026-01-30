@@ -52,7 +52,6 @@ export const DataContext = createContext<{
   parts: Part[];
   warranties: WarrantyRecord[];
   customers: Customer[];
-  // Added users to DataContext
   users: UserProfile[];
   brands: string[];
   showrooms: ShowroomConfig[];
@@ -80,6 +79,8 @@ export const DataContext = createContext<{
   addStockMovement: (movement: Omit<StockMovement, 'id' | 'date'>) => Promise<void>;
   deletePart: (id: string) => Promise<void>;
   deletePartsBulk: (ids: string[]) => Promise<void>;
+  addBrand: (name: string) => Promise<void>;
+  deleteBrand: (name: string) => Promise<void>;
   loadDemoData: () => Promise<void>;
 } | null>(null);
 
@@ -117,7 +118,6 @@ const App: React.FC = () => {
   const [parts, setParts] = useState<Part[]>([]);
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  // Added users state
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [showrooms, setShowrooms] = useState<ShowroomConfig[]>([]);
@@ -153,7 +153,6 @@ const App: React.FC = () => {
   const refreshAll = useCallback(async () => {
     setIsSyncing(true);
     try {
-      // Added ApiService.users.getAll() to refreshAll
       const [t, p, te, pa, w, c, b, s, r, cf, u] = await Promise.all([
         ApiService.tickets.getAll(),
         ApiService.products.getAll(),
@@ -177,7 +176,6 @@ const App: React.FC = () => {
       setShowrooms(s);
       setReports(r);
       if (cf) setConfig(cf);
-      // Set users state
       setUsers(u);
       setSyncMetrics({ lastSuccess: new Date().toISOString(), latency: 45, status: 'CONNECTED', errorCount: 0 });
     } catch (e) {
@@ -331,6 +329,16 @@ const App: React.FC = () => {
     await refreshAll();
   };
 
+  const addBrand = async (name: string) => {
+    await ApiService.brands.add(name);
+    await refreshAll();
+  };
+
+  const deleteBrand = async (name: string) => {
+    await ApiService.brands.delete(name);
+    await refreshAll();
+  };
+
   const loadDemoData = async () => {
     addNotification({ title: 'Simulateur', message: 'Chargement des données de démo...', type: 'info' });
     await refreshAll();
@@ -345,7 +353,8 @@ const App: React.FC = () => {
           refreshAll, saveTicket, deleteTicket, saveProduct, deleteProduct,
           saveCustomer, deleteCustomer, saveTechnician, deleteTechnician,
           saveShowroom, deleteShowroom, updateConfig, saveReport, deleteReport,
-          saveUser, deleteUser, addStockMovement, deletePart, deletePartsBulk, loadDemoData
+          saveUser, deleteUser, addStockMovement, deletePart, deletePartsBulk, 
+          addBrand, deleteBrand, loadDemoData
         }}>
           <HashRouter>
             <div className="flex min-h-screen bg-[#f8f9fa] text-[#3c4043]">
