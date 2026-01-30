@@ -6,7 +6,8 @@ import {
   Activity, Hash, Tag, ChevronRight, Info, History, ShieldCheck, Box, X,
   FileUp, Download, CheckCircle2, Square, CheckSquare, AlertTriangle,
   ArrowRight, FileSpreadsheet, SlidersHorizontal, LayoutGrid, BarChart3,
-  TrendingDown, Zap, Archive, FilterX, RotateCcw, ListFilter, Boxes
+  TrendingDown, Zap, Archive, FilterX, RotateCcw, ListFilter, Boxes, MapPinned,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Part, StockMovement } from '../types';
@@ -16,8 +17,8 @@ import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 
 const MAPPING_RULES = [
-  { label: 'Désignation', fields: ['Designation', 'Nom', 'Name', 'Article'], target: 'name' },
-  { label: 'Référence / SKU', fields: ['SKU', 'Reference', 'Code', 'Ref'], target: 'sku' },
+  { label: 'Designation', fields: ['Designation', 'Nom', 'Name', 'Article'], target: 'name' },
+  { label: 'Reference / SKU', fields: ['SKU', 'Reference', 'Code', 'Ref'], target: 'sku' },
   { label: 'Marque', fields: ['Marque', 'Brand', 'Constructeur'], target: 'brand' },
   { label: 'Stock Actuel', fields: ['Stock', 'Quantite', 'Qty', 'Qte'], target: 'currentStock' },
   { label: 'Prix Unitaire', fields: ['Prix', 'UnitPrice', 'PU', 'Tarif'], target: 'unitPrice' },
@@ -30,11 +31,13 @@ const PartsInventory: React.FC = () => {
   const { addNotification } = useNotifications();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // États de filtrage
+  // Etats de filtrage
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<string>('Tous');
   const [selectedCategory, setSelectedCategory] = useState<string>('Toutes');
+  const [selectedLocation, setSelectedLocation] = useState<string>('Tous');
   const [stockStatus, setStockStatus] = useState<'all' | 'critical' | 'out'>('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
@@ -48,6 +51,12 @@ const PartsInventory: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => { refreshAll(); }, []);
+
+  const locations = useMemo(() => {
+    const locs = new Set<string>();
+    (parts || []).forEach(p => { if (p.location) locs.add(p.location); });
+    return ['Tous', ...Array.from(locs)].sort();
+  }, [parts]);
 
   const inventoryStats = useMemo(() => {
     const totalRefs = (parts || []).length;
@@ -63,27 +72,33 @@ const PartsInventory: React.FC = () => {
                           p.sku.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesBrand = selectedBrand === 'Tous' || p.brand === selectedBrand;
       const matchesCategory = selectedCategory === 'Toutes' || p.category === selectedCategory;
+      const matchesLocation = selectedLocation === 'Tous' || p.location === selectedLocation;
       
       let matchesStatus = true;
       if (stockStatus === 'critical') matchesStatus = p.currentStock <= p.minStock && p.currentStock > 0;
       if (stockStatus === 'out') matchesStatus = p.currentStock === 0;
 
-      return matchesSearch && matchesBrand && matchesCategory && matchesStatus;
+      return matchesSearch && matchesBrand && matchesCategory && matchesLocation && matchesStatus;
     }).sort((a, b) => {
        if (a.currentStock === 0 && b.currentStock !== 0) return -1;
        if (a.currentStock !== 0 && b.currentStock === 0) return 1;
        return a.name.localeCompare(b.name);
     }); 
-  }, [searchTerm, selectedBrand, selectedCategory, stockStatus, parts]);
+  }, [searchTerm, selectedBrand, selectedCategory, selectedLocation, stockStatus, parts]);
+
+  const filteredValue = useMemo(() => {
+    return filteredParts.reduce((acc, p) => acc + (p.unitPrice * p.currentStock), 0);
+  }, [filteredParts]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedBrand('Tous');
     setSelectedCategory('Toutes');
+    setSelectedLocation('Tous');
     setStockStatus('all');
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedBrand !== 'Tous' || selectedCategory !== 'Toutes' || stockStatus !== 'all';
+  const hasActiveFilters = searchTerm !== '' || selectedBrand !== 'Tous' || selectedCategory !== 'Toutes' || selectedLocation !== 'Tous' || stockStatus !== 'all';
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -103,9 +118,10 @@ const PartsInventory: React.FC = () => {
           };
           return {
             id: `PT-IMP-${Date.now()}-${idx}`,
-            name: findValue(['Designation', 'Nom', 'Name', 'Article']) || 'Référence inconnue',
+            name: findValue(['Designation', 'Nom', 'Name', 'Article']) || 'Reference inconnue',
             sku: String(findValue(['SKU', 'Reference', 'Code', 'Ref']) || `AUTO-${idx}`).toUpperCase(),
-            brand: findValue(['Marque', 'Brand']) || 'Générique',
+            brand: findValue(['Marque', 'Brand']) || 'Generique',
+            // Fix: Using correct accented value to match Part category type
             category: 'Électronique',
             currentStock: parseInt(findValue(['Stock', 'Quantite', 'Qty', 'Qte'])) || 0,
             minStock: parseInt(findValue(['Min', 'Alerte', 'Seuil'])) || 5,
@@ -129,11 +145,11 @@ const PartsInventory: React.FC = () => {
     try {
       await ApiService.parts.saveAll(importPreview);
       await refreshAll();
-      addNotification({ title: 'Importation Réussie', message: `${importPreview.length} articles ajoutés au catalogue.`, type: 'success' });
+      addNotification({ title: 'Importation Reussie', message: `${importPreview.length} articles ajoutes au catalogue.`, type: 'success' });
       setIsMappingModalOpen(false);
       setImportPreview([]);
     } catch (e) {
-      addNotification({ title: 'Échec Import', message: 'Erreur lors de la synchronisation cloud.', type: 'error' });
+      addNotification({ title: 'Echec Import', message: 'Erreur lors de la synchronisation cloud.', type: 'error' });
     } finally {
       setIsImporting(false);
     }
@@ -142,14 +158,14 @@ const PartsInventory: React.FC = () => {
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0 || isProcessingDelete) return;
-    if (window.confirm(`Confirmez-vous la suppression de ${ids.length} références ? Cette action est irréversible dans le Cloud Horizon.`)) {
+    if (window.confirm(`Confirmez-vous la suppression de ${ids.length} references ? Cette action est irreversible dans le Cloud Horizon.`)) {
       setIsProcessingDelete(true);
       try {
         await deletePartsBulk(ids);
-        addNotification({ title: 'Nettoyage Cloud', message: `${ids.length} articles retirés avec succès.`, type: 'info' });
+        addNotification({ title: 'Nettoyage Cloud', message: `${ids.length} articles retires avec succes.`, type: 'info' });
         setSelectedIds(new Set());
       } catch (err) {
-        addNotification({ title: 'Erreur Sync', message: 'Échec de la suppression de groupe.', type: 'error' });
+        addNotification({ title: 'Erreur Sync', message: 'Echec de la suppression de groupe.', type: 'error' });
       } finally {
         setIsProcessingDelete(false);
       }
@@ -166,7 +182,7 @@ const PartsInventory: React.FC = () => {
       quantity: Math.abs(delta),
       type: delta > 0 ? 'IN' : 'OUT',
       reason: 'Ajustement Manuel Direct',
-      performedBy: currentUser?.name || 'Expert Système'
+      performedBy: currentUser?.name || 'Expert Systeme'
     });
   };
 
@@ -183,6 +199,7 @@ const PartsInventory: React.FC = () => {
       name: formData.get('name') as string,
       sku: (formData.get('sku') as string).toUpperCase(),
       brand: formData.get('brand') as string,
+      // Fix: Default to correctly accented value 'Électronique'
       category: (formData.get('category') as any) || 'Électronique',
       currentStock: parseInt(formData.get('currentStock') as string) || 0,
       minStock: parseInt(formData.get('minStock') as string) || 5,
@@ -192,7 +209,7 @@ const PartsInventory: React.FC = () => {
     await ApiService.parts.saveAll([data]);
     await refreshAll();
     setIsModalOpen(false);
-    addNotification({ title: 'Base de données', message: 'Référence enregistrée.', type: 'success' });
+    addNotification({ title: 'Base de donnees', message: 'Reference enregistree.', type: 'success' });
   };
 
   if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><Loader2 className="animate-spin text-[#1a73e8]" size={32} /></div>;
@@ -201,7 +218,7 @@ const PartsInventory: React.FC = () => {
     <div className="space-y-8 animate-page-entry pb-32">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-light text-[#202124]">Catalogue Pièces & Rechanges</h1>
+          <h1 className="text-3xl font-light text-[#202124]">Catalogue Pieces & Rechanges</h1>
           <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management global de l'inventaire technique Royal Plaza</p>
         </div>
         <div className="flex items-center gap-3">
@@ -210,19 +227,18 @@ const PartsInventory: React.FC = () => {
              <FileUp size={18} /> <span>Import XLSX</span>
            </button>
            <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
-             <Plus size={20} /> <span>Nouvelle Référence</span>
+             <Plus size={20} /> <span>Nouvelle Reference</span>
            </button>
            <button onClick={refreshAll} className="btn-google-outlined h-11 px-4"><RefreshCw size={18} /></button>
         </div>
       </header>
 
-      {/* MONITORING GRID */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
          {[
-           { label: 'Catalogue Actif', value: inventoryStats.totalRefs, icon: <Layers size={20}/>, color: '#1a73e8', desc: 'Réf. enregistrées' },
-           { label: 'Flux Critique', value: inventoryStats.lowStockCount, icon: <TrendingDown size={20}/>, color: '#f9ab00', desc: 'Seuil d\'alerte atteint' },
-           { label: 'Rupture Totale', value: inventoryStats.outOfStockCount, icon: <Zap size={20}/>, color: '#d93025', desc: 'Stock à zéro' },
-           { label: 'Valorisation', value: `${(inventoryStats.totalValue / 1000000).toFixed(1)}M`, icon: <BarChart3 size={20}/>, color: '#188038', desc: 'Total stock (FCFA)' }
+           { label: 'Catalogue Actif', value: inventoryStats.totalRefs, icon: <Layers size={20}/>, color: '#1a73e8', desc: 'Ref. enregistrees' },
+           { label: 'Flux Critique', value: inventoryStats.lowStockCount, icon: <TrendingDown size={20}/>, color: '#f9ab00', desc: "Seuil d'alerte atteint" },
+           { label: 'Rupture Totale', value: inventoryStats.outOfStockCount, icon: <Zap size={20}/>, color: '#d93025', desc: 'Stock a zero' },
+           { label: 'Valorisation Globale', value: `${(inventoryStats.totalValue / 1000000).toFixed(1)}M`, icon: <BarChart3 size={20}/>, color: '#188038', desc: 'Total stock (FCFA)' }
          ].map((stat, i) => (
            <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: stat.color }}>
               <div className="flex justify-between items-start">
@@ -231,106 +247,159 @@ const PartsInventory: React.FC = () => {
                     <h3 className="text-3xl font-bold text-[#202124] tracking-tight">{stat.value}</h3>
                     <p className="text-[9px] text-[#9aa0a6] font-bold uppercase mt-2">{stat.desc}</p>
                  </div>
-                 <div className="p-2.5 bg-gray-50 text-gray-400 group-hover:text-blue-600 transition-colors">{stat.icon}</div>
+                 <div className="p-2.5 bg-gray-50 text-gray-400">{stat.icon}</div>
               </div>
            </div>
          ))}
       </div>
 
-      {/* ENHANCED FILTER BAR - THE CONTROL CENTER */}
-      <div className="google-card overflow-hidden border-none shadow-md">
+      <div className="google-card overflow-hidden border-none shadow-lg">
          <div className="p-8 space-y-6 bg-white">
-            <div className="flex flex-col lg:flex-row gap-6">
+            <div className="flex flex-col xl:flex-row gap-6">
                <div className="relative flex-1 group">
-                  <Search className="absolute left-4 top-3.5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={20} />
+                  <Search className="absolute left-5 top-4 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
                   <input 
                     type="text" 
-                    placeholder="Rechercher par désignation, référence SKU ou marque..." 
-                    className="w-full pl-12 h-12 bg-[#f8f9fa] border-[#dadce0] focus:bg-white focus:ring-0 focus:border-[#1a73e8] text-sm font-bold placeholder:text-gray-400" 
+                    placeholder="Rechercher une piece par designation, reference SKU..." 
+                    className="w-full pl-14 h-16 bg-[#f8f9fa] border-2 border-transparent focus:border-[#1a73e8] focus:bg-white focus:ring-0 text-base font-bold shadow-inner transition-all placeholder:text-gray-400 placeholder:font-normal" 
                     value={searchTerm} 
                     onChange={e => setSearchTerm(e.target.value)} 
                   />
+                  {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="absolute right-5 top-5 p-1 text-gray-400 hover:text-red-500 transition-colors">
+                      <X size={22} />
+                    </button>
+                  )}
                </div>
                
-               <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center bg-[#f1f3f4] p-1 rounded-xl">
-                     <button 
-                       onClick={() => setStockStatus('all')}
-                       className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${stockStatus === 'all' ? 'bg-white text-[#1a73e8] shadow-sm' : 'text-[#5f6368] hover:text-[#202124]'}`}
-                     >
-                       Tout
-                     </button>
-                     <button 
-                       onClick={() => setStockStatus('critical')}
-                       className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${stockStatus === 'critical' ? 'bg-[#f9ab00] text-white shadow-sm' : 'text-[#5f6368] hover:text-[#f9ab00]'}`}
-                     >
-                       Critique
-                     </button>
-                     <button 
-                       onClick={() => setStockStatus('out')}
-                       className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${stockStatus === 'out' ? 'bg-[#d93025] text-white shadow-sm' : 'text-[#5f6368] hover:text-[#d93025]'}`}
-                     >
-                       Rupture
-                     </button>
+               <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center bg-[#f1f3f4] p-1.5">
+                     {[
+                       { id: 'all', label: 'Tout le Stock' },
+                       { id: 'critical', label: 'Alertes SLA' },
+                       { id: 'out', label: 'Ruptures' }
+                     ].map(status => (
+                       <button 
+                         key={status.id}
+                         onClick={() => setStockStatus(status.id as any)}
+                         className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${stockStatus === status.id ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                       >
+                         {status.label}
+                       </button>
+                     ))}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                      className={`p-4 border-2 transition-all group flex items-center gap-2 ${showAdvancedFilters ? 'bg-blue-50 border-blue-200 text-[#1a73e8]' : 'bg-white border-[#f1f3f4] text-[#5f6368] hover:border-gray-300'}`}
+                    >
+                      <SlidersHorizontal size={22} />
+                      <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{showAdvancedFilters ? 'Masquer' : 'Filtres'}</span>
+                      {showAdvancedFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+
+                    <div className="h-14 min-w-[180px] p-3 bg-blue-50 border border-blue-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                      <div className="shrink-0 mr-4">
+                         <div className="flex items-center gap-2">
+                           <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" />
+                           <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Horizon</span>
+                         </div>
+                         <p className="text-sm font-black text-blue-700 leading-none mt-1">{filteredParts.length} <span className="text-[9px]">Ref.</span></p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Valeur</p>
+                         <p className="text-sm font-black text-blue-700 leading-none mt-1">{(filteredValue / 1000).toFixed(0)}k <span className="text-[9px]">F</span></p>
+                      </div>
+                    </div>
                   </div>
 
                   {hasActiveFilters && (
                     <button 
                       onClick={resetFilters}
-                      className="p-3 text-[#d93025] hover:bg-red-50 transition-colors border border-transparent hover:border-red-100"
-                      title="Réinitialiser les filtres"
+                      className="p-4 text-[#d93025] hover:bg-red-50 border-2 border-transparent hover:border-red-100 transition-all group"
                     >
-                      <RotateCcw size={18} />
+                      <RotateCcw size={22} className="group-hover:rotate-[-180deg] transition-transform duration-500" />
                     </button>
                   )}
                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-[#f1f3f4]">
-               <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1">Filtrer par Constructeur</label>
-                  <div className="relative">
-                     <SlidersHorizontal className="absolute left-3.5 top-3.5 text-[#5f6368]" size={14} />
-                     <select 
-                        value={selectedBrand} 
-                        onChange={(e) => setSelectedBrand(e.target.value)}
-                        className="w-full pl-10 h-11 bg-white border-[#dadce0] text-[11px] font-black uppercase tracking-widest focus:ring-0 cursor-pointer"
-                     >
-                        <option value="Tous">Toutes les marques</option>
-                        {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                     </select>
-                  </div>
-               </div>
+            {hasActiveFilters && (
+              <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                 {selectedBrand !== 'Tous' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-[#1a73e8] text-[9px] font-black uppercase border border-blue-100">
+                     Marque: {selectedBrand} <button onClick={() => setSelectedBrand('Tous')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {selectedCategory !== 'Toutes' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase border border-emerald-100">
+                     Type: {selectedCategory} <button onClick={() => setSelectedCategory('Toutes')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {selectedLocation !== 'Tous' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 text-[9px] font-black uppercase border border-purple-100">
+                     Rayon: {selectedLocation} <button onClick={() => setSelectedLocation('Tous')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {stockStatus !== 'all' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 text-[9px] font-black uppercase border border-red-100">
+                     Priorite: {stockStatus === 'out' ? 'Rupture' : 'Alerte Stock'} <button onClick={() => setStockStatus('all')}><X size={12}/></button>
+                   </span>
+                 )}
+              </div>
+            )}
 
-               <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1">Domaine technique</label>
-                  <div className="relative">
-                     <Boxes className="absolute left-3.5 top-3.5 text-[#5f6368]" size={14} />
-                     <select 
-                        value={selectedCategory} 
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full pl-10 h-11 bg-white border-[#dadce0] text-[11px] font-black uppercase tracking-widest focus:ring-0 cursor-pointer"
-                     >
-                        <option value="Toutes">Toutes les catégories</option>
-                        <option value="Électronique">Électronique</option>
-                        <option value="Mécanique">Mécanique</option>
-                        <option value="Consommable">Consommable</option>
-                        <option value="Accessoire">Accessoire</option>
-                     </select>
-                  </div>
-               </div>
+            {showAdvancedFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-6 border-t border-[#f1f3f4] animate-in slide-in-from-top-2 duration-300">
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                      <SlidersHorizontal size={12} /> Constructeur
+                    </label>
+                    <select 
+                      value={selectedBrand} 
+                      onChange={(e) => setSelectedBrand(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                    >
+                      <option value="Tous">Toutes les marques</option>
+                      {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                 </div>
 
-               <div className="flex items-end pb-0.5">
-                  <div className="w-full p-3 bg-blue-50 border border-blue-100 flex items-center justify-between">
-                     <span className="text-[10px] font-black text-blue-700 uppercase">{filteredParts.length} Résultats</span>
-                     <Activity size={14} className="text-blue-400" />
-                  </div>
-               </div>
-            </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                      <Boxes size={12} /> Domaine Technique
+                    </label>
+                    <select 
+                      value={selectedCategory} 
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                    >
+                      <option value="Toutes">Toutes les catégories</option>
+                      <option value="Électronique">Électronique</option>
+                      <option value="Mécanique">Mécanique</option>
+                      <option value="Consommable">Consommable</option>
+                      <option value="Accessoire">Accessoire</option>
+                    </select>
+                 </div>
+
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                      <MapPinned size={12} /> Emplacement Rayon
+                    </label>
+                    <select 
+                      value={selectedLocation} 
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                    >
+                      {locations.map(loc => <option key={loc} value={loc}>{loc === 'Tous' ? 'Tous les emplacements' : loc}</option>)}
+                    </select>
+                 </div>
+              </div>
+            )}
          </div>
       </div>
 
-      {/* TABLEAU HORIZON */}
       <div className="google-card overflow-hidden">
          <table className="w-full text-left">
             <thead>
@@ -342,9 +411,9 @@ const PartsInventory: React.FC = () => {
                   </th>
                   <th className="px-8 py-5">Article & Identification</th>
                   <th className="px-8 py-5">Marque</th>
-                  <th className="px-8 py-5 text-center">Contrôle Stock</th>
+                  <th className="px-8 py-5 text-center">Controle Stock</th>
                   <th className="px-8 py-5 text-center">Indicateur</th>
-                  <th className="px-8 py-5 text-right">Opérations</th>
+                  <th className="px-8 py-5 text-right">Operations</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-[#dadce0]">
@@ -409,24 +478,15 @@ const PartsInventory: React.FC = () => {
                    </tr>
                  );
                })}
-               {filteredParts.length === 0 && (
-                 <tr>
-                    <td colSpan={6} className="py-32 text-center bg-gray-50/30">
-                       <Archive size={64} className="mx-auto text-gray-200 mb-6" />
-                       <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Aucun article ne correspond à votre recherche</p>
-                    </td>
-                 </tr>
-               )}
             </tbody>
          </table>
       </div>
 
-      {/* FLOATING ACTION BAR FOR SELECTION */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[80] bg-[#202124] text-white px-8 py-4 flex items-center gap-10 shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
            <div className="flex items-center gap-4 border-r border-white/20 pr-10">
               <div className="w-10 h-10 bg-blue-600 flex items-center justify-center font-black text-sm">{selectedIds.size}</div>
-              <p className="text-[11px] font-black uppercase tracking-widest">Articles sélectionnés</p>
+              <p className="text-[11px] font-black uppercase tracking-widest">Articles selectionnes</p>
            </div>
            <div className="flex gap-4">
               <button 
@@ -437,15 +497,14 @@ const PartsInventory: React.FC = () => {
                 {isProcessingDelete ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                 Supprimer le lot
               </button>
-              <button onClick={() => setSelectedIds(new Set())} className="px-6 py-3 bg-white/10 hover:bg-white/20 transition-colors text-[10px] font-black uppercase tracking-widest">Désélectionner</button>
+              <button onClick={() => setSelectedIds(new Set())} className="px-6 py-3 bg-white/10 hover:bg-white/20 transition-colors text-[10px] font-black uppercase tracking-widest">Deselectionner</button>
            </div>
         </div>
       )}
 
-      {/* DRAWER DÉTAILS RICHE */}
-      <Drawer isOpen={!!selectedPart} onClose={() => setSelectedPart(null)} title="Expertise Pièce Détachée" icon={<Package size={24}/>} subtitle={`Réf. ${selectedPart?.sku}`}>
+      <Drawer isOpen={!!selectedPart} onClose={() => setSelectedPart(null)} title="Expertise Piece Detachee" icon={<Package size={24}/>} subtitle={`Ref. ${selectedPart?.sku}`}>
          {selectedPart && (
-            <div className="space-y-12 pb-20 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="space-y-12 pb-20">
                <section className="flex flex-col md:flex-row items-start gap-10">
                   <div className="w-32 h-32 bg-[#f8f9fa] border border-[#dadce0] flex items-center justify-center text-[#1a73e8] shrink-0 shadow-inner">
                     <Package size={64} />
@@ -472,24 +531,18 @@ const PartsInventory: React.FC = () => {
                      <div className="flex justify-between items-end">
                         <div>
                            <p className="text-4xl font-black text-[#202124] tracking-tighter">{selectedPart.currentStock}</p>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Unités disponibles</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Unites disponibles</p>
                         </div>
                         <div className="text-right">
                            <p className="text-xl font-bold text-[#5f6368]">{selectedPart.minStock}</p>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Seuil de Sécurité</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Seuil de Securite</p>
                         </div>
-                     </div>
-                     <div className="h-3 bg-gray-100 border border-[#dadce0] overflow-hidden">
-                        <div 
-                          className={`h-full transition-all duration-1000 ${selectedPart.currentStock <= selectedPart.minStock ? 'bg-[#f9ab00]' : 'bg-[#1a73e8]'}`} 
-                          style={{ width: `${Math.min(100, (selectedPart.currentStock / (selectedPart.minStock * 2)) * 100)}%` }}
-                        />
                      </div>
                   </div>
 
                   <div className="p-8 bg-[#f8f9fa] border border-[#dadce0] space-y-6">
                      <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
-                        <DollarSign size={16} className="text-[#188038]" /> Économie de la pièce
+                        <DollarSign size={16} className="text-[#188038]" /> Economie
                      </h4>
                      <div className="space-y-4">
                         <div className="flex justify-between items-center pb-4 border-b border-[#dadce0]">
@@ -497,104 +550,35 @@ const PartsInventory: React.FC = () => {
                            <span className="text-base font-black text-[#202124]">{selectedPart.unitPrice.toLocaleString()} F</span>
                         </div>
                         <div className="flex justify-between items-center">
-                           <span className="text-xs font-bold text-[#5f6368]">Valeur en Stock</span>
+                           <span className="text-xs font-bold text-[#5f6368]">Valeur Stock</span>
                            <span className="text-lg font-black text-[#188038]">{(selectedPart.unitPrice * selectedPart.currentStock).toLocaleString()} F</span>
                         </div>
                      </div>
-                  </div>
-               </section>
-
-               <section className="space-y-6">
-                  <h4 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2">
-                     <History size={16} /> Flux de Sorties Récent
-                  </h4>
-                  <div className="p-8 text-center border-2 border-dashed border-[#dadce0] bg-[#f8f9fa]/50">
-                     <History size={40} className="mx-auto text-gray-200 mb-4" />
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Chargement de l'historique cloud...</p>
                   </div>
                </section>
             </div>
          )}
       </Drawer>
 
-      {/* MODAL MAPPING IMPORTATION OPTIMISÉ */}
-      <Modal isOpen={isMappingModalOpen} onClose={() => setIsMappingModalOpen(false)} title="Vérification de l'Intégrité Cloud" size="lg">
-         <div className="space-y-8 animate-in zoom-in-95 duration-300">
-            <div className="flex items-start gap-6 p-6 bg-blue-50 border border-blue-100">
-               <div className="w-14 h-14 bg-white border border-blue-200 flex items-center justify-center text-[#1a73e8] shadow-sm"><FileSpreadsheet size={32} /></div>
-               <div>
-                  <h4 className="text-base font-black text-blue-900 uppercase tracking-tight">Analyse Structurale Horizon</h4>
-                  <p className="text-xs text-blue-700 mt-1 leading-relaxed font-medium">Horizon a détecté <strong>{importPreview.length} articles</strong> valides. Les colonnes ont été auto-mappées vers les standards Royal Plaza.</p>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-               {MAPPING_RULES.map(rule => (
-                 <div key={rule.target} className="p-4 bg-[#f8f9fa] border border-[#dadce0] flex flex-col justify-between">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{rule.label}</p>
-                    <div className="flex items-center gap-2 text-[#1a73e8] mt-2">
-                       <CheckCircle2 size={14} />
-                       <span className="text-[10px] font-black uppercase">Standard OK</span>
-                    </div>
-                 </div>
-               ))}
-            </div>
-
-            <div className="google-card overflow-hidden">
-               <div className="bg-gray-50 px-6 py-3 border-b text-[9px] font-black text-[#5f6368] uppercase tracking-widest">Échantillon de Pré-Synchronisation</div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-left text-[11px]">
-                    <thead className="bg-white border-b">
-                       <tr className="text-gray-400">
-                          <th className="px-6 py-3">Désignation</th>
-                          <th className="px-6 py-3">SKU</th>
-                          <th className="px-6 py-3 text-center">Stock</th>
-                          <th className="px-6 py-3 text-right">Prix</th>
-                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                       {importPreview.slice(0, 5).map((p, i) => (
-                          <tr key={i}>
-                             <td className="px-6 py-3 font-bold text-[#3c4043]">{p.name}</td>
-                             <td className="px-6 py-3 font-mono text-[#1a73e8]">{p.sku}</td>
-                             <td className="px-6 py-3 text-center font-black">{p.currentStock}</td>
-                             <td className="px-6 py-3 text-right font-bold">{p.unitPrice.toLocaleString()} F</td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
-               </div>
-            </div>
-
-            <div className="flex gap-4 pt-6 border-t border-[#dadce0]">
-               <button onClick={confirmImport} disabled={isImporting} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
-                  {isImporting ? <Loader2 size={18} className="animate-spin" /> : <><Save size={20} /> Injecter dans le Cloud Plaza</>}
-               </button>
-               <button onClick={() => setIsMappingModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Abandonner</button>
-            </div>
-         </div>
-      </Modal>
-
-      {/* MODAL AJOUT/EDITION SHARP */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingPart ? 'Ajustement Référence Catalogue' : 'Ouverture Nouvelle Référence'} size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingPart ? 'Ajustement Reference' : 'Ouverture Reference'} size="lg">
          <form onSubmit={handleSavePart} className="space-y-10">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Désignation Complète</label>
-                  <input name="name" type="text" defaultValue={editingPart?.name} required placeholder="ex: Compresseur Inverter LG V2" className="w-full bg-white h-11" />
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Designation</label>
+                  <input name="name" type="text" defaultValue={editingPart?.name} required placeholder="ex: Compresseur LG" className="w-full bg-white h-11" />
                </div>
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Référence SKU Unique</label>
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Reference SKU</label>
                   <input name="sku" type="text" defaultValue={editingPart?.sku} required className="w-full bg-white font-mono uppercase h-11" placeholder="PT-..." />
                </div>
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Constructeur / Marque</label>
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Marque</label>
                   <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full bg-white h-11 font-bold">
                     {brands.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                </div>
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Catégorie Horizon</label>
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Catégorie</label>
                   <select name="category" defaultValue={editingPart?.category || 'Électronique'} className="w-full bg-white h-11">
                     <option value="Électronique">Électronique</option>
                     <option value="Mécanique">Mécanique</option>
@@ -603,28 +587,17 @@ const PartsInventory: React.FC = () => {
                   </select>
                </div>
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Position de Stockage</label>
-                  <input name="location" type="text" defaultValue={editingPart?.location || 'Rayon A1 - Glass'} required className="w-full bg-white h-11" />
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Position</label>
+                  <input name="location" type="text" defaultValue={editingPart?.location || 'Rayon A1'} required className="w-full bg-white h-11" />
                </div>
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Tarif Unitaire (FCFA)</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3.5 top-3 text-[#188038]" size={18} />
-                    <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="w-full bg-white h-11 pl-11 font-black" />
-                  </div>
-               </div>
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Stock Initial</label>
-                  <input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} required className="w-full bg-white h-11" />
-               </div>
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Seuil Alerte (Min)</label>
-                  <input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} required className="w-full bg-white h-11 border-amber-200" />
+                  <label className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest ml-1">Tarif Unitaire</label>
+                  <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="w-full bg-white h-11 font-black" />
                </div>
             </div>
             <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
                <button type="submit" className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
-                  <Save size={20} /> Valider la fiche article
+                  <Save size={20} /> Valider la fiche
                </button>
                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Abandonner</button>
             </div>
