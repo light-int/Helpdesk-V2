@@ -10,7 +10,8 @@ import {
   TrendingUp, Truck, Wrench, Users, History, AlertTriangle, ShieldCheck, Lock,
   ShieldAlert, Tag, Hash, Archive, Eye, Smartphone, Briefcase, Play,
   Zap, Map, Layers, Target, Headphones, Receipt, Info as InfoIcon, FilterX, BellRing,
-  SlidersHorizontal, LayoutGrid, ListFilter, MapPinned, ChevronLeft
+  SlidersHorizontal, LayoutGrid, ListFilter, MapPinned, ChevronLeft, ArrowUpRight,
+  Timer, BarChart3, RotateCcw, Boxes, Shapes, CalendarDays
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, TicketStatus, TicketCategory, Showroom, UsedPart, Customer } from '../types';
@@ -32,14 +33,18 @@ const Tickets: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('Tous');
   const [priorityFilter, setPriorityFilter] = useState<string>('Toutes');
   const [showroomFilter, setShowroomFilter] = useState<string>('Tous');
+  const [categoryFilter, setCategoryFilter] = useState<string>('Toutes');
+  const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Droits d'accès
+  const canCreateTicket = currentUser?.role !== 'TECHNICIAN';
 
   useEffect(() => { 
     refreshAll();
@@ -47,12 +52,8 @@ const Tickets: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, priorityFilter, showroomFilter]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter, priorityFilter, showroomFilter, categoryFilter, dateRange]);
 
-  // Détection du ticket via l'URL
   useEffect(() => {
     const ticketId = searchParams.get('id');
     if (ticketId && tickets.length > 0) {
@@ -64,22 +65,10 @@ const Tickets: React.FC = () => {
     }
   }, [searchParams, tickets, setSearchParams]);
 
-  const openAddModal = () => {
-    setEditingTicket(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (ticket: Ticket) => {
-    setEditingTicket(ticket);
-    setIsModalOpen(true);
-  };
-
   const allFilteredTickets = useMemo(() => {
-    let baseList = tickets.filter(t => {
+    return tickets.filter(t => {
       if (t.isArchived) return false;
-      if (currentUser?.role === 'TECHNICIAN' && t.assignedTechnicianId !== currentUser.id) {
-        return false;
-      }
+      if (currentUser?.role === 'TECHNICIAN' && t.assignedTechnicianId !== currentUser.id) return false;
       
       const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (t.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -89,22 +78,31 @@ const Tickets: React.FC = () => {
       const matchesStatus = statusFilter === 'Tous' || t.status === statusFilter;
       const matchesPriority = priorityFilter === 'Toutes' || t.priority === priorityFilter;
       const matchesShowroom = showroomFilter === 'Tous' || t.showroom === showroomFilter;
+      const matchesCategory = categoryFilter === 'Toutes' || t.category === categoryFilter;
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesShowroom;
-    });
+      // Filter by date
+      let matchesDate = true;
+      if (dateRange !== 'all') {
+        const ticketDate = new Date(t.createdAt);
+        const now = new Date();
+        if (dateRange === 'today') {
+          matchesDate = ticketDate.toDateString() === now.toDateString();
+        } else if (dateRange === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          matchesDate = ticketDate >= weekAgo;
+        } else if (dateRange === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          matchesDate = ticketDate >= monthAgo;
+        }
+      }
 
-    return [...baseList].sort((a, b) => {
+      return matchesSearch && matchesStatus && matchesPriority && matchesShowroom && matchesCategory && matchesDate;
+    }).sort((a, b) => {
       if (a.priority === 'Urgent' && b.priority !== 'Urgent') return -1;
       if (a.priority !== 'Urgent' && b.priority === 'Urgent') return 1;
-      if (a.status === 'Nouveau' && b.status !== 'Nouveau') return -1;
-      if (a.status !== 'Nouveau' && b.status === 'Nouveau') return 1;
-      const aIsClosed = a.status === 'Résolu' || a.status === 'Fermé';
-      const bIsClosed = b.status === 'Résolu' || b.status === 'Fermé';
-      if (!aIsClosed && bIsClosed) return -1;
-      if (aIsClosed && !bIsClosed) return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [tickets, searchTerm, statusFilter, priorityFilter, showroomFilter, currentUser]);
+  }, [tickets, searchTerm, statusFilter, priorityFilter, showroomFilter, categoryFilter, dateRange, currentUser]);
 
   const paginatedTickets = useMemo(() => {
     const startIndex = (currentPage - 1) * TICKETS_PER_PAGE;
@@ -113,544 +111,587 @@ const Tickets: React.FC = () => {
 
   const totalPages = Math.ceil(allFilteredTickets.length / TICKETS_PER_PAGE);
 
-  const urgentCount = useMemo(() => tickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length, [tickets]);
-  const newCount = useMemo(() => tickets.filter(t => t.status === 'Nouveau').length, [tickets]);
+  const stats = useMemo(() => ({
+    total: tickets.filter(t => !t.isArchived).length,
+    urgent: tickets.filter(t => t.priority === 'Urgent' && t.status !== 'Fermé').length,
+    new: tickets.filter(t => t.status === 'Nouveau').length,
+    closed: tickets.filter(t => (t.status === 'Résolu' || t.status === 'Fermé')).length
+  }), [tickets]);
 
-  const isRecent = (dateStr: string) => {
-    if (!dateStr) return false;
-    const ticketDate = new Date(dateStr).getTime();
-    const now = new Date().getTime();
-    return (now - ticketDate) < (24 * 60 * 60 * 1000); 
-  };
-
-  const formatDuration = (ms?: number) => {
-    if (!ms) return null;
-    const mins = Math.floor(ms / 60000);
-    const hours = Math.floor(mins / 60);
-    const rMins = mins % 60;
-    return hours > 0 ? `${hours}h ${rMins}min` : `${rMins}min`;
-  };
-
-  const getLiveDuration = (startedAt?: string) => {
-    if (!startedAt) return null;
-    const diff = currentTime.getTime() - new Date(startedAt).getTime();
-    return formatDuration(diff);
-  };
-
-  const handleStartIntervention = async (ticket: Ticket) => {
-    const updated: Ticket = {
-      ...ticket,
-      status: 'En cours',
-      lastUpdate: new Date().toISOString(),
-      interventionReport: {
-        ...ticket.interventionReport,
-        startedAt: new Date().toISOString()
-      }
-    };
-    await saveTicket(updated);
-    setSelectedTicket(updated);
-    addNotification({ title: 'Chrono Démarré', message: `L'intervention sur le dossier #${ticket.id} a débuté.`, type: 'info' });
-  };
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'Tous' || priorityFilter !== 'Toutes' || showroomFilter !== 'Tous' || categoryFilter !== 'Toutes' || dateRange !== 'all';
 
   const resetFilters = () => {
     setSearchTerm('');
     setStatusFilter('Tous');
     setPriorityFilter('Toutes');
     setShowroomFilter('Tous');
+    setCategoryFilter('Toutes');
+    setDateRange('all');
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Résolu': return 'bg-green-50 text-green-700 border-green-200';
+      case 'Fermé': return 'bg-gray-50 text-gray-500 border-gray-300';
+      case 'En attente d\'approbation': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'Nouveau': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'En cours': return 'bg-amber-50 text-amber-700 border-amber-300';
+      default: return 'bg-gray-50 text-gray-700 border-gray-300';
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Urgent': return 'bg-red-600';
+      case 'Haute': return 'bg-orange-500';
+      case 'Moyenne': return 'bg-blue-500';
+      default: return 'bg-gray-300';
+    }
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const custName = formData.get('customerName') as string;
-    const custPhone = formData.get('customerPhone') as string;
     
-    if (!custName || !custPhone) {
-        addNotification({ title: 'Saisie Incomplète', message: 'Le nom et le mobile sont obligatoires.', type: 'warning' });
-        return;
-    }
-
-    const existingCustomer = customers.find(c => c.phone === custPhone);
-    const customerData: Customer = {
-      id: existingCustomer?.id || `C-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: custName,
-      phone: custPhone,
-      email: existingCustomer?.email || (formData.get('email') as string) || '',
-      type: existingCustomer?.type || 'Particulier',
-      address: existingCustomer?.address || (formData.get('location') as string) || '',
-      status: 'Actif',
-      totalSpent: (existingCustomer?.totalSpent || 0),
-      ticketsCount: (existingCustomer?.ticketsCount || 0) + (editingTicket ? 0 : 1),
-      lastVisit: new Date().toISOString(),
-      isArchived: false
-    };
+    // FIX BUG 23503: Sanitisation de l'ID technicien pour éviter violation FK
+    const rawTechId = formData.get('assignedTechnicianId') as string;
+    // Si vide ou n'existe pas dans la liste des techniciens chargés, on met undefined (Supabase mettra null)
+    const finalTechId = rawTechId && technicians.some(t => t.id === rawTechId) ? rawTechId : undefined;
 
     const ticketData: Ticket = {
       ...(editingTicket || {}),
       id: editingTicket?.id || `T-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerId: customerData.id,
-      customerName: custName,
-      customerPhone: custPhone,
+      customerName: formData.get('customerName') as string,
+      customerPhone: formData.get('customerPhone') as string,
       brand: formData.get('brand') as string,
       productName: formData.get('productName') as string,
       serialNumber: formData.get('serialNumber') as string,
-      purchaseDate: formData.get('purchaseDate') as string,
       location: formData.get('location') as string,
-      clientImpact: (formData.get('clientImpact') as any) || 'Faible',
-      source: (formData.get('source') as any) || editingTicket?.source || 'WhatsApp',
-      showroom: (formData.get('showroom') as any) || editingTicket?.showroom || 'Glass',
-      category: (formData.get('category') as any) || editingTicket?.category || 'SAV',
-      status: (formData.get('status') as any) || editingTicket?.status || 'Nouveau',
-      priority: (formData.get('priority') as any) || editingTicket?.priority || 'Moyenne',
+      source: (formData.get('source') as any) || 'WhatsApp',
+      showroom: (formData.get('showroom') as any) || 'Glass',
+      category: (formData.get('category') as any) || 'SAV',
+      status: (formData.get('status') as any) || 'Nouveau',
+      priority: (formData.get('priority') as any) || 'Moyenne',
       description: formData.get('description') as string,
-      assignedTechnicianId: formData.get('assignedTechnicianId') as string || editingTicket?.assignedTechnicianId,
+      assignedTechnicianId: finalTechId,
       createdAt: editingTicket?.createdAt || new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
       financials: editingTicket?.financials || {
         partsTotal: 0, partsCost: 0, laborTotal: 0, laborCost: 0, logisticsCost: 0, 
         travelFee: 5000, discount: 0, grandTotal: 5000, netMargin: 3000, isPaid: false
-      },
-      isArchived: editingTicket?.isArchived || false
+      }
     } as Ticket;
 
     try {
-      await saveCustomer(customerData);
       await saveTicket(ticketData);
       setIsModalOpen(false);
-      setEditingTicket(null);
-      setSelectedTicket(null);
+      addNotification({ title: 'Horizon Sync', message: `Ticket #${ticketData.id} enregistré.`, type: 'success' });
+    } catch (err: any) {
+      console.error("Save error:", err);
+      // Notification d'erreur explicite pour l'utilisateur
       addNotification({ 
-        title: 'Cloud Horizon', 
-        message: `Dossier #${ticketData.id} synchronisé.`, 
-        type: 'success' 
+        title: 'Erreur d\'intégrité', 
+        message: "L'expert sélectionné est introuvable ou invalide. Le dossier n'a pas pu être sauvegardé.", 
+        type: 'error' 
       });
-      await refreshAll();
-    } catch (err) {
-      addNotification({ title: 'Erreur Sync', message: 'Vérifiez la structure Cloud.', type: 'error' });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Archiver ce dossier ?")) {
-      await deleteTicket(id);
-      setSelectedTicket(null);
-      addNotification({ title: 'Dossier Archivé', message: 'Ticket déplacé vers les archives.', type: 'info' });
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Résolu': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Fermé': return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'En attente d\'approbation': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'Nouveau': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'En cours': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
   return (
-    <div className="relative flex flex-col space-y-6 animate-page-entry pb-12">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 animate-page-entry pb-20">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-normal text-[#3c4043]">Tickets & SAV</h1>
-          <p className="text-[#5f6368] text-sm font-medium">Gestion opérationnelle du matériel Royal Plaza.</p>
+          <h1 className="text-3xl font-light text-[#202124]">Tickets & Opérations SAV</h1>
+          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management du flux technique Royal Plaza</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4 text-[#5f6368] hover:text-[#1a73e8]" title="Actualiser">
-              <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-          </button>
-          {currentUser?.role !== 'TECHNICIAN' && (
-            <button onClick={openAddModal} className="btn-google-primary shadow-lg shadow-blue-600/10 h-11">
-              <Plus size={18} /> Ouvrir Dossier
+          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4"><RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /></button>
+          
+          {/* RÈGLE MÉTIER : Un technicien ne peut pas créer de ticket */}
+          {canCreateTicket && (
+            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10">
+              <Plus size={20} /> <span>Ouvrir un Dossier</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* BANNIÈRE ALERTE */}
-      {(urgentCount > 0 || newCount > 0) && (
-        <div className={`p-4 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-4 duration-500 border-2 shadow-sm ${urgentCount > 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-          <div className="flex items-center gap-4">
-            <div className={`p-2 rounded-xl bg-white shadow-sm ${urgentCount > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-               <BellRing size={20} className={urgentCount > 0 ? 'animate-bounce' : ''} />
-            </div>
-            <div>
-               <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Alerte Flux Horizon</p>
-               <p className="text-sm font-bold">
-                 {urgentCount > 0 ? `${urgentCount} dossier(s) URGENT(S) détecté(s).` : `${newCount} nouveau(x) dossier(s) à qualifier.`}
-               </p>
-            </div>
-          </div>
-          <button onClick={() => { setPriorityFilter(urgentCount > 0 ? 'Urgent' : 'Toutes'); setStatusFilter(urgentCount === 0 ? 'Nouveau' : 'Tous'); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white shadow-sm hover:scale-105 transition-all ${urgentCount > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-            Traiter maintenant
-          </button>
-        </div>
-      )}
-
-      {/* FILTRES COMPACTS STYLE GOOGLE */}
-      <div className="bg-white border border-[#dadce0] rounded-[24px] shadow-sm overflow-hidden">
-        <div className="p-4 flex flex-col lg:flex-row gap-4">
-           <div className="relative flex-1">
-              <Search className="absolute left-4 top-3.5 text-[#9aa0a6]" size={18} />
-              <input 
-               type="text" 
-               placeholder="Rechercher dossier, client, S/N..." 
-               value={searchTerm} 
-               onChange={e => setSearchTerm(e.target.value)} 
-               className="w-full pl-12 h-12 bg-[#f8f9fa] border-transparent focus:bg-white !rounded-2xl text-[13px] font-medium" 
-              />
-           </div>
-
-           <div className="flex flex-wrap gap-2">
-              <div className="relative min-w-[140px]">
-                 <ListFilter className="absolute left-3 top-3.5 text-[#5f6368]" size={15} />
-                 <select 
-                    value={statusFilter} 
-                    onChange={e => setStatusFilter(e.target.value)} 
-                    className={`pl-10 pr-4 h-12 text-[10px] font-black uppercase !rounded-2xl transition-all appearance-none cursor-pointer border-[#dadce0] ${statusFilter !== 'Tous' ? 'bg-blue-50 border-[#1a73e8] text-[#1a73e8]' : 'bg-white'}`}
-                 >
-                    <option value="Tous">États (Tous)</option>
-                    <option value="Nouveau">🔵 Nouveaux</option>
-                    <option value="En cours">🟡 En cours</option>
-                    <option value="En attente d'approbation">🟣 En attente</option>
-                    <option value="Résolu">🟢 Résolus</option>
-                    <option value="Fermé">⚪ Fermés</option>
-                 </select>
-              </div>
-
-              <div className="relative min-w-[140px]">
-                 <SlidersHorizontal className="absolute left-3 top-3.5 text-[#5f6368]" size={15} />
-                 <select 
-                    value={priorityFilter} 
-                    onChange={e => setPriorityFilter(e.target.value)} 
-                    className={`pl-10 pr-4 h-12 text-[10px] font-black uppercase !rounded-2xl transition-all appearance-none cursor-pointer border-[#dadce0] ${priorityFilter !== 'Toutes' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white'}`}
-                 >
-                    <option value="Toutes">Priorités (Toutes)</option>
-                    <option value="Urgent">🔴 Urgent</option>
-                    <option value="Haute">Haute</option>
-                    <option value="Moyenne">Moyenne</option>
-                    <option value="Basse">Basse</option>
-                 </select>
-              </div>
-
-              <div className="relative min-w-[140px]">
-                 <MapPinned className="absolute left-3 top-3.5 text-[#5f6368]" size={15} />
-                 <select 
-                    value={showroomFilter} 
-                    onChange={e => setShowroomFilter(e.target.value)} 
-                    className={`pl-10 pr-4 h-12 text-[10px] font-black uppercase !rounded-2xl transition-all appearance-none cursor-pointer border-[#dadce0] ${showroomFilter !== 'Tous' ? 'bg-gray-100 border-[#1a73e8] text-[#1a73e8]' : 'bg-white'}`}
-                 >
-                    <option value="Tous">Sites (Tous)</option>
-                    {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
-                 </select>
-              </div>
-
-              <button 
-                onClick={resetFilters} 
-                className="btn-google-outlined h-12 px-4 !rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all group"
-                title="Effacer filtres"
-              >
-                 <FilterX size={18} />
-              </button>
-           </div>
-        </div>
-        <div className="px-6 py-2 bg-[#f8f9fa] border-t border-[#dadce0] flex items-center justify-between">
-           <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest flex items-center gap-1.5">
-              <LayoutGrid size={12} /> {allFilteredTickets.length} Dossiers au total
-           </span>
-           <div className="text-[10px] font-bold text-gray-400 uppercase">
-              Actualisé : {currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-           </div>
-        </div>
-      </div>
-
-      {/* TABLEAU SANS SCROLL INTERNE AVEC PAGINATION */}
-      <div className="google-card overflow-hidden shadow-xl border-none">
-        <table className="w-full text-left">
-          <thead className="bg-white border-b border-[#dadce0]">
-            <tr className="text-[#5f6368] text-[10px] font-black uppercase tracking-widest">
-              <th className="px-8 py-5">ID & Showroom</th>
-              <th className="px-8 py-5">Client & Matériel</th>
-              <th className="px-8 py-5">Expert Assigné</th>
-              <th className="px-8 py-5 text-center">État opérationnel</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#dadce0]">
-            {paginatedTickets.map((ticket, idx) => (
-              <tr 
-                key={ticket.id} 
-                onClick={() => setSelectedTicket(ticket)}
-                className={`hover:bg-[#f8faff] transition-all cursor-pointer group ${selectedTicket?.id === ticket.id ? 'bg-[#e8f0fe]' : ''} ${ticket.priority === 'Urgent' ? 'border-l-4 border-l-red-500' : ''}`}
-              >
-                <td className="px-8 py-5">
-                  <div className="flex items-center gap-2">
-                     <span className="font-black text-[#1a73e8]">#{ticket.id}</span>
-                     {isRecent(ticket.createdAt) && <span className="badge-new">NOUVEAU</span>}
-                     {ticket.priority === 'Urgent' && <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full animate-pulse">URGENT</span>}
-                  </div>
-                  <p className="text-[9px] text-[#5f6368] font-black uppercase mt-1 tracking-wider">{ticket.showroom}</p>
-                </td>
-                <td className="px-8 py-5">
-                  <p className="text-sm font-bold text-[#3c4043] group-hover:text-[#1a73e8] transition-colors">{ticket.customerName}</p>
-                  <p className="text-[10px] text-[#5f6368] truncate max-w-[250px] mt-0.5 italic flex items-center gap-2">
-                      <Tag size={10} className="text-[#1a73e8]" /> {ticket.brand} • {ticket.productName}
-                  </p>
-                </td>
-                <td className="px-8 py-5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-[#f1f3f4] flex items-center justify-center text-[#5f6368] border border-[#dadce0]">
-                      <User size={14} />
-                    </div>
-                    <span className="text-xs font-bold text-[#5f6368]">
-                      {technicians.find(tech => tech.id === ticket.assignedTechnicianId)?.name || 'En attente...'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-8 py-5 text-center">
-                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border shadow-sm ${getStatusColor(ticket.status)}`}>
-                    {ticket.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        {allFilteredTickets.length === 0 && (
-            <div className="py-32 text-center bg-gray-50/30">
-                <Archive size={48} className="mx-auto text-gray-200 mb-4" />
-                <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Aucun dossier trouvé</p>
-            </div>
-        )}
-
-        {/* PAGINATION FIXÉE EN BAS DU CARD (STYLE GOOGLE) */}
-        {totalPages > 1 && (
-          <div className="px-8 py-4 bg-[#f8f9fa] border-t border-[#dadce0] flex items-center justify-between">
-            <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">
-              Dossiers {(currentPage - 1) * TICKETS_PER_PAGE + 1} - {Math.min(currentPage * TICKETS_PER_PAGE, allFilteredTickets.length)} sur {allFilteredTickets.length}
-            </p>
-            <div className="flex items-center gap-2">
-               <button 
-                disabled={currentPage === 1}
-                onClick={(e) => { e.stopPropagation(); setCurrentPage(p => p - 1); window.scrollTo({top: 0, behavior: 'smooth'}); }}
-                className="p-2 rounded-lg border border-[#dadce0] bg-white text-[#5f6368] disabled:opacity-30 hover:bg-[#f1f3f4] transition-all"
-               >
-                 <ChevronLeft size={18} />
-               </button>
-               <div className="flex gap-1">
-                  {[...Array(totalPages)].map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => { setCurrentPage(i + 1); window.scrollTo({top: 0, behavior: 'smooth'}); }}
-                      className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-[#1a73e8] text-white shadow-md' : 'bg-white text-[#5f6368] border border-[#dadce0] hover:bg-[#f1f3f4]'}`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
+      {/* MONITORING DASHBOARD - MINI */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          { label: 'Flux SAV Actif', value: stats.total, color: '#1a73e8', icon: <Activity size={20}/> },
+          { label: 'Urgences SLA', value: stats.urgent, color: '#d93025', icon: <Zap size={20}/> },
+          { label: 'Nouveaux Dossiers', value: stats.new, color: '#1a73e8', icon: <BellRing size={20}/> },
+          { label: 'Résolutions Mois', value: stats.closed, color: '#188038', icon: <CheckCircle2 size={20}/> }
+        ].map((s, i) => (
+          <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: s.color }}>
+             <div className="flex justify-between items-start">
+               <div>
+                 <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{s.label}</p>
+                 <h3 className="text-3xl font-bold text-[#202124] tracking-tighter">{s.value}</h3>
                </div>
-               <button 
-                disabled={currentPage === totalPages}
-                onClick={(e) => { e.stopPropagation(); setCurrentPage(p => p + 1); window.scrollTo({top: 0, behavior: 'smooth'}); }}
-                className="p-2 rounded-lg border border-[#dadce0] bg-white text-[#5f6368] disabled:opacity-30 hover:bg-[#f1f3f4] transition-all"
-               >
-                 <ChevronRight size={18} />
-               </button>
-            </div>
+               <div className="p-2 bg-gray-50 text-gray-400 group-hover:text-blue-600 transition-colors">{s.icon}</div>
+             </div>
           </div>
+        ))}
+      </div>
+
+      {/* COMMAND CENTER FILTERS - ENHANCED CARD */}
+      <div className="google-card overflow-hidden border-none shadow-lg">
+        <div className="p-8 space-y-6 bg-white">
+           <div className="flex flex-col xl:flex-row gap-6">
+              <div className="relative flex-1 group">
+                 <Search className="absolute left-5 top-4.5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
+                 <input 
+                  type="text" 
+                  placeholder="Rechercher par client, ticket ID, série ou modèle..." 
+                  className="w-full pl-14 h-16 bg-[#f8f9fa] border-2 border-transparent focus:border-[#1a73e8] focus:bg-white focus:ring-0 text-base font-bold shadow-inner transition-all placeholder:text-gray-400 placeholder:font-normal"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                 />
+                 {searchTerm && (
+                   <button onClick={() => setSearchTerm('')} className="absolute right-5 top-5 p-1 text-gray-400 hover:text-red-500 transition-colors">
+                     <X size={20} />
+                   </button>
+                 )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                 <div className="flex items-center bg-[#f1f3f4] p-1.5">
+                    {[
+                      { id: 'Tous', label: 'Tout le flux' },
+                      { id: 'Nouveau', label: 'Nouveaux' },
+                      { id: 'En cours', label: 'En cours' },
+                      { id: 'Résolu', label: 'Résolus' }
+                    ].map(status => (
+                      <button 
+                        key={status.id}
+                        onClick={() => setStatusFilter(status.id)}
+                        className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === status.id ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                      >
+                        {status.label}
+                      </button>
+                    ))}
+                 </div>
+
+                 <div className="flex items-center bg-[#f1f3f4] p-1.5">
+                    {[
+                      { id: 'all', label: 'Toute date' },
+                      { id: 'today', label: 'Auj.' },
+                      { id: 'week', label: '7 Jours' },
+                      { id: 'month', label: '30 Jours' }
+                    ].map(range => (
+                      <button 
+                        key={range.id}
+                        onClick={() => setDateRange(range.id as any)}
+                        className={`px-4 py-3 text-[9px] font-black uppercase tracking-widest transition-all ${dateRange === range.id ? 'bg-[#202124] text-white shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                 </div>
+                 
+                 {hasActiveFilters && (
+                    <button 
+                      onClick={resetFilters} 
+                      className="p-4 text-[#d93025] hover:bg-red-50 border-2 border-transparent hover:border-red-100 transition-all group"
+                      title="Réinitialiser tous les filtres"
+                    >
+                       <RotateCcw size={22} className="group-hover:rotate-[-180deg] transition-transform duration-500" />
+                    </button>
+                 )}
+              </div>
+           </div>
+
+           {hasActiveFilters && (
+              <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                 {statusFilter !== 'Tous' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-[#1a73e8] text-[9px] font-black uppercase border border-blue-100">
+                     Statut: {statusFilter} <button onClick={() => setStatusFilter('Tous')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {priorityFilter !== 'Toutes' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 text-[9px] font-black uppercase border border-orange-100">
+                     Priorité: {priorityFilter} <button onClick={() => setPriorityFilter('Toutes')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {showroomFilter !== 'Tous' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 text-[9px] font-black uppercase border border-purple-100">
+                     Point: {showroomFilter} <button onClick={() => setShowroomFilter('Tous')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {categoryFilter !== 'Toutes' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase border border-emerald-100">
+                     Expertise: {categoryFilter} <button onClick={() => setCategoryFilter('Toutes')}><X size={12}/></button>
+                   </span>
+                 )}
+                 {dateRange !== 'all' && (
+                   <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-[9px] font-black uppercase border border-gray-200">
+                     Période: {dateRange} <button onClick={() => setDateRange('all')}><X size={12}/></button>
+                   </span>
+                 )}
+              </div>
+           )}
+
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 pt-6 border-t border-[#f1f3f4]">
+              <div className="space-y-1.5">
+                 <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                   <SlidersHorizontal size={12} /> Niveau d'Urgence
+                 </label>
+                 <div className="relative">
+                   <select 
+                      value={priorityFilter} 
+                      onChange={e => setPriorityFilter(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                   >
+                      <option value="Toutes">Toutes Priorités</option>
+                      <option value="Urgent" className="text-red-600">Urgent SLA</option>
+                      <option value="Haute">Priorité Haute</option>
+                      <option value="Moyenne">Priorité Moyenne</option>
+                      <option value="Basse">Priorité Basse</option>
+                   </select>
+                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                 <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                   <MapPinned size={12} /> Point de Vente
+                 </label>
+                 <div className="relative">
+                   <select 
+                      value={showroomFilter} 
+                      onChange={e => setShowroomFilter(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                   >
+                      <option value="Tous">Tous les Showrooms</option>
+                      {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+                   </select>
+                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                 <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                   <Shapes size={12} /> Domaine Technique
+                 </label>
+                 <div className="relative">
+                   <select 
+                      value={categoryFilter} 
+                      onChange={e => setCategoryFilter(e.target.value)}
+                      className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer"
+                   >
+                      <option value="Toutes">Toutes les Catégories</option>
+                      <option value="SAV">SAV Classique</option>
+                      <option value="Climatisation">Climatisation</option>
+                      <option value="Électronique">Électronique</option>
+                      <option value="Installation">Installation</option>
+                      <option value="Maintenance">Maintenance Pro</option>
+                   </select>
+                 </div>
+              </div>
+
+              <div className="flex items-end">
+                 <div className="w-full p-4 bg-blue-50 border border-blue-100 flex items-center justify-between shadow-inner relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-12 h-12 bg-blue-100 rotate-45 translate-x-6 -translate-y-6 opacity-20 group-hover:opacity-40 transition-opacity" />
+                    <div>
+                       <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" /> Résultats Horizon
+                       </p>
+                       <p className="text-lg font-black text-blue-700 leading-none mt-1">{allFilteredTickets.length} <span className="text-[10px]">Dossiers</span></p>
+                    </div>
+                    <div className="p-2 bg-white text-blue-600 shadow-sm"><LayoutGrid size={18}/></div>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* DATA GRID */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-white border-b border-[#dadce0] text-[9px] font-black text-[#5f6368] uppercase tracking-[0.2em]">
+                <th className="px-8 py-5">ID & Canal</th>
+                <th className="px-8 py-5">Client & Coordonnées</th>
+                <th className="px-8 py-5">Matériel & Constructeur</th>
+                <th className="px-8 py-5 text-center">Priorité</th>
+                <th className="px-8 py-5 text-right">Statut Opé.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#dadce0]">
+              {paginatedTickets.map((t) => (
+                <tr 
+                  key={t.id} 
+                  onClick={() => setSelectedTicket(t)}
+                  className={`hover:bg-[#f8faff] transition-colors group cursor-pointer relative ${selectedTicket?.id === t.id ? 'bg-[#e8f0fe]' : ''}`}
+                >
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                       <span className="text-xs font-black text-[#1a73e8]">#{t.id}</span>
+                       <span className="px-2 py-0.5 bg-gray-100 text-[8px] font-black text-gray-500 uppercase tracking-tighter border border-gray-200">{t.source}</span>
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-widest">{t.showroom}</p>
+                  </td>
+                  <td className="px-8 py-5">
+                    <p className="text-sm font-bold text-[#3c4043] group-hover:text-[#1a73e8] transition-colors">{t.customerName}</p>
+                    <p className="text-[10px] text-[#5f6368] font-mono mt-0.5">{t.customerPhone}</p>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-8 h-8 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors ${t.status === 'Résolu' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-[#1a73e8]'}`}>
+                          <Package size={16} />
+                       </div>
+                       <div>
+                          <p className="text-xs font-bold text-[#3c4043] leading-tight">{t.productName}</p>
+                          <span className="text-[9px] font-black text-[#1a73e8] uppercase tracking-tighter">{t.brand}</span>
+                       </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                     <div className="flex items-center justify-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${getPriorityColor(t.priority)} ${t.priority === 'Urgent' ? 'animate-pulse' : ''}`} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#5f6368]">{t.priority}</span>
+                     </div>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest ${getStatusColor(t.status)}`}>
+                      {t.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {allFilteredTickets.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-32 text-center bg-white">
+                    <Archive size={48} className="mx-auto text-gray-100 mb-4" />
+                    <p className="text-xs font-black text-gray-300 uppercase tracking-[0.2em]">Aucun dossier correspondant</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+           <div className="px-8 py-4 bg-[#f8f9fa] border-t border-[#dadce0] flex items-center justify-between">
+              <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">
+                Dossiers {(currentPage - 1) * TICKETS_PER_PAGE + 1} - {Math.min(currentPage * TICKETS_PER_PAGE, allFilteredTickets.length)} sur {allFilteredTickets.length}
+              </p>
+              <div className="flex gap-1">
+                 <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} className="p-2 hover:bg-white border border-transparent hover:border-[#dadce0] transition-all"><ChevronLeft size={18}/></button>
+                 <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} className="p-2 hover:bg-white border border-transparent hover:border-[#dadce0] transition-all"><ChevronRight size={18}/></button>
+              </div>
+           </div>
         )}
       </div>
 
-      {/* DRAWER DETAILS */}
+      {/* TICKET DETAILS DRAWER */}
       <Drawer
         isOpen={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
-        title={`Dossier #${selectedTicket?.id}`}
-        subtitle={`${selectedTicket?.category} • ${selectedTicket?.showroom}`}
+        title={`Dossier Opérationnel #${selectedTicket?.id}`}
+        subtitle={`${selectedTicket?.category} • Enregistré le ${selectedTicket ? new Date(selectedTicket.createdAt).toLocaleDateString() : ''}`}
         icon={<FileText size={20} />}
         footer={
           <div className="flex gap-3">
-             {currentUser?.role === 'TECHNICIAN' && selectedTicket?.assignedTechnicianId === currentUser.id ? (
-                <>
-                  {selectedTicket.status === 'Nouveau' ? (
-                    <button onClick={() => handleStartIntervention(selectedTicket)} className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl bg-green-600">
-                       <Play size={16} /> Démarrer intervention
-                    </button>
-                  ) : (
-                    <button className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl">
-                       <Wrench size={16} /> Rapport
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <button onClick={() => selectedTicket && openEditModal(selectedTicket)} className="flex-1 btn-google-outlined justify-center text-xs font-black uppercase tracking-widest">Modifier</button>
-                  <button onClick={() => selectedTicket && handleDelete(selectedTicket.id)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all"><Trash2 size={20}/></button>
-                </>
-              )}
+             <button onClick={() => { setSelectedTicket(null); setEditingTicket(selectedTicket); setIsModalOpen(true); }} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest">Modifier la Fiche</button>
+             {currentUser?.role === 'ADMIN' && (
+                <button onClick={() => { if(window.confirm('Archiver ce dossier ?')) deleteTicket(selectedTicket!.id); setSelectedTicket(null); }} className="p-4 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white transition-all">
+                  <Trash2 size={20} />
+                </button>
+             )}
           </div>
         }
       >
         {selectedTicket && (
-          <div className="space-y-10 animate-in fade-in duration-300">
+          <div className="space-y-12 pb-10">
              <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 bg-white border border-[#dadce0] rounded-3xl shadow-sm">
-                   <p className="text-[9px] font-black text-[#5f6368] uppercase mb-2">État Dossier</p>
-                   <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border inline-block ${getStatusColor(selectedTicket.status)}`}>{selectedTicket.status}</span>
+                <div className="p-6 bg-white border border-[#dadce0] shadow-sm space-y-2">
+                   <p className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest">Statut Horizon</p>
+                   <span className={`px-4 py-1.5 border text-[10px] font-black uppercase inline-block ${getStatusColor(selectedTicket.status)}`}>{selectedTicket.status}</span>
                 </div>
-                <div className="p-5 bg-white border border-[#dadce0] rounded-3xl shadow-sm">
-                   <p className="text-[9px] font-black text-[#5f6368] uppercase mb-2">Chrono Intervention</p>
-                   <span className="text-sm font-black text-[#3c4043]">{selectedTicket.status === 'En cours' ? 'En direct...' : formatDuration(selectedTicket.interventionReport?.durationMs) || 'Non démarré'}</span>
+                <div className="p-6 bg-white border border-[#dadce0] shadow-sm space-y-2">
+                   <p className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-widest">Niveau d'Urgence</p>
+                   <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${getPriorityColor(selectedTicket.priority)}`} />
+                      <span className="text-sm font-black text-[#3c4043] uppercase">{selectedTicket.priority}</span>
+                   </div>
                 </div>
              </div>
+
              <section className="space-y-4">
-                <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><User size={16} /> Fiche Client</h3>
-                <div className="p-6 bg-[#f8f9fa] border border-[#dadce0] rounded-3xl space-y-4">
-                   <p className="text-base font-black text-[#3c4043]">{selectedTicket.customerName}</p>
-                   <div className="flex items-center gap-3 text-xs font-black text-[#1a73e8] font-mono tracking-wider"><Smartphone size={16} /> {selectedTicket.customerPhone}</div>
+                <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Package size={16} /> Passeport Équipement</h3>
+                <div className="p-8 bg-[#f8f9fa] border border-[#dadce0] space-y-6">
+                   <div className="flex items-start gap-6">
+                      <div className="w-16 h-16 bg-white border border-[#dadce0] flex items-center justify-center text-[#1a73e8] shrink-0"><Wrench size={32}/></div>
+                      <div className="flex-1 min-w-0">
+                         <span className="text-[9px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 border border-blue-100">{selectedTicket.brand}</span>
+                         <h4 className="text-xl font-black text-[#202124] mt-2 tracking-tight truncate">{selectedTicket.productName}</h4>
+                         <p className="text-xs font-mono text-[#5f6368] mt-1 font-bold">S/N: {selectedTicket.serialNumber || 'NON DÉFINI'}</p>
+                      </div>
+                   </div>
+                   <div className="pt-6 border-t border-[#dadce0] grid grid-cols-2 gap-8">
+                      <div>
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date d'Achat</p>
+                         <p className="text-sm font-bold text-[#3c4043]">{selectedTicket.purchaseDate || '-- / -- / --'}</p>
+                      </div>
+                      <div>
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Localisation</p>
+                         <p className="text-sm font-bold text-[#3c4043] flex items-center gap-2"><MapPin size={14} className="text-[#1a73e8]"/> {selectedTicket.location || 'Non précisée'}</p>
+                      </div>
+                   </div>
                 </div>
              </section>
+
              <section className="space-y-4">
-                <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Package size={16} /> Équipement</h3>
-                <div className="p-6 bg-white border border-[#dadce0] rounded-3xl shadow-sm space-y-3">
-                   <span className="text-[9px] font-black text-[#1a73e8] uppercase bg-blue-50 px-2 py-0.5 rounded">{selectedTicket.brand}</span>
-                   <h4 className="text-lg font-black text-[#3c4043]">{selectedTicket.productName}</h4>
-                   <p className="text-[9px] text-gray-400 font-black uppercase">S/N : <span className="text-xs font-mono font-black text-[#3c4043]">{selectedTicket.serialNumber || 'NON SPÉCIFIÉ'}</span></p>
+                <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><History size={16} /> Diagnostic & Symptômes</h3>
+                <div className="p-8 bg-white border border-[#dadce0] shadow-sm italic text-sm text-[#3c4043] leading-relaxed relative">
+                   <div className="absolute top-0 left-0 w-1 h-full bg-[#1a73e8]" />
+                   "{selectedTicket.description}"
+                </div>
+             </section>
+
+             <section className="space-y-4">
+                <h3 className="text-[10px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] flex items-center gap-2"><Users size={16} /> Expert Assigné</h3>
+                <div className="p-6 border border-[#dadce0] bg-white flex items-center justify-between">
+                   {selectedTicket.assignedTechnicianId ? (
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#f8f9fa] border border-[#dadce0] flex items-center justify-center text-[#1a73e8]"><User size={24}/></div>
+                        <div>
+                           <p className="text-sm font-black text-[#3c4043]">{technicians.find(tech => tech.id === selectedTicket.assignedTechnicianId)?.name}</p>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Technicien Certifié Horizon</p>
+                        </div>
+                     </div>
+                   ) : (
+                     <p className="text-xs font-bold text-gray-400 italic">En attente d'affectation Cloud...</p>
+                   )}
+                   <button className="p-2 text-[#1a73e8] hover:bg-blue-50 transition-colors"><MessageSquare size={18}/></button>
                 </div>
              </section>
           </div>
         )}
       </Drawer>
 
-      {/* MODAL CREATION - CORRECTION PADDINGS ICÔNES */}
+      {/* TICKET FORM MODAL */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title={editingTicket ? `Modification #${editingTicket.id}` : "Nouvelle Demande Horizon"}
+        title={editingTicket ? `Révision Dossier #${editingTicket.id}` : "Nouvelle Demande d'Intervention"}
         size="xl"
       >
-         <form onSubmit={handleSave} className="space-y-8 animate-in fade-in">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               <div className="space-y-5">
-                  <div className="flex items-center gap-2 border-b pb-2"><User size={16} className="text-[#1a73e8]"/><h3 className="text-[10px] font-black uppercase text-gray-700">Client</h3></div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Identité Client</label>
-                      <div className="relative">
-                        <User className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <input name="customerName" type="text" required defaultValue={editingTicket?.customerName} placeholder="Nom complet" className="!pl-11" />
-                      </div>
+        <form onSubmit={handleSave} className="space-y-10">
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+              {/* SECTION CLIENT */}
+              <div className="space-y-6">
+                 <div className="flex items-center gap-3 border-b border-[#dadce0] pb-3">
+                    <Users size={18} className="text-[#1a73e8]"/>
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-[#202124]">Identification Client</h3>
+                 </div>
+                 <div className="space-y-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Nom Complet</label>
+                       <input name="customerName" type="text" defaultValue={editingTicket?.customerName} required className="w-full h-11 bg-white font-bold" />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Mobile GSM</label>
-                      <div className="relative">
-                        <Smartphone className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <input name="customerPhone" type="tel" required defaultValue={editingTicket?.customerPhone} placeholder="+241 ..." className="!pl-11 font-bold" />
-                      </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Mobile GSM</label>
+                       <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} required className="w-full h-11 bg-white font-bold" placeholder="+241 ..." />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Canal Entrée</label>
-                      <div className="relative">
-                        <MessageSquare className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <select name="source" defaultValue={editingTicket?.source || 'WhatsApp'} className="!pl-11">
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Canal d'Entrée</label>
+                       <select name="source" defaultValue={editingTicket?.source || 'WhatsApp'} className="w-full h-11 bg-white font-bold">
                           <option value="WhatsApp">WhatsApp</option>
-                          <option value="Phone">Appel</option>
-                          <option value="Email">Email</option>
-                          <option value="Interne">Showroom</option>
-                        </select>
-                      </div>
+                          <option value="Phone">Appel Téléphonique</option>
+                          <option value="Email">Email Support</option>
+                          <option value="Interne">Showroom / Interne</option>
+                       </select>
                     </div>
-                  </div>
-               </div>
+                 </div>
+              </div>
 
-               <div className="space-y-5">
-                  <div className="flex items-center gap-2 border-b pb-2"><Package size={16} className="text-purple-600"/><h3 className="text-[10px] font-black uppercase text-gray-700">Équipement</h3></div>
-                  <div className="space-y-4">
+              {/* SECTION MATÉRIEL */}
+              <div className="space-y-6">
+                 <div className="flex items-center gap-3 border-b border-[#dadce0] pb-3">
+                    <Package size={18} className="text-purple-600"/>
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-[#202124]">Spécifications Produit</h3>
+                 </div>
+                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Marque</label>
-                        <select name="brand" defaultValue={editingTicket?.brand || 'LG'}>
-                           {['LG', 'Beko', 'Samsung', 'Hisense', 'Royal Plaza'].map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Catégorie</label>
-                        <select name="category" defaultValue={editingTicket?.category || 'SAV'}>
-                           <option value="SAV">SAV</option>
-                           <option value="Installation">Installation</option>
-                           <option value="Maintenance">Maintenance</option>
-                        </select>
-                      </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Marque</label>
+                          <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full h-11 bg-white font-bold">
+                             {['LG', 'Beko', 'Samsung', 'Hisense', 'Royal Plaza', 'BuroPlus', 'TCL', 'Midea'].map(b => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Catégorie</label>
+                          <select name="category" defaultValue={editingTicket?.category || 'SAV'} className="w-full h-11 bg-white font-bold">
+                             <option value="SAV">SAV</option>
+                             <option value="Installation">Installation</option>
+                             <option value="Maintenance">Maintenance</option>
+                          </select>
+                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Désignation</label>
-                      <div className="relative">
-                        <Tag className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <input name="productName" type="text" required defaultValue={editingTicket?.productName} placeholder="ex: Split LG 1.5CV" className="!pl-11" />
-                      </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Modèle / Désignation</label>
+                       <input name="productName" type="text" defaultValue={editingTicket?.productName} required className="w-full h-11 bg-white font-bold" placeholder="ex: Split LG 1.5CV Artic" />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">S/N Appareil</label>
-                      <div className="relative">
-                        <Hash className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} placeholder="SN-..." className="!pl-11 font-mono text-xs uppercase" />
-                      </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Numéro de Série (S/N)</label>
+                       <input name="serialNumber" type="text" defaultValue={editingTicket?.serialNumber} className="w-full h-11 bg-white font-mono uppercase" placeholder="SN-..." />
                     </div>
-                  </div>
-               </div>
+                 </div>
+              </div>
 
-               <div className="space-y-5">
-                  <div className="flex items-center gap-2 border-b pb-2"><Target size={16} className="text-amber-600"/><h3 className="text-[10px] font-black uppercase text-gray-700">Logistique</h3></div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Quartier / Zone</label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <input name="location" type="text" defaultValue={editingTicket?.location} placeholder="Localisation..." className="!pl-11" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Priorité</label>
-                        <select name="priority" defaultValue={editingTicket?.priority || 'Moyenne'} className="font-bold">
-                           <option value="Basse">Basse</option>
-                           <option value="Moyenne">Moyenne</option>
-                           <option value="Urgent">Urgent</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Showroom</label>
-                        <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'}>
+              {/* SECTION LOGISTIQUE */}
+              <div className="space-y-6">
+                 <div className="flex items-center gap-3 border-b border-[#dadce0] pb-3">
+                    <Target size={18} className="text-orange-600"/>
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-[#202124]">Logistique & Assignation</h3>
+                 </div>
+                 <div className="space-y-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Showroom de Rattachement</label>
+                       <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full h-11 bg-white font-bold">
                           {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
-                        </select>
-                      </div>
+                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1">Assignation</label>
-                      <div className="relative">
-                        <Wrench className="absolute left-3.5 top-3.5 text-[#dadce0]" size={16} />
-                        <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="!pl-11 font-bold text-blue-700">
-                          <option value="">Affectation auto</option>
-                          {technicians.map(tech => <option key={tech.id} value={tech.id}>{tech.name}</option>)}
-                        </select>
-                      </div>
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Niveau Priorité</label>
+                          <select name="priority" defaultValue={editingTicket?.priority || 'Moyenne'} className="w-full h-11 bg-white font-bold text-red-600">
+                             <option value="Basse">Basse</option>
+                             <option value="Moyenne">Moyenne</option>
+                             <option value="Haute">Haute</option>
+                             <option value="Urgent">Urgent</option>
+                          </select>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Expert Assigné</label>
+                          <select name="assignedTechnicianId" defaultValue={editingTicket?.assignedTechnicianId || ''} className="w-full h-11 bg-white font-bold text-[#1a73e8]">
+                             <option value="">Affectation Auto</option>
+                             {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                       </div>
                     </div>
-                  </div>
-               </div>
-            </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Quartier / Zone d'Intervention</label>
+                       <input name="location" type="text" defaultValue={editingTicket?.location} className="w-full h-11 bg-white" placeholder="ex: Akanda, Villa 402" />
+                    </div>
+                 </div>
+              </div>
+           </div>
 
-            <div className="space-y-2 pt-4 border-t">
-               <label className="text-[10px] font-black text-[#5f6368] uppercase ml-1 flex items-center gap-2"><InfoIcon size={14}/> Diagnostic initial</label>
-               <textarea name="description" required defaultValue={editingTicket?.description} className="h-32 resize-none text-sm" placeholder="Symptômes signalés par le client..." />
-            </div>
+           <div className="space-y-3 pt-6 border-t border-[#dadce0]">
+              <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.2em] ml-1">Diagnostic Initial & Notes Client</label>
+              <textarea name="description" required defaultValue={editingTicket?.description} className="w-full h-32 bg-white text-sm font-medium resize-none p-4" placeholder="Décrire les symptômes rapportés par le client..." />
+           </div>
 
-            <div className="flex gap-4 pt-6 border-t">
-               <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">
-                  <Save size={20} /> {editingTicket ? "Mettre à jour" : "Ouvrir Dossier"}
-               </button>
-               <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]">Abandonner</button>
-            </div>
-         </form>
+           <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
+              <button type="submit" className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
+                 <Save size={20} /> {editingTicket ? 'Mettre à jour le Dossier' : 'Ouvrir le Dossier Cloud'}
+              </button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Abandonner</button>
+           </div>
+        </form>
       </Modal>
     </div>
   );

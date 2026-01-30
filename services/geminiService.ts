@@ -16,8 +16,9 @@ export const chatWithAI = async (message: string, history: { role: 'user' | 'mod
       return "L'IA Horizon est actuellement en mode repos (Clé API non configurée). Vous pouvez toujours utiliser toutes les fonctions de gestion SAV manuellement.";
     }
     
+    // Using recommended model names from the guidelines
     const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const chat = ai.chats.create({
       model: modelName,
       config: {
@@ -48,8 +49,9 @@ export const analyzeTicketDescription = async (description: string, modelType: '
   if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle requise' };
 
   try {
+    // Using recommended model names from the guidelines
     const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: modelName,
       contents: `Analyse ce ticket de SAV et suggère une catégorie (Livraison, Installation, SAV, Remboursement) et une priorité (Basse, Moyenne, Haute, Urgent). Réponds en JSON. Ticket: ${description}`,
@@ -78,9 +80,9 @@ export const generateStrategicReport = async (data: any, modelType: 'flash' | 'p
   }
 
   try {
-    // Les rapports utilisent toujours Pro si disponible, sinon Flash
+    // Using recommended model names from the guidelines
     const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: modelName,
       contents: `Génère un rapport stratégique exécutif pour Royal Plaza Gabon basé sur ces indicateurs : ${JSON.stringify(data)}. 
@@ -100,7 +102,7 @@ export const generateStrategicReport = async (data: any, modelType: 'flash' | 'p
       ## 4. RECOMMANDATIONS ET AXES DE CROISSANCE
       [Liste numérotée d'actions concrètes pour le mois prochain]
       
-      Utilise un ton expert, formel et visionnaire. Ne mentionne pas de Markdown technique mais utilise des titres, sous-titres et listes.`,
+      Utilise un ton expert, formel et visionnaire. Ne mentionne pas de Markdown technique mais utilise des titres, sous-titres and listes.`,
       config: {
         systemInstruction: "Tu es un consultant senior en stratégie retail expert du marché gabonais. Tu rédiges des rapports destinés à la direction générale de Royal Plaza.",
         temperature: 0.85,
@@ -117,7 +119,7 @@ export const translateContent = async (text: string, targetLang: 'EN' | 'FR') =>
   if (!isAiOperational()) return text;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Traduis le texte suivant en ${targetLang === 'EN' ? 'Anglais' : 'Français'}. 

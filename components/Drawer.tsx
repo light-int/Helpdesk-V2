@@ -44,27 +44,27 @@ const Drawer: React.FC<DrawerProps> = ({
     <div className="fixed inset-0 z-[100] overflow-hidden">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-[4px] animate-backdrop"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[1px] animate-backdrop"
         onClick={onClose}
       />
       
-      {/* Drawer Panel */}
+      {/* Drawer Panel - Sharp Edges */}
       <div 
-        className="absolute right-0 top-0 h-full bg-white shadow-[-25px_0_70px_-15px_rgba(0,0,0,0.3)] flex flex-col animate-royal-drawer w-full md:max-w-full"
+        className="absolute right-0 top-0 h-full bg-white shadow-2xl flex flex-col animate-royal-drawer w-full md:max-w-full border-l border-[#dadce0]"
         style={{ width: window.innerWidth < 768 ? '100%' : width, transition: 'width 0.3s ease-in-out' }}
       >
         {/* Header */}
         <div className="p-6 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa] shrink-0">
           <div className="flex items-center gap-4">
             {icon && (
-              <div className="w-10 h-10 rounded-xl bg-[#e8f0fe] text-[#1a73e8] flex items-center justify-center border border-[#d2e3fc] shadow-sm">
+              <div className="w-10 h-10 bg-white text-[#1a73e8] flex items-center justify-center border border-[#dadce0]">
                 {icon}
               </div>
             )}
             <div>
-              <h2 className="text-sm font-black text-[#202124] uppercase tracking-widest leading-none">{title}</h2>
+              <h2 className="text-xs font-black text-[#202124] uppercase tracking-[0.2em] leading-none">{title}</h2>
               {subtitle && (
-                <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-[0.2em] mt-1.5">
+                <p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest mt-2">
                   {subtitle}
                 </p>
               )}
@@ -72,7 +72,7 @@ const Drawer: React.FC<DrawerProps> = ({
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 hover:bg-[#e8eaed] rounded-full text-[#5f6368] transition-all hover:rotate-90"
+            className="p-1 hover:bg-[#e8eaed] text-[#5f6368] transition-all"
           >
             <X size={24} />
           </button>

@@ -40,18 +40,18 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-[6px] transition-opacity duration-300 animate-in fade-in" 
+        className="fixed inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity duration-300 animate-in fade-in" 
         onClick={onClose}
       />
       
-      {/* Modal Content */}
-      <div className={`relative bg-white w-full ${sizeClasses[size]} max-h-[95vh] rounded-[32px] shadow-2xl animate-modal-entry overflow-hidden flex flex-col border border-white/40`}>
+      {/* Modal Content - Sharp Edges */}
+      <div className={`relative bg-white w-full ${sizeClasses[size]} max-h-[95vh] shadow-2xl animate-modal-entry overflow-hidden flex flex-col border border-[#dadce0]`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-[#dadce0] bg-[#f8f9fa] shrink-0">
-          <h3 className="text-sm font-black text-[#3c4043] uppercase tracking-widest">{title}</h3>
+        <div className="flex items-center justify-between px-8 py-5 border-b border-[#dadce0] bg-[#f8f9fa] shrink-0">
+          <h3 className="text-[11px] font-black text-[#3c4043] uppercase tracking-[0.2em]">{title}</h3>
           <button 
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-[#e8eaed] text-[#5f6368] transition-all hover:rotate-90 active:scale-90"
+            className="p-1 hover:bg-[#e8eaed] text-[#5f6368] transition-all"
           >
             <X size={20} />
           </button>
