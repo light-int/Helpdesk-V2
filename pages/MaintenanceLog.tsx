@@ -5,17 +5,28 @@ import {
   MoreHorizontal, X, User, History, Package, CheckCircle2, 
   Clock, Activity, FileText, Wrench, ChevronLeft, ChevronRight, Plus, Trash2, Save,
   AlertTriangle, CheckSquare, ShieldCheck, Hash, Tag, Calendar, ShieldQuestion, Lock,
-  LayoutList, LayoutGrid, Timer, Settings2, SlidersHorizontal
+  LayoutList, LayoutGrid, Timer, Settings2, SlidersHorizontal, RotateCcw,
+  ChevronDown, ChevronUp, Boxes, MapPinned, Users, FileSpreadsheet, Download,
+  FileDown
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, UsedPart, InterventionReport } from '../types';
 import Modal from '../components/Modal';
 
 const MaintenanceLog: React.FC = () => {
-  const { tickets, technicians, isLoading, refreshAll, isSyncing, parts, saveTicket, addStockMovement } = useData();
+  const { tickets, technicians, isLoading, refreshAll, isSyncing, parts, saveTicket, addStockMovement, showrooms } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
+  
+  // États de filtrage
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('Tous');
+  const [techFilter, setTechFilter] = useState<string>('Tous');
+  const [showroomFilter, setShowroomFilter] = useState<string>('Tous');
+  const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   const [selectedMaintenance, setSelectedMaintenance] = useState<Ticket | null>(null);
   
   // États Calendrier
@@ -32,14 +43,75 @@ const MaintenanceLog: React.FC = () => {
 
   useEffect(() => { refreshAll(); }, []);
 
-  const maintenance = useMemo(() => {
-    return tickets.filter(t => 
-      (t.category === 'Maintenance' || t.category === 'Installation' || t.category === 'SAV') &&
-      (currentUser?.role === 'TECHNICIAN' ? t.assignedTechnicianId === currentUser.id : true) &&
-      (t.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       t.id.toLowerCase().includes(searchTerm.toLowerCase()))
-    ).sort((a, b) => new Date(b.lastUpdate || b.createdAt).getTime() - new Date(a.lastUpdate || a.createdAt).getTime());
-  }, [tickets, searchTerm, currentUser]);
+  const filteredMaintenance = useMemo(() => {
+    return tickets.filter(t => {
+      // Uniquement catégories liées au terrain
+      const isTerrain = t.category === 'Maintenance' || t.category === 'Installation' || t.category === 'SAV';
+      if (!isTerrain) return false;
+
+      // Filtre technicien (si tech loggué ou si filtre actif)
+      if (currentUser?.role === 'TECHNICIAN' && t.assignedTechnicianId !== currentUser.id) return false;
+      if (techFilter !== 'Tous' && t.assignedTechnicianId !== techFilter) return false;
+
+      const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (t.id || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'Tous' || t.status === statusFilter;
+      const matchesShowroom = showroomFilter === 'Tous' || t.showroom === showroomFilter;
+
+      // Filtre date
+      let matchesDate = true;
+      if (dateRange !== 'all') {
+        const ticketDate = new Date(t.createdAt);
+        const now = new Date();
+        if (dateRange === 'today') matchesDate = ticketDate.toDateString() === now.toDateString();
+        else if (dateRange === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          matchesDate = ticketDate >= weekAgo;
+        } else if (dateRange === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          matchesDate = ticketDate >= monthAgo;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesShowroom && matchesDate;
+    }).sort((a, b) => new Date(b.lastUpdate || b.createdAt).getTime() - new Date(a.lastUpdate || a.createdAt).getTime());
+  }, [tickets, searchTerm, statusFilter, techFilter, showroomFilter, dateRange, currentUser]);
+
+  const handleExportXLSX = () => {
+    const exportData = filteredMaintenance.map(t => ({
+      'ID Dossier': t.id,
+      'Date Création': t.createdAt ? new Date(t.createdAt).toLocaleDateString('fr-FR') : 'N/A',
+      'Client': t.customerName,
+      'Téléphone': t.customerPhone || 'N/A',
+      'Localisation': t.location || t.showroom,
+      'Catégorie': t.category,
+      'Expert': technicians.find(tec => tec.id === t.assignedTechnicianId)?.name || 'Non assigné',
+      'Statut': t.status,
+      'Priorité': t.priority,
+      'Produit': t.productName,
+      'Marque': t.brand,
+      'S/N': t.serialNumber || 'N/A',
+      'Durée (min)': t.interventionReport?.durationMs ? Math.floor(t.interventionReport.durationMs / 60000) : 0,
+      'État Matériel': t.interventionReport?.equipmentStatus || 'Non diagnostiqué'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Registre Terrain");
+    XLSX.writeFile(wb, `RP_Maintenance_${new Date().toISOString().split('T')[0]}.xlsx`);
+    addNotification({ title: 'Exportation', message: 'Registre de maintenance exporté avec succès.', type: 'success' });
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('Tous');
+    setTechFilter('Tous');
+    setShowroomFilter('Tous');
+    setDateRange('all');
+  };
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'Tous' || techFilter !== 'Tous' || showroomFilter !== 'Tous' || dateRange !== 'all';
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -92,7 +164,7 @@ const MaintenanceLog: React.FC = () => {
     const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const d = String(day).padStart(2, '0');
     const dateStr = `${year}-${month}-${d}`;
-    return maintenance.filter(t => t.createdAt.startsWith(dateStr));
+    return filteredMaintenance.filter(t => t.createdAt && t.createdAt.startsWith(dateStr));
   };
 
   const openInterventionForm = () => {
@@ -167,24 +239,19 @@ const MaintenanceLog: React.FC = () => {
     return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
   };
 
+  if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><RefreshCw className="text-[#1a73e8] animate-spin" size={32} /></div>;
+
   return (
     <div className="space-y-8 animate-page-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-light text-[#202124]">Maintenance & Terrain</h1>
-          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Planification des interventions techniques Royal Plaza</p>
+          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Management du flux technique Royal Plaza</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-4 top-3 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Rechercher un dossier technique..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-              className="w-80 pl-12 h-11 bg-white border-[#dadce0] focus:ring-0 focus:border-[#1a73e8] shadow-sm" 
-            />
-          </div>
+          <button onClick={handleExportXLSX} className="btn-google-outlined h-11 px-6 flex items-center gap-3 border-[#188038] text-[#188038] hover:bg-green-50">
+            <FileSpreadsheet size={18} /> <span>Exporter Registre</span>
+          </button>
           <button onClick={() => setIsCalendarOpen(true)} className="btn-google-outlined h-11 px-6 flex items-center gap-3">
             <CalendarDays size={18} /> <span>Calendrier</span>
           </button>
@@ -194,14 +261,15 @@ const MaintenanceLog: React.FC = () => {
         </div>
       </header>
 
-      {/* KPIS GOUVERNANCE MAINTENANCE */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* MONITORING GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
          {[
-           { label: 'Flux SAV Actif', value: maintenance.length, icon: <Activity size={20}/>, color: '#1a73e8' },
-           { label: 'Attente Approbation', value: maintenance.filter(m => m.status === 'En attente d\'approbation').length, icon: <Timer size={20}/>, color: '#a142f4' },
-           { label: 'Experts Disponibles', value: technicians.filter(t => t.status === 'Disponible').length, icon: <User size={20}/>, color: '#188038' }
+           { label: 'Opérations Terrain', value: filteredMaintenance.length, icon: <Activity size={20}/>, color: '#1a73e8' },
+           { label: 'Attente Approbation', value: filteredMaintenance.filter(m => m.status === 'En attente d\'approbation').length, icon: <Timer size={20}/>, color: '#a142f4' },
+           { label: 'Experts Disponibles', value: technicians.filter(t => t.status === 'Disponible').length, icon: <User size={20}/>, color: '#188038' },
+           { label: 'Urgences Terrain', value: filteredMaintenance.filter(m => m.priority === 'Urgent').length, icon: <AlertTriangle size={20}/>, color: '#d93025' }
          ].map((stat, i) => (
-           <div key={i} className="stats-card border-l-4" style={{ borderLeftColor: stat.color }}>
+           <div key={i} className="stats-card border-l-4 border-t-0 border-r-0 border-b-0 shadow-sm" style={{ borderLeftColor: stat.color }}>
               <div className="flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-[0.15em] mb-1">{stat.label}</p>
@@ -213,82 +281,212 @@ const MaintenanceLog: React.FC = () => {
          ))}
       </div>
 
-      <div className="google-card overflow-hidden">
-        <div className="px-8 py-5 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa]">
-           <div className="flex items-center gap-3">
-              <div className="w-1.5 h-6 bg-[#1a73e8]" />
-              <h2 className="text-[11px] font-black text-[#202124] uppercase tracking-widest">Journal des Opérations Terrain</h2>
+      {/* REFINED COMMAND CENTER FILTERS */}
+      <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
+        <div className="p-10 space-y-8">
+           <div className="flex flex-col xl:flex-row gap-8">
+              <div className="relative flex-1 group">
+                 <Search className="absolute left-6 top-5 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
+                 <input 
+                  type="text" 
+                  placeholder="Rechercher un dossier par client, ID ou localisation..." 
+                  className="w-full pl-16 h-16 bg-[#f8f9fa] border-none text-base font-bold shadow-inner transition-all placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                 />
+                 {searchTerm && (
+                   <button onClick={() => setSearchTerm('')} className="absolute right-6 top-5 p-1 text-gray-400 hover:text-red-500 transition-colors">
+                     <X size={20} />
+                   </button>
+                 )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-6">
+                 <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
+                    {[
+                      { id: 'Tous', label: 'Tout' },
+                      { id: 'En cours', label: 'Sur site' },
+                      { id: 'En attente d\'approbation', label: 'Rapports' }
+                    ].map(status => (
+                      <button 
+                        key={status.id}
+                        onClick={() => setStatusFilter(status.id)}
+                        className={`px-8 py-3.5 text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === status.id ? 'bg-white text-[#1a73e8] shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                      >
+                        {status.label}
+                      </button>
+                    ))}
+                 </div>
+
+                 <div className="flex items-center bg-[#f1f3f4] p-1.5 shadow-inner">
+                    {[
+                      { id: 'all', label: 'Période' },
+                      { id: 'today', label: 'Auj.' },
+                      { id: 'week', label: 'Sem.' }
+                    ].map(range => (
+                      <button 
+                        key={range.id}
+                        onClick={() => setDateRange(range.id as any)}
+                        className={`px-6 py-3.5 text-[9px] font-black uppercase tracking-widest transition-all ${dateRange === range.id ? 'bg-[#202124] text-white shadow-md' : 'text-[#5f6368] hover:text-[#202124]'}`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                 </div>
+
+                 <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                      className={`p-4.5 border-2 transition-all group flex items-center gap-3 ${showAdvancedFilters ? 'bg-blue-50 border-blue-200 text-[#1a73e8]' : 'bg-white border-[#f1f3f4] text-[#5f6368] hover:border-gray-300'}`}
+                    >
+                      <SlidersHorizontal size={22} />
+                      <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{showAdvancedFilters ? 'Réduire' : 'Options'}</span>
+                      {showAdvancedFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+
+                    <div className="h-16 min-w-[220px] p-4 bg-white border border-blue-100 flex items-center justify-between shadow-sm relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-1 h-full bg-[#1a73e8]" />
+                      <div className="shrink-0 mr-4">
+                         <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Base de Données</span>
+                         </div>
+                         <p className="text-lg font-black text-[#202124] leading-none mt-1">{filteredMaintenance.length} <span className="text-[10px] text-gray-400 font-bold">RÉSULTATS</span></p>
+                      </div>
+                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl"><LayoutGrid size={18}/></div>
+                    </div>
+                 </div>
+                 
+                 {hasActiveFilters && (
+                    <button 
+                      onClick={resetFilters} 
+                      className="p-5 text-[#d93025] hover:bg-red-50 border-2 border-transparent hover:border-red-100 transition-all group"
+                      title="Réinitialiser les filtres"
+                    >
+                       <RotateCcw size={24} className="group-hover:rotate-[-180deg] transition-transform duration-700" />
+                    </button>
+                 )}
+              </div>
            </div>
-           <div className="flex gap-2">
-              <button className="p-2 text-[#5f6368] hover:bg-gray-100 transition-colors"><LayoutList size={18} /></button>
-              <button className="p-2 text-[#9aa0a6] hover:bg-gray-100 transition-colors"><SlidersHorizontal size={18} /></button>
-           </div>
+
+           {showAdvancedFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-8 border-t border-[#f1f3f4] animate-in slide-in-from-top-4 duration-500">
+                <div className="space-y-2">
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                     <MapPinned size={12} /> Localisation / Showroom
+                   </label>
+                   <div className="relative">
+                      <select 
+                        value={showroomFilter} 
+                        onChange={e => setShowroomFilter(e.target.value)}
+                        className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer appearance-none px-5"
+                      >
+                          <option value="Tous">Tous les sites</option>
+                          {showrooms.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-4 text-gray-400 pointer-events-none" size={16} />
+                   </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-[9px] font-black text-[#9aa0a6] uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
+                     <Users size={12} /> Expert sur le terrain
+                   </label>
+                   <div className="relative">
+                      <select 
+                        value={techFilter} 
+                        onChange={e => setTechFilter(e.target.value)}
+                        className="w-full h-12 bg-[#f8f9fa] border-none text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-[#1a73e8] cursor-pointer appearance-none px-5"
+                      >
+                          <option value="Tous">Tous les experts</option>
+                          {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-4 text-gray-400 pointer-events-none" size={16} />
+                   </div>
+                </div>
+
+                <div className="flex items-end pb-1">
+                   <button onClick={handleExportXLSX} className="w-full h-12 bg-white border-2 border-[#188038] text-[#188038] hover:bg-[#188038] hover:text-white transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 group shadow-sm">
+                      <FileDown size={18} className="group-hover:translate-y-0.5 transition-transform" /> 
+                      Télécharger Registre Excel
+                   </button>
+                </div>
+              </div>
+           )}
         </div>
-        
+
+        {/* LOG TABLE */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[#dadce0] bg-white text-[#5f6368] text-[9px] font-black uppercase tracking-widest">
-                <th className="px-8 py-4">ID & Date</th>
-                <th className="px-8 py-4">Client & Zone</th>
-                <th className="px-8 py-4">Expert Technique</th>
-                <th className="px-8 py-4 text-center">Intervention</th>
-                <th className="px-8 py-4 text-right">Statut Opé.</th>
+              <tr className="border-b border-[#dadce0] bg-[#f8f9fa] text-[#5f6368] text-[9px] font-black uppercase tracking-[0.2em]">
+                <th className="px-10 py-6">Dossier ID & Date</th>
+                <th className="px-10 py-6">Client & Localisation</th>
+                <th className="px-10 py-6">Expert Assigné</th>
+                <th className="px-10 py-6 text-center">Durée / Type</th>
+                <th className="px-10 py-6 text-right">Statut Opé.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#dadce0]">
-              {maintenance.map((t) => {
+              {filteredMaintenance.map((t) => {
                 const tech = technicians.find(tec => tec.id === t.assignedTechnicianId);
                 return (
                   <tr 
                     key={t.id} 
                     onClick={() => setSelectedMaintenance(t)}
-                    className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedMaintenance?.id === t.id ? 'bg-[#e8f0fe]' : ''}`}
+                    className={`hover:bg-[#f8faff] transition-colors group cursor-pointer ${selectedMaintenance?.id === t.id ? 'bg-[#e8f0fe]' : 'bg-white'}`}
                   >
-                    <td className="px-8 py-5">
-                      <p className="font-black text-[#1a73e8]">#{t.id}</p>
-                      <p className="text-[9px] text-[#9aa0a6] font-bold mt-1 uppercase">{formatDateShort(t.createdAt)}</p>
+                    <td className="px-10 py-6">
+                      <p className="font-black text-[#1a73e8] text-sm">#{t.id}</p>
+                      <p className="text-[9px] text-[#9aa0a6] font-bold mt-1.5 uppercase tracking-tighter">{formatDateShort(t.createdAt)}</p>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className="px-10 py-6">
                       <p className="text-sm font-bold text-[#3c4043] group-hover:text-[#1a73e8] transition-colors">{t.customerName}</p>
-                      <p className="text-[10px] text-[#5f6368] flex items-center gap-1.5 mt-1">
-                        <MapPin size={10} className="text-[#9aa0a6]" /> {t.location || t.showroom}
-                      </p>
+                      <div className="text-[10px] text-[#5f6368] flex items-center gap-2 mt-1.5">
+                        <MapPin size={10} className="text-[#9aa0a6]" /> <span className="font-medium">{t.location || t.showroom}</span>
+                      </div>
                     </td>
-                    <td className="px-8 py-5">
+                    <td className="px-10 py-6">
                       {tech ? (
                         <div className="flex items-center gap-3">
-                           <img src={tech.avatar} className="w-8 h-8 rounded-full border border-[#dadce0] p-0.5 bg-white" alt="" />
+                           <img src={tech.avatar} className="w-9 h-9 rounded-full border border-[#dadce0] p-0.5 bg-white shadow-sm" alt="" />
                            <span className="text-xs font-bold text-[#5f6368]">{tech.name}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-3 text-gray-300">
-                           <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center"><User size={12}/></div>
-                           <span className="text-[10px] font-bold uppercase italic">Non assigné</span>
+                           <div className="w-9 h-9 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center"><User size={14}/></div>
+                           <span className="text-[10px] font-bold uppercase italic">En attente</span>
                         </div>
                       )}
                     </td>
-                    <td className="px-8 py-5 text-center">
+                    <td className="px-10 py-6 text-center">
                        <div className="inline-flex flex-col items-center">
                           <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-tighter">{t.category}</span>
-                          {t.interventionReport?.durationMs && (
-                             <span className="text-[9px] text-[#1a73e8] font-bold">{formatDuration(t.interventionReport.durationMs)}</span>
+                          {t.interventionReport?.durationMs ? (
+                             <span className="text-[9px] text-[#1a73e8] font-black flex items-center gap-1 mt-1">
+                               <Timer size={10} /> {formatDuration(t.interventionReport.durationMs)}
+                             </span>
+                          ) : (
+                            <span className="text-[9px] text-gray-300 uppercase tracking-tighter mt-1">-- : --</span>
                           )}
                        </div>
                     </td>
-                    <td className="px-8 py-5 text-right">
-                       <span className={`px-4 py-1.5 border text-[9px] font-black uppercase tracking-widest ${getStatusColor(t.status)}`}>
+                    <td className="px-10 py-6 text-right">
+                       <span className={`px-5 py-2 border text-[9px] font-black uppercase tracking-widest inline-block shadow-sm ${getStatusColor(t.status)}`}>
                          {t.status}
                        </span>
                     </td>
                   </tr>
                 );
               })}
-              {maintenance.length === 0 && (
+              {filteredMaintenance.length === 0 && (
                 <tr>
-                   <td colSpan={5} className="py-24 text-center">
-                      <ClipboardList size={48} className="mx-auto text-gray-100 mb-4" />
-                      <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Aucun dossier technique en cours</p>
+                   <td colSpan={5} className="py-40 text-center bg-white">
+                      <div className="w-24 h-24 bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center mx-auto mb-8">
+                        <ClipboardList size={48} className="text-gray-200" />
+                      </div>
+                      <p className="text-xs font-black text-gray-300 uppercase tracking-[0.4em]">Aucune opération identifiée</p>
+                      <button onClick={resetFilters} className="text-[#1a73e8] text-[10px] font-black uppercase mt-6 hover:underline underline-offset-4 decoration-2">Effacer tous les filtres</button>
                    </td>
                 </tr>
               )}
@@ -335,7 +533,7 @@ const MaintenanceLog: React.FC = () => {
                   <ShieldCheck size={16} /> Diagnostic post-Opération
                 </h3>
                 {selectedMaintenance.interventionReport?.equipmentStatus ? (
-                  <div className={`p-6 flex items-center justify-between border-l-8 ${getEquipmentStatusColor(selectedMaintenance.interventionReport.equipmentStatus)}`}>
+                  <div className={`p-6 flex items-center justify-between border-l-8 ${getEquipmentStatusColor(selectedMaintenance.interventionReport.equipmentStatus)} shadow-sm`}>
                     <div>
                       <p className="text-[9px] font-black uppercase opacity-70 mb-1">Condition du matériel</p>
                       <p className="text-lg font-black uppercase tracking-tight">{selectedMaintenance.interventionReport.equipmentStatus}</p>
@@ -382,7 +580,7 @@ const MaintenanceLog: React.FC = () => {
                      <div className="flex items-center gap-4">
                         <img 
                           src={technicians.find(t => t.id === selectedMaintenance.assignedTechnicianId)?.avatar} 
-                          className="w-14 h-14 border-2 border-[#1a73e8] p-0.5" 
+                          className="w-14 h-14 border-2 border-[#1a73e8] p-0.5 shadow-sm" 
                           alt="" 
                         />
                         <div>
@@ -413,7 +611,7 @@ const MaintenanceLog: React.FC = () => {
                          <ul className="space-y-3">
                             {selectedMaintenance.interventionReport.actionsTaken?.map((action, idx) => (
                               <li key={idx} className="flex gap-3 text-xs text-[#3c4043] font-medium leading-relaxed">
-                                 <div className="w-1.5 h-1.5 bg-[#1a73e8] mt-1.5 shrink-0" /> {action}
+                                 <div className="w-1.5 h-1.5 bg-[#1a73e8] mt-1.5 shrink-0" /> <span>{action}</span>
                               </li>
                             ))}
                          </ul>
@@ -426,7 +624,7 @@ const MaintenanceLog: React.FC = () => {
                               {selectedMaintenance.interventionReport.partsUsed.map((part, idx) => (
                                 <span key={idx} className="px-3 py-2 bg-white border border-[#dadce0] text-[10px] font-bold text-[#3c4043] flex items-center gap-3 shadow-sm uppercase tracking-tighter">
                                     <Package size={12} className="text-[#1a73e8]" />
-                                    {part.name} <span className="text-[#1a73e8] font-black">x{part.quantity}</span>
+                                    <span>{part.name}</span> <span className="text-[#1a73e8] font-black">x{part.quantity}</span>
                                 </span>
                               ))}
                             </div>
@@ -446,7 +644,7 @@ const MaintenanceLog: React.FC = () => {
               </section>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-8 border-t border-[#dadce0] bg-white flex gap-3">
+            <div className="absolute bottom-0 left-0 right-0 p-8 border-t border-[#dadce0] bg-white flex gap-3 shadow-2xl">
               {selectedMaintenance.status !== 'Fermé' ? (
                 <button 
                   onClick={openInterventionForm}
@@ -464,7 +662,7 @@ const MaintenanceLog: React.FC = () => {
         </>
       )}
 
-      {/* MODAL RAPPORT TECHNIQUE OPTIMISÉ */}
+      {/* MODAL RAPPORT TECHNIQUE */}
       <Modal
         isOpen={isInterventionModalOpen}
         onClose={() => setIsInterventionModalOpen(false)}
@@ -472,7 +670,6 @@ const MaintenanceLog: React.FC = () => {
         size="lg"
       >
         <div className="space-y-10 animate-in fade-in">
-           {/* Section État du Matériel */}
            <section className="space-y-4">
               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2">
                 <ShieldCheck size={14} className="text-[#1a73e8]" /> Diagnostic Final
@@ -522,19 +719,19 @@ const MaintenanceLog: React.FC = () => {
 
            <section className="space-y-4">
               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2">
-                <FileText size={14} className="text-[#1a73e8]" /> Observations & Recommandations Client
+                <FileText size={14} className="text-[#1a73e8]" /> Observations Client
               </h4>
               <textarea
                 value={recommendations}
                 onChange={(e) => setRecommendations(e.target.value)}
                 className="w-full h-32 bg-white text-xs font-medium border-[#dadce0] focus:border-[#1a73e8] focus:ring-0 resize-none p-4"
                 placeholder="Préciser la cause de la panne et les conseils d'utilisation..."
-              ></textarea>
+              />
            </section>
 
            <section className="space-y-4">
               <h4 className="text-[10px] font-black uppercase text-[#5f6368] tracking-widest flex items-center gap-2">
-                <Package size={14} className="text-[#1a73e8]" /> Composants Sortis du Stock
+                <Package size={14} className="text-[#1a73e8]" /> Rechanges Utilisées
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="h-[200px] overflow-y-auto border border-[#dadce0] bg-[#f8f9fa] divide-y divide-[#dadce0] custom-scrollbar">
@@ -566,22 +763,22 @@ const MaintenanceLog: React.FC = () => {
                           </div>
                        </div>
                     ))}
-                    {usedParts.length === 0 && <div className="h-full flex flex-col items-center justify-center opacity-20 py-10"><Package size={32} /><p className="text-[10px] font-black uppercase mt-2">Aucune pièce sélectionnée</p></div>}
+                    {usedParts.length === 0 && <div className="h-full flex flex-col items-center justify-center opacity-20 py-10"><Package size={32} /><p className="text-[10px] font-black uppercase mt-2">Aucune pièce</p></div>}
                  </div>
               </div>
            </section>
 
            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
               <button onClick={handleSaveIntervention} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl">
-                 <Save size={20} /> Transmettre au Management
+                 <Save size={20} /> Transmettre pour Validation
               </button>
-              <button onClick={() => setIsInterventionModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest transition-colors">Annuler</button>
+              <button onClick={() => setIsInterventionModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest">Abandonner</button>
            </div>
         </div>
       </Modal>
 
-      {/* MODAL CALENDRIER SHARP */}
-      <Modal isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} title="Planning Central Horizon" size="lg">
+      {/* MODAL CALENDRIER */}
+      <Modal isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} title="Planning Central Terrain" size="lg">
          <div className="space-y-8 animate-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between bg-[#f8f9fa] p-6 border border-[#dadce0]">
                <h3 className="text-xl font-light text-[#202124] capitalize">
