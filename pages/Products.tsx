@@ -3,9 +3,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, Search, RefreshCw, ShoppingBag, Edit3, Trash2, 
   ChevronLeft, ChevronRight, Image as ImageIcon, Tag,
-  ShieldCheck, ArrowRight, Upload, Filter, X, FileText
+  ShieldCheck, ArrowRight, Upload, Filter
 } from 'lucide-react';
-import { useData, useNotifications, useUser } from '../App';
+import { useData, useNotifications } from '../App';
 import { Product } from '../types';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
@@ -30,15 +30,15 @@ const Products: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { refreshAll(); }, []);
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const categories = useMemo(() => {
-    const cats = new Set((products || []).map(p => p.category));
+    const cats = new Set((products || []).map((p: Product) => p.category));
     return Array.from(cats).filter(Boolean);
   }, [products]);
 
   const filtered = useMemo(() => {
-    return (products || []).filter(p => {
+    return (products || []).filter((p: Product) => {
       const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (p.reference || '').toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -63,15 +63,14 @@ const Products: React.FC = () => {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const bstr = evt.target?.result;
+        const bstr = evt.target?.result as string;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
         
         let count = 0;
-        for (const row of data as any[]) {
-          // Mapping intelligent pour supporter plusieurs formats de colonnes
+        for (const row of data) {
           const newProd: Product = {
             id: `PR-IMP-${Date.now()}-${count}`,
             name: row.name || row.Nom || row.Désignation || 'Sans nom',
@@ -80,15 +79,15 @@ const Products: React.FC = () => {
             category: row.category || row.Catégorie || 'Divers',
             price: Number(row.price || row.Prix || 0),
             warrantyMonths: Number(row.warranty || row.Garantie || row['Garantie (Mois)'] || 12),
-            image: row.image || row.Image || row.URL || row.image_url || null
+            image: row.image || row.Image || row.URL || row.image_url || undefined
           };
           await saveProduct(newProd);
           count++;
         }
-        addNotification({ title: 'Import Réussi', message: `${count} produits ajoutés au catalogue.`, type: 'success' });
+        addNotification({ title: 'Import Réussi', message: `${count} articles synchronisés.`, type: 'success' });
         refreshAll();
       } catch (err) {
-        addNotification({ title: 'Erreur', message: 'Le format du fichier Excel/CSV est invalide.', type: 'error' });
+        addNotification({ title: 'Erreur', message: 'Fichier invalide.', type: 'error' });
       }
     };
     reader.readAsBinaryString(file);
@@ -107,28 +106,28 @@ const Products: React.FC = () => {
       category: formData.get('category') as string,
       price: Number(formData.get('price')),
       warrantyMonths: Number(formData.get('warrantyMonths')),
-      image: formData.get('image') as string || editingProduct?.image
+      image: (formData.get('image') as string) || editingProduct?.image
     };
     
     try {
       await saveProduct(data);
-      addNotification({ title: 'Catalogue', message: 'Produit synchronisé avec succès.', type: 'success' });
+      addNotification({ title: 'Catalogue', message: 'Produit enregistré.', type: 'success' });
       setIsModalOpen(false);
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la sauvegarde.', type: 'error' });
+      addNotification({ title: 'Erreur', message: 'Échec sauvegarde.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Retirer ce produit du catalogue ?')) return;
+    if (!window.confirm('Retirer ce produit ?')) return;
     try {
       await deleteProduct(id);
-      addNotification({ title: 'Catalogue', message: 'Produit supprimé.', type: 'info' });
+      addNotification({ title: 'Catalogue', message: 'Produit retiré.', type: 'info' });
       setSelectedProduct(null);
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Impossible de supprimer ce produit.', type: 'error' });
+      addNotification({ title: 'Erreur', message: 'Échec suppression.', type: 'error' });
     }
   };
 
@@ -136,8 +135,8 @@ const Products: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Catalogue Produits</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Référentiel matériel et marques partenaires Royal Plaza.</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Catalogue Matériel</h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">Référentiel produits et marques Royal Plaza.</p>
         </div>
         <div className="flex gap-2">
           <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
@@ -156,7 +155,7 @@ const Products: React.FC = () => {
             <Search className="absolute left-3 top-3 text-[#686868]" size={16} />
             <input 
               type="text" 
-              placeholder="Rechercher un modèle, une référence..." 
+              placeholder="Rechercher par modèle ou référence..." 
               className="w-full pl-10 h-11"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -178,31 +177,23 @@ const Products: React.FC = () => {
             <div className="space-y-1.5 min-w-[180px]">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
               <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} className="w-full h-9 text-xs">
-                <option value="Tous">Toutes les marques</option>
-                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                <option value="Tous">Toutes</option>
+                {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5 min-w-[180px]">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
               <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full h-9 text-xs">
-                <option value="Tous">Toutes les catégories</option>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="Tous">Toutes</option>
+                {categories.map((c: any) => <option key={String(c)} value={String(c)}>{String(c)}</option>)}
               </select>
-            </div>
-            <div className="flex items-end">
-              <button 
-                onClick={() => { setBrandFilter('Tous'); setCategoryFilter('Tous'); setSearchTerm(''); }}
-                className="btn-sb-outline h-9 text-[10px] font-bold px-3 uppercase"
-              >
-                Réinitialiser
-              </button>
             </div>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {paginated.map((p) => (
+        {paginated.map((p: Product) => (
           <div 
             key={p.id} 
             onClick={() => setSelectedProduct(p)}
@@ -214,7 +205,7 @@ const Products: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center gap-2 text-[#dadce0]">
                   <ImageIcon size={48} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Image indisponible</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Pas d'image</span>
                 </div>
               )}
               <div className="absolute top-3 left-3">
@@ -238,56 +229,42 @@ const Products: React.FC = () => {
         ))}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 pt-10">
-          <button 
-            disabled={currentPage === 1} 
-            onClick={() => setCurrentPage(p => p - 1)} 
-            className="btn-sb-outline h-9 px-3 disabled:opacity-30"
-          >
-            <ChevronLeft size={16}/>
-          </button>
-          <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages}</span>
-          <button 
-            disabled={currentPage === totalPages} 
-            onClick={() => setCurrentPage(p => p + 1)} 
-            className="btn-sb-outline h-9 px-3 disabled:opacity-30"
-          >
-            <ChevronRight size={16}/>
-          </button>
-        </div>
-      )}
+      <div className="flex justify-center items-center gap-4 pt-10">
+        <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
+          <ChevronLeft size={16}/>
+        </button>
+        <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages}</span>
+        <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
+          <ChevronRight size={16}/>
+        </button>
+      </div>
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title={editingProduct ? "Modifier le Produit" : "Ajouter au Catalogue"}
-      >
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Modifier Produit" : "Nouvel Article Catalogue"}>
         <form onSubmit={handleSaveProduct} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Nom du produit</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Nom commercial</label>
               <input name="name" type="text" defaultValue={editingProduct?.name} placeholder="ex: TV LG 55 OLED" required className="w-full" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence catalogue</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence facturation</label>
               <input name="reference" type="text" defaultValue={editingProduct?.reference} placeholder="ex: REF-10293" required className="w-full" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
               <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="w-full">
-                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
               <input name="category" list="cats" defaultValue={editingProduct?.category} placeholder="ex: Électroménager" required className="w-full" />
               <datalist id="cats">
-                {categories.map(c => <option key={c} value={c} />)}
+                {categories.map((c: any) => <option key={String(c)} value={String(c)} />)}
               </datalist>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix Public (F CFA)</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix Public</label>
               <input name="price" type="number" defaultValue={editingProduct?.price} placeholder="0" required className="w-full" />
             </div>
             <div className="space-y-1.5">
@@ -296,10 +273,10 @@ const Products: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[#686868] uppercase">URL de l'image</label>
+            <label className="text-[10px] font-bold text-[#686868] uppercase">URL Visuel</label>
             <input name="image" type="url" defaultValue={editingProduct?.image} placeholder="https://..." className="w-full" />
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#ededed]">
+          <div className="flex justify-end gap-3 pt-4 border-t">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline">Annuler</button>
             <button type="submit" disabled={isSaving} className="btn-sb-primary">
               {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Enregistrer'}
@@ -308,39 +285,29 @@ const Products: React.FC = () => {
         </form>
       </Modal>
 
-      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Fiche Produit" icon={<ShoppingBag size={16}/>}>
+      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Contrôle Produit" icon={<ShoppingBag size={16}/>}>
         {selectedProduct && (
           <div className="space-y-8 animate-sb-entry">
-            <div className="w-full aspect-video bg-white rounded-lg border border-[#ededed] flex items-center justify-center p-8 overflow-hidden">
+            <div className="w-full aspect-video bg-white rounded-lg border border-[#ededed] flex items-center justify-center p-8 overflow-hidden shadow-sm">
                {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-contain" alt="" /> : <ImageIcon size={64} className="text-[#dadce0]" />}
             </div>
             <div className="flex justify-between items-start">
               <div>
                  <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight leading-tight">{selectedProduct.name}</h3>
-                 <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">REF: {selectedProduct.reference}</p>
+                 <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">SKU FACTURE: {selectedProduct.reference}</p>
               </div>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }}
-                  className="p-2 border border-[#ededed] rounded hover:border-[#3ecf8e] text-[#686868] hover:text-[#3ecf8e] transition-colors"
-                >
-                  <Edit3 size={16} />
-                </button>
-                <button 
-                  onClick={() => handleDelete(selectedProduct.id)}
-                  className="p-2 border border-[#ededed] rounded hover:border-red-500 text-[#686868] hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <button onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }} className="p-2 border border-[#ededed] rounded hover:border-[#3ecf8e] text-[#686868] hover:text-[#3ecf8e] transition-colors"><Edit3 size={16} /></button>
+                <button onClick={() => handleDelete(selectedProduct.id)} className="p-2 border border-[#ededed] rounded hover:border-red-500 text-[#686868] hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Tarif Public</p></div>
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Prix Public</p></div>
                 <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.price?.toLocaleString()} F</p>
               </div>
               <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Garantie</p></div>
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Care Pack</p></div>
                 <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.warrantyMonths} Mois</p>
               </div>
             </div>

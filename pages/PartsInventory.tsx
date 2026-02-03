@@ -2,10 +2,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Package, Search, Plus, RefreshCw, Edit3, Trash2, 
-  Minus, Layers, DollarSign, Activity, ChevronRight,
-  TrendingDown, Zap, BarChart3, MapPin, Tag, Upload, 
-  FileDown, Filter, X, AlertTriangle, Boxes, CheckCircle2,
-  Table as TableIcon, ArrowRight, Settings2
+  Minus, Layers, Activity, 
+  BarChart3, MapPin, Upload, 
+  AlertTriangle, Boxes, CheckCircle2,
+  Zap, ArrowRight
 } from 'lucide-react';
 import { Part } from '../types';
 import { useNotifications, useData, useUser } from '../App';
@@ -39,34 +39,34 @@ const PartsInventory: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { refreshAll(); }, []);
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const filteredParts = useMemo(() => {
-    return (parts || []).filter(p => {
+    return (parts || []).filter((p: Part) => {
       const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
       let matchesStatus = true;
       if (stockStatus === 'critical') matchesStatus = p.currentStock <= p.minStock && p.currentStock > 0;
       if (stockStatus === 'out') matchesStatus = p.currentStock === 0;
       return matchesSearch && matchesStatus;
-    }).sort((a, b) => (a.currentStock <= a.minStock ? -1 : 1));
+    }).sort((a: Part, b: Part) => (a.currentStock <= a.minStock ? -1 : 1));
   }, [searchTerm, stockStatus, parts]);
 
   const stats = useMemo(() => {
-    const totalParts = parts.length;
-    const critical = parts.filter(p => p.currentStock <= p.minStock && p.currentStock > 0).length;
-    const outOfStock = parts.filter(p => p.currentStock === 0).length;
-    const totalValuation = parts.reduce((acc, p) => acc + (p.currentStock * p.unitPrice), 0);
+    const totalParts = (parts || []).length;
+    const critical = (parts || []).filter((p: Part) => p.currentStock <= p.minStock && p.currentStock > 0).length;
+    const outOfStock = (parts || []).filter((p: Part) => p.currentStock === 0).length;
+    const totalValuation = (parts || []).reduce((acc: number, p: Part) => acc + (p.currentStock * p.unitPrice), 0);
     return { totalParts, critical, outOfStock, totalValuation };
   }, [parts]);
 
   const handleAdjustStock = async (id: string, delta: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const part = parts.find(p => p.id === id);
+    const part = parts.find((p: Part) => p.id === id);
     if (!part) return;
     
     if (delta < 0 && part.currentStock + delta < 0) {
-      addNotification({ title: 'Attention', message: 'Le stock ne peut pas être négatif.', type: 'warning' });
+      addNotification({ title: 'Alerte Stock', message: 'Opération impossible : Stock insuffisant.', type: 'warning' });
       return;
     }
 
@@ -76,12 +76,12 @@ const PartsInventory: React.FC = () => {
         partName: part.name,
         quantity: Math.abs(delta),
         type: delta > 0 ? 'IN' : 'OUT',
-        reason: 'Ajustement rapide manuel',
-        performedBy: currentUser?.name || 'Expert'
+        reason: 'Ajustement manuel rapide',
+        performedBy: currentUser?.name || 'Expert Cluster'
       });
-      addNotification({ title: 'Stock mis à jour', message: `${part.name} : ${delta > 0 ? '+' : ''}${delta}`, type: 'success' });
+      addNotification({ title: 'Inventaire mis à jour', message: `${part.name} : ${delta > 0 ? '+' : ''}${delta} unités.`, type: 'success' });
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la mise à jour du stock.', type: 'error' });
+      addNotification({ title: 'Erreur Logistique', message: 'Échec de la synchronisation du mouvement.', type: 'error' });
     }
   };
 
@@ -104,10 +104,10 @@ const PartsInventory: React.FC = () => {
 
     try {
       await savePart(partData);
-      addNotification({ title: 'Succès', message: 'Pièce enregistrée dans le catalogue.', type: 'success' });
+      addNotification({ title: 'Succès Catalogue', message: 'Fiche article enregistrée.', type: 'success' });
       setIsModalOpen(false);
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Impossible de sauvegarder la pièce.', type: 'error' });
+      addNotification({ title: 'Erreur Catalogue', message: 'Impossible de sauvegarder la pièce.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -115,14 +115,14 @@ const PartsInventory: React.FC = () => {
 
   const handleDeletePart = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Confirmer la suppression définitive de cette pièce ?')) return;
+    if (!window.confirm('Voulez-vous supprimer cet article de l\'inventaire ?')) return;
     try {
       await deletePart(id);
-      addNotification({ title: 'Supprimé', message: 'La pièce a été retirée de l\'inventaire.', type: 'info' });
+      addNotification({ title: 'Article Retiré', message: 'Suppression effectuée.', type: 'info' });
       if (selectedPart?.id === id) setSelectedPart(null);
       setSelectedIds(prev => prev.filter(i => i !== id));
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la suppression.', type: 'error' });
+      addNotification({ title: 'Erreur Cluster', message: 'Échec de la suppression.', type: 'error' });
     }
   };
 
@@ -133,32 +133,32 @@ const PartsInventory: React.FC = () => {
     setIsSaving(true);
     try {
       await ApiService.parts.deleteBulk(selectedIds);
-      addNotification({ title: 'Suppression groupée', message: `${selectedIds.length} articles retirés.`, type: 'success' });
+      addNotification({ title: 'Batch Delete', message: `${selectedIds.length} articles retirés de la base.`, type: 'success' });
       setSelectedIds([]);
       refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la suppression groupée.', type: 'error' });
+      addNotification({ title: 'Erreur Batch', message: 'Échec de l\'opération groupée.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('ATTENTION : Voulez-vous vraiment VIDER TOUT l\'inventaire ? Cette action est irréversible.')) return;
+    if (!window.confirm('ALERTE : Voulez-vous VIDER TOTALEMENT l\'inventaire ? Cette action est irréversible.')) return;
     setIsSaving(true);
     try {
-      const allIds = parts.map(p => p.id);
+      const allIds = parts.map((p: Part) => p.id);
       await ApiService.parts.deleteBulk(allIds);
-      addNotification({ title: 'Inventaire vidé', message: 'Toutes les pièces ont été supprimées.', type: 'info' });
+      addNotification({ title: 'Inventaire Purge', message: 'Tout le catalogue a été supprimé.', type: 'info' });
       refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec du nettoyage de l\'inventaire.', type: 'error' });
+      addNotification({ title: 'Erreur Purge', message: 'Échec du nettoyage.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const toggleSelect = (id: string, e: React.MouseEvent) => {
+  const toggleSelect = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -167,7 +167,7 @@ const PartsInventory: React.FC = () => {
     if (selectedIds.length === filteredParts.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredParts.map(p => p.id));
+      setSelectedIds(filteredParts.map((p: Part) => p.id));
     }
   };
 
@@ -178,11 +178,11 @@ const PartsInventory: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
+        const bstr = evt.target?.result as string;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
         
         if (data.length > 0) {
           const headers = (data[0] as string[]).map(h => String(h || ''));
@@ -207,7 +207,7 @@ const PartsInventory: React.FC = () => {
           setIsMappingModalOpen(true);
         }
       } catch (err) {
-        addNotification({ title: 'Erreur Fichier', message: 'Le format du fichier est invalide.', type: 'error' });
+        addNotification({ title: 'Erreur Fichier', message: 'Format invalide ou corrompu.', type: 'error' });
       }
     };
     reader.readAsBinaryString(file);
@@ -216,30 +216,30 @@ const PartsInventory: React.FC = () => {
 
   const processImport = async () => {
     if (!mapping.name || !mapping.sku) {
-      addNotification({ title: 'Mapping incomplet', message: 'Le nom et la référence (SKU) sont obligatoires.', type: 'warning' });
+      addNotification({ title: 'Mapping requis', message: 'Nom et SKU sont obligatoires.', type: 'warning' });
       return;
     }
 
     setIsSaving(true);
     try {
-      const importedParts: Part[] = rawImportData.map((row, i) => ({
+      const importedParts: Part[] = rawImportData.map((row: any, i: number) => ({
         id: `PT-IMP-${Date.now()}-${i}`,
-        name: String(row[mapping.name] || 'Sans nom'),
-        sku: String(row[mapping.sku] || `SKU-${Date.now()}-${i}`),
+        name: String(row[mapping.name] || 'Article sans nom'),
+        sku: String(row[mapping.sku] || `REF-${Date.now()}-${i}`),
         currentStock: Number(row[mapping.currentStock] || 0),
         minStock: Number(row[mapping.minStock] || 5),
         unitPrice: Number(row[mapping.unitPrice] || 0),
-        location: String(row[mapping.location] || 'Magasin Central'),
+        location: String(row[mapping.location] || 'Magasin'),
         brand: String(row[mapping.brand] || 'Royal Plaza'),
         category: (row[mapping.category] || 'Consommable') as any
       }));
 
       await ApiService.parts.saveAll(importedParts);
-      addNotification({ title: 'Import Réussi', message: `${importedParts.length} pièces synchronisées.`, type: 'success' });
+      addNotification({ title: 'Batch Import', message: `${importedParts.length} articles synchronisés.`, type: 'success' });
       setIsMappingModalOpen(false);
       refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur Import', message: 'Échec de l\'enregistrement massif.', type: 'error' });
+      addNotification({ title: 'Erreur Import', message: 'Échec de l\'opération massive.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -251,8 +251,8 @@ const PartsInventory: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Pièces & Rechanges</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Gestion centralisée des stocks techniques et composants SAV.</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Stocks & Rechanges</h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">Gestion du catalogue de composants techniques Plaza.</p>
         </div>
         <div className="flex gap-2">
           {parts.length > 0 && (
@@ -262,7 +262,7 @@ const PartsInventory: React.FC = () => {
           )}
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx, .xls, .csv" />
           <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-10 px-4">
-             <Upload size={16} /> <span>Importer CSV/Excel</span>
+             <Upload size={16} /> <span>Import Excel</span>
           </button>
           <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
             <Plus size={16} /> <span>Nouvel Article</span>
@@ -273,16 +273,16 @@ const PartsInventory: React.FC = () => {
       {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'Catalogue total', value: stats.totalParts, icon: <Boxes size={16}/>, color: 'text-blue-500' },
-          { label: 'Articles en alerte', value: stats.critical, icon: <AlertTriangle size={16}/>, color: 'text-amber-500' },
-          { label: 'Ruptures sèches', value: stats.outOfStock, icon: <Zap size={16}/>, color: 'text-red-500' },
-          { label: 'Valeur Inventaire', value: `${(stats.totalValuation / 1000000).toFixed(1)}M F`, icon: <BarChart3 size={16}/>, color: 'text-[#3ecf8e]' }
+          { label: 'Articles Total', value: stats.totalParts, icon: <Boxes size={16}/>, color: 'text-blue-500' },
+          { label: 'En Alerte', value: stats.critical, icon: <AlertTriangle size={16}/>, color: 'text-amber-500' },
+          { label: 'En Rupture', value: stats.outOfStock, icon: <Zap size={16}/>, color: 'text-red-500' },
+          { label: 'Valeur Totale', value: `${(stats.totalValuation / 1000000).toFixed(1)}M F`, icon: <BarChart3 size={16}/>, color: 'text-[#3ecf8e]' }
         ].map((s, i) => (
-          <div key={i} className="sb-card flex items-center gap-4 py-4 px-6">
-             <div className={`p-2.5 bg-[#f8f9fa] rounded-md ${s.color}`}>{s.icon}</div>
+          <div key={i} className="sb-card flex items-center gap-4 py-4 px-6 border-[#ededed] shadow-sm">
+             <div className={`p-2.5 bg-[#f8f9fa] rounded-xl border border-[#f5f5f5] ${s.color}`}>{s.icon}</div>
              <div>
-                <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">{s.label}</p>
-                <p className="text-xl font-bold text-[#1c1c1c]">{s.value}</p>
+                <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">{s.label}</p>
+                <p className="text-xl font-black text-[#1c1c1c]">{s.value}</p>
              </div>
           </div>
         ))}
@@ -290,119 +290,118 @@ const PartsInventory: React.FC = () => {
 
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="relative group flex-1 w-full">
-          <Search className="absolute left-3 top-3.5 text-[#686868]" size={18} />
+          <Search className="absolute left-3.5 top-3.5 text-[#686868]" size={18} />
           <input 
-            type="text" placeholder="Rechercher par nom, SKU ou marque..." 
-            className="w-full pl-10 h-12 bg-white"
+            type="text" placeholder="Recherche par désignation ou SKU..." 
+            className="w-full pl-12 h-12 bg-white rounded-xl shadow-sm border-[#ededed]"
             value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex bg-[#f1f3f4] p-1 rounded-lg shrink-0 border border-[#ededed]">
+        <div className="flex bg-white p-1 rounded-xl shrink-0 border border-[#ededed] shadow-sm">
           {[
-            { id: 'all', label: 'Tout', icon: <Layers size={12}/> },
-            { id: 'critical', label: 'Alertes', icon: <AlertTriangle size={12}/> },
-            { id: 'out', label: 'Ruptures', icon: <Zap size={12}/> }
+            { id: 'all', label: 'Catalogue', icon: <Layers size={14}/> },
+            { id: 'critical', label: 'Alertes', icon: <AlertTriangle size={14}/> },
+            { id: 'out', label: 'Ruptures', icon: <Zap size={14}/> }
           ].map(st => (
             <button 
               key={st.id} 
               onClick={() => setStockStatus(st.id as any)} 
-              className={`flex items-center gap-2 px-6 py-2 text-[10px] font-black uppercase rounded-md transition-all ${stockStatus === st.id ? 'bg-white shadow-sm text-[#1c1c1c]' : 'text-[#686868] hover:text-[#1c1c1c]'}`}
+              className={`flex items-center gap-2 px-6 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${stockStatus === st.id ? 'bg-[#1c1c1c] text-white shadow-md' : 'text-[#686868] hover:bg-[#f8f9fa]'}`}
             >
               {st.icon} {st.label}
             </button>
           ))}
         </div>
-        <button onClick={refreshAll} className="btn-sb-outline h-12 px-3">
+        <button onClick={refreshAll} className="btn-sb-outline h-12 px-4 rounded-xl shadow-sm">
           <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      {/* Bulk Actions Bar */}
       {selectedIds.length > 0 && (
-        <div className="bg-[#1c1c1c] text-white p-4 rounded-lg flex items-center justify-between animate-sb-entry shadow-lg">
-           <div className="flex items-center gap-4">
-              <CheckCircle2 size={20} className="text-[#3ecf8e]" />
-              <span className="text-sm font-bold">{selectedIds.length} article(s) sélectionné(s)</span>
+        <div className="bg-[#1c1c1c] text-white p-5 rounded-2xl flex items-center justify-between animate-sb-entry shadow-xl">
+           <div className="flex items-center gap-5">
+              <CheckCircle2 size={24} className="text-[#3ecf8e]" />
+              <span className="text-sm font-black uppercase tracking-widest">{selectedIds.length} article(s) en file d'attente</span>
            </div>
-           <div className="flex gap-2">
-              <button onClick={() => setSelectedIds([])} className="px-4 py-2 text-xs font-bold hover:bg-white/10 rounded transition-colors">Annuler</button>
-              <button onClick={handleBulkDelete} className="bg-red-500 hover:bg-red-600 px-4 py-2 text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                <Trash2 size={14}/> Supprimer la sélection
+           <div className="flex gap-3">
+              <button onClick={() => setSelectedIds([])} className="px-5 py-2.5 text-[11px] font-black uppercase hover:bg-white/10 rounded-xl transition-colors">Désélectionner</button>
+              <button onClick={handleBulkDelete} className="bg-red-500 hover:bg-red-600 px-6 py-2.5 text-[11px] font-black uppercase rounded-xl flex items-center gap-3 transition-all shadow-lg shadow-red-500/20">
+                <Trash2 size={16}/> Supprimer Batch
               </button>
            </div>
         </div>
       )}
 
-      <div className="sb-table-container">
+      <div className="sb-table-container shadow-sm border-[#ededed]">
         <table className="w-full text-left sb-table">
           <thead>
             <tr>
-              <th className="w-10 px-4">
-                <input type="checkbox" checked={selectedIds.length > 0 && selectedIds.length === filteredParts.length} onChange={toggleSelectAll} className="rounded" />
+              <th className="w-10 px-5">
+                <input type="checkbox" checked={selectedIds.length > 0 && selectedIds.length === filteredParts.length} onChange={toggleSelectAll} className="rounded-md border-[#ededed]" />
               </th>
-              <th className="w-24">SKU</th>
+              <th className="w-24">Cluster SKU</th>
               <th>Désignation & Marque</th>
               <th>Emplacement</th>
               <th className="text-center">Quantité</th>
-              <th className="text-right">Prix Unitaire</th>
-              <th className="text-right">Actions</th>
+              <th className="text-right">Unitaire</th>
+              <th className="text-right px-5">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredParts.map((p) => (
-              <tr key={p.id} onClick={() => setSelectedPart(p)} className={`cursor-pointer group ${selectedIds.includes(p.id) ? 'bg-[#f0fdf4]' : ''}`}>
-                <td className="px-4" onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e) => toggleSelect(p.id, e as any)} className="rounded" />
+            {filteredParts.map((p: Part) => (
+              <tr key={p.id} onClick={() => setSelectedPart(p)} className={`cursor-pointer group hover:bg-[#fafafa] ${selectedIds.includes(p.id) ? 'bg-[#f0fdf4]/50' : ''}`}>
+                <td className="px-5" onClick={e => e.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => toggleSelect(p.id, e)} className="rounded-md border-[#ededed]" />
                 </td>
-                <td className="font-mono text-[11px] font-black text-[#686868] uppercase">{p.sku}</td>
-                <td>
-                  <p className="text-[13px] font-bold text-[#1c1c1c]">{p.name}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9px] font-black text-[#3ecf8e] uppercase leading-none">{p.brand}</span>
+                <td className="font-mono text-[10px] font-black text-[#686868] uppercase tracking-tighter">{p.sku}</td>
+                <td className="py-5">
+                  <p className="text-[13px] font-black text-[#1c1c1c]">{p.name}</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[9px] font-black text-[#3ecf8e] uppercase tracking-tighter bg-[#f0fdf4] px-1.5 rounded-sm border border-[#dcfce7]">{p.brand}</span>
                     <span className="text-[9px] text-[#686868] font-bold">• {p.category}</span>
                   </div>
                 </td>
                 <td>
-                  <div className="flex items-center gap-1.5 text-[#686868]">
-                    <MapPin size={12} />
-                    <span className="text-[11px] font-medium">{p.location}</span>
+                  <div className="flex items-center gap-1.5 text-[#686868] font-bold">
+                    <MapPin size={12} className="text-[#3ecf8e]" />
+                    <span className="text-[11px]">{p.location}</span>
                   </div>
                 </td>
                 <td onClick={e => e.stopPropagation()}>
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="flex items-center justify-center gap-4">
                      <button 
                       onClick={() => handleAdjustStock(p.id, -1)} 
-                      className="w-7 h-7 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-colors"
+                      className="w-8 h-8 rounded-lg bg-white border border-[#ededed] flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
                      >
                         <Minus size={14}/>
                      </button>
-                     <span className={`text-[15px] font-black min-w-[30px] text-center ${p.currentStock <= p.minStock ? 'text-red-500' : 'text-[#1c1c1c]'}`}>
+                     <span className={`text-[15px] font-black min-w-[32px] text-center ${p.currentStock <= p.minStock ? 'text-red-500' : 'text-[#1c1c1c]'}`}>
                         {p.currentStock}
                      </span>
                      <button 
                       onClick={() => handleAdjustStock(p.id, 1)} 
-                      className="w-7 h-7 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center hover:bg-[#f0fdf4] hover:text-[#3ecf8e] transition-colors"
+                      className="w-8 h-8 rounded-lg bg-white border border-[#ededed] flex items-center justify-center hover:bg-[#f0fdf4] hover:text-[#3ecf8e] transition-all shadow-sm"
                      >
                         <Plus size={14}/>
                      </button>
                   </div>
                 </td>
-                <td className="text-right font-mono text-[13px] font-bold text-[#1c1c1c]">
+                <td className="text-right font-mono text-[13px] font-black text-[#1c1c1c]">
                   {p.unitPrice.toLocaleString()} F
                 </td>
-                <td className="text-right">
-                   <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <td className="text-right px-5">
+                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setEditingPart(p); setIsModalOpen(true); }}
-                        className="p-1.5 text-[#686868] hover:text-[#3ecf8e] rounded"
+                        className="p-2 text-[#686868] hover:text-[#3ecf8e] border border-[#ededed] rounded-lg bg-white transition-colors"
                       >
-                        <Edit3 size={14}/>
+                        <Edit3 size={15}/>
                       </button>
                       <button 
                         onClick={(e) => handleDeletePart(p.id, e)}
-                        className="p-1.5 text-[#686868] hover:text-red-500 rounded"
+                        className="p-2 text-[#686868] hover:text-red-500 border border-[#ededed] rounded-lg bg-white transition-colors"
                       >
-                        <Trash2 size={14}/>
+                        <Trash2 size={15}/>
                       </button>
                    </div>
                 </td>
@@ -410,213 +409,169 @@ const PartsInventory: React.FC = () => {
             ))}
           </tbody>
         </table>
-        {filteredParts.length === 0 && (
-          <div className="p-24 text-center space-y-3 opacity-40">
-            <Package size={48} className="mx-auto text-[#686868]" />
-            <p className="text-[13px] font-bold text-[#686868] uppercase tracking-widest">Aucun article trouvé</p>
-          </div>
-        )}
       </div>
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title={editingPart ? "Modifier l'Article" : "Nouvel Article Stock"}
-      >
-        <form onSubmit={handleSavePart} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Désignation</label>
-              <input name="name" type="text" defaultValue={editingPart?.name} placeholder="ex: Compresseur LG 12k" required className="w-full" />
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingPart ? "Correction Fiche Article" : "Intégration Catalogue Rechanges"}>
+        <form onSubmit={handleSavePart} className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Désignation Technique</label>
+              <input name="name" type="text" defaultValue={editingPart?.name} placeholder="ex: Compresseur Inverter 12k" required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence SKU</label>
-              <input name="sku" type="text" defaultValue={editingPart?.sku} placeholder="ex: COMP-LG-V1" required className="w-full" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Code SKU Cluster</label>
+              <input name="sku" type="text" defaultValue={editingPart?.sku} placeholder="ex: PART-LG-INV-01" required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
-              <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full">
-                 {brands.map(b => <option key={b} value={b}>{b}</option>)}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Marque Certifiée</label>
+              <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full h-11 px-4 rounded-xl border-[#ededed]">
+                 {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
-              <select name="category" defaultValue={editingPart?.category || 'Mécanique'} className="w-full">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Filière Technique</label>
+              <select name="category" defaultValue={editingPart?.category || 'Mécanique'} className="w-full h-11 px-4 rounded-xl border-[#ededed]">
                 <option value="Électronique">Électronique</option>
                 <option value="Mécanique">Mécanique</option>
                 <option value="Consommable">Consommable</option>
                 <option value="Accessoire">Accessoire</option>
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Stock Actuel</label>
-              <input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} placeholder="0" required className="w-full" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Stock Initiale</label>
+              <input name="currentStock" type="number" defaultValue={editingPart?.currentStock || 0} required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Seuil d'alerte</label>
-              <input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} placeholder="5" required className="w-full" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Seuil d'Alerte SLA</label>
+              <input name="minStock" type="number" defaultValue={editingPart?.minStock || 5} required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix Unitaire (F CFA)</label>
-              <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} placeholder="0" required className="w-full" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Prix de Cession (F CFA)</label>
+              <input name="unitPrice" type="number" defaultValue={editingPart?.unitPrice || 0} required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Emplacement Magasin</label>
-              <input name="location" type="text" defaultValue={editingPart?.location} placeholder="ex: Rayon A1 - Glass" required className="w-full" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Emplacement Logistique</label>
+              <input name="location" type="text" defaultValue={editingPart?.location} placeholder="ex: Zone A1 - BDM" required className="w-full h-11 px-4 rounded-xl border-[#ededed]" />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#ededed]">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline">Annuler</button>
-            <button type="submit" disabled={isSaving} className="btn-sb-primary">
-              {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Enregistrer Article'}
+          <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase rounded-xl">Annuler</button>
+            <button type="submit" disabled={isSaving} className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
+              {isSaving ? <RefreshCw className="animate-spin" size={16}/> : 'Enregistrer Article'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Import Mapping Modal */}
-      <Modal 
-        isOpen={isMappingModalOpen} 
-        onClose={() => setIsMappingModalOpen(false)} 
-        title="Configuration de l'Importation"
-        size="lg"
-      >
+      <Modal isOpen={isMappingModalOpen} onClose={() => setIsMappingModalOpen(false)} title="Intelligence d'Importation" size="lg">
         <div className="space-y-8">
-           <div className="flex items-start gap-4 p-4 bg-[#f0f9f4] border border-[#dcfce7] rounded-lg">
-              <CheckCircle2 className="text-[#3ecf8e] mt-1 shrink-0" size={20}/>
+           <div className="flex items-start gap-5 p-6 bg-[#f0f9f4] border border-[#dcfce7] rounded-2xl shadow-sm">
+              <CheckCircle2 className="text-[#3ecf8e] mt-1 shrink-0" size={24}/>
               <div>
-                 <p className="text-sm font-bold text-[#1c1c1c]">Fichier analysé avec succès</p>
-                 <p className="text-xs text-[#4b5563]">Veuillez mapper vos colonnes Excel aux champs de l'inventaire Plaza.</p>
+                 <p className="text-sm font-black text-[#1c1c1c] uppercase tracking-tight">Fichier Structurel Analysé</p>
+                 <p className="text-xs text-[#686868] font-bold mt-1">Veuillez mapper les champs Excel vers le kernel Plaza.</p>
               </div>
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
               {[
-                { key: 'name', label: 'Désignation / Nom', req: true },
-                { key: 'sku', label: 'Référence / SKU', req: true },
-                { key: 'currentStock', label: 'Stock Actuel', req: false },
-                { key: 'unitPrice', label: 'Prix Unitaire', req: false },
+                { key: 'name', label: 'Désignation', req: true },
+                { key: 'sku', label: 'Identifiant SKU', req: true },
+                { key: 'currentStock', label: 'Quantité Live', req: false },
+                { key: 'unitPrice', label: 'P.U. Cession', req: false },
                 { key: 'location', label: 'Emplacement', req: false },
                 { key: 'brand', label: 'Marque', req: false },
                 { key: 'category', label: 'Catégorie', req: false },
                 { key: 'minStock', label: 'Seuil Alerte', req: false },
-              ].map(field => (
+              ].map((field: any) => (
                 <div key={field.key} className="space-y-1.5">
-                   <label className="text-[10px] font-black text-[#686868] uppercase flex items-center justify-between">
+                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center justify-between">
                       <span>{field.label} {field.req && <span className="text-red-500">*</span>}</span>
-                      <span className="text-[9px] lowercase opacity-40 italic">Système</span>
                    </label>
                    <select 
-                    className={`w-full h-10 ${mapping[field.key] ? 'border-[#3ecf8e] bg-[#f0fdf4]/50' : ''}`}
+                    className={`w-full h-11 px-4 rounded-xl font-bold border-[#ededed] ${mapping[field.key] ? 'border-[#3ecf8e] bg-[#f0fdf4]/50' : ''}`}
                     value={mapping[field.key]}
                     onChange={e => setMapping({...mapping, [field.key]: e.target.value})}
                    >
                       <option value="">-- Ignorer --</option>
-                      {fileHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      {fileHeaders.map((h: string) => <option key={h} value={h}>{h}</option>)}
                    </select>
                 </div>
               ))}
            </div>
 
-           <div className="p-4 border border-[#ededed] rounded-lg bg-[#fcfcfc]">
-              <p className="text-[10px] font-black text-[#686868] uppercase mb-3 flex items-center gap-2">
-                <TableIcon size={12}/> Aperçu des données sources
-              </p>
-              <div className="overflow-x-auto max-h-40 custom-scrollbar">
-                 <table className="w-full text-[10px] text-left border-collapse">
-                    <thead>
-                       <tr className="bg-[#f8f9fa] border-b border-[#ededed]">
-                          {fileHeaders.slice(0, 5).map(h => <th key={h} className="py-2 px-3 font-bold text-[#1c1c1c] border-r border-[#ededed]">{h}</th>)}
-                       </tr>
-                    </thead>
-                    <tbody>
-                       {rawImportData.slice(0, 5).map((row, i) => (
-                         <tr key={i} className="border-b border-[#f5f5f5] last:border-none">
-                            {fileHeaders.slice(0, 5).map(h => <td key={h} className="py-2 px-3 text-[#686868] border-r border-[#ededed]">{String(row[h] || '')}</td>)}
-                         </tr>
-                       ))}
-                    </tbody>
-                 </table>
-              </div>
-           </div>
-
-           <div className="flex justify-end gap-3 pt-6 border-t border-[#ededed]">
-              <button onClick={() => setIsMappingModalOpen(false)} className="btn-sb-outline h-11 px-6">Annuler</button>
+           <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
+              <button onClick={() => setIsMappingModalOpen(false)} className="btn-sb-outline h-12 px-8 rounded-xl text-[11px] font-black uppercase tracking-widest">Abandonner</button>
               <button 
                 onClick={processImport} 
                 disabled={isSaving || !mapping.name || !mapping.sku} 
-                className="btn-sb-primary h-11 px-10 shadow-md"
+                className="btn-sb-primary h-12 px-12 rounded-xl shadow-lg shadow-[#3ecf8e]/20 text-[11px] font-black uppercase tracking-widest"
               >
-                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <>Importer {rawImportData.length} articles <ArrowRight size={14}/></>}
+                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <>Synchroniser {rawImportData.length} articles <ArrowRight size={16} className="ml-2"/></>}
               </button>
            </div>
         </div>
       </Modal>
 
-      <Drawer isOpen={!!selectedPart} onClose={() => setSelectedPart(null)} title="Fiche Technique Pièce" icon={<Package size={18}/>}>
+      <Drawer isOpen={!!selectedPart} onClose={() => setSelectedPart(null)} title="Contrôle d'Inventaire" icon={<Package size={18}/>}>
         {selectedPart && (
           <div className="space-y-8 animate-sb-entry pb-10">
-            <div className="p-8 bg-[#f8f9fa] border border-[#ededed] rounded-xl flex flex-col items-center text-center">
-               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-[#3ecf8e] shadow-sm mb-4 border border-[#ededed]">
-                  <Package size={40} />
+            <div className="p-10 bg-[#f8f9fa] border border-[#ededed] rounded-3xl flex flex-col items-center text-center shadow-sm relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-[#3ecf8e]/5 rounded-full blur-3xl -mr-16 -mt-16" />
+               <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center text-[#3ecf8e] shadow-xl mb-6 border border-[#ededed] relative z-10">
+                  <Package size={48} />
                </div>
-               <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight">{selectedPart.name}</h3>
-               <p className="text-[11px] text-[#686868] font-black uppercase tracking-[0.2em] mt-2">
-                 SKU: {selectedPart.sku}
-               </p>
-               <div className="mt-4 flex gap-2">
-                  <span className="px-3 py-1 bg-white border border-[#ededed] text-[9px] font-black uppercase rounded-full shadow-sm">
-                    {selectedPart.brand}
-                  </span>
-                  <span className="px-3 py-1 bg-white border border-[#ededed] text-[9px] font-black uppercase rounded-full shadow-sm">
-                    {selectedPart.category}
-                  </span>
+               <h3 className="text-2xl font-black text-[#1c1c1c] tracking-tight relative z-10">{selectedPart.name}</h3>
+               <p className="text-[11px] text-[#686868] font-black uppercase tracking-[0.3em] mt-2 relative z-10">SKU: {selectedPart.sku}</p>
+               <div className="mt-6 flex gap-3 relative z-10">
+                  <span className="px-4 py-1.5 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded-xl shadow-sm text-[#1c1c1c]">{selectedPart.brand}</span>
+                  <span className="px-4 py-1.5 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded-xl shadow-sm text-[#1c1c1c]">{selectedPart.category}</span>
                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 bg-white border border-[#ededed] rounded-xl shadow-sm space-y-1">
-                 <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Stock Disponible</p>
+              <div className="p-6 bg-white border border-[#ededed] rounded-2xl shadow-sm space-y-2">
+                 <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">État du Stock</p>
                  <div className="flex items-baseline gap-2">
-                    <p className={`text-2xl font-black ${selectedPart.currentStock <= selectedPart.minStock ? 'text-red-500' : 'text-[#1c1c1c]'}`}>
+                    <p className={`text-3xl font-black ${selectedPart.currentStock <= selectedPart.minStock ? 'text-red-500' : 'text-[#3ecf8e]'}`}>
                       {selectedPart.currentStock}
                     </p>
-                    <span className="text-[10px] text-[#686868] font-bold">unités</span>
+                    <span className="text-[11px] font-black text-[#686868] uppercase opacity-70">Unités</span>
                  </div>
-                 <p className="text-[10px] text-[#686868] italic">Seuil alerte: {selectedPart.minStock}</p>
+                 <p className="text-[10px] text-[#686868] font-bold italic">Seuil critique: {selectedPart.minStock}</p>
               </div>
-              <div className="p-5 bg-white border border-[#ededed] rounded-xl shadow-sm space-y-1">
-                 <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Valeur Stockée</p>
-                 <p className="text-2xl font-black text-[#1c1c1c] font-mono">
+              <div className="p-6 bg-white border border-[#ededed] rounded-2xl shadow-sm space-y-2">
+                 <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Valeur Entrepôt</p>
+                 <p className="text-xl font-black text-[#1c1c1c] font-mono tracking-tight">
                     {(selectedPart.currentStock * selectedPart.unitPrice).toLocaleString()} F
                  </p>
-                 <p className="text-[10px] text-[#3ecf8e] font-bold">Basé sur PU {selectedPart.unitPrice.toLocaleString()} F</p>
+                 <p className="text-[10px] text-[#3ecf8e] font-black uppercase tracking-tighter">P.U. {selectedPart.unitPrice.toLocaleString()} F</p>
               </div>
             </div>
 
             <div className="space-y-4">
-               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#ededed] pb-2">Localisation Logistique</h4>
-               <div className="p-4 bg-[#fcfcfc] border border-[#ededed] rounded-lg flex items-center gap-3">
-                  <MapPin size={18} className="text-[#3ecf8e]"/>
+               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#f5f5f5] pb-3">Localisation Cluster</h4>
+               <div className="p-5 bg-[#fcfcfc] border border-[#ededed] rounded-2xl flex items-center gap-4 group">
+                  <div className="w-10 h-10 rounded-xl bg-white border border-[#ededed] flex items-center justify-center text-[#3ecf8e] group-hover:scale-110 transition-transform"><MapPin size={20}/></div>
                   <div>
-                    <p className="text-[13px] font-bold text-[#1c1c1c]">{selectedPart.location}</p>
-                    <p className="text-[10px] text-[#686868] uppercase font-bold tracking-tight">Magasin Central Royal Plaza</p>
+                    <p className="text-[14px] font-black text-[#1c1c1c]">{selectedPart.location}</p>
+                    <p className="text-[10px] text-[#686868] font-black uppercase tracking-widest mt-0.5">Entrepôt Central Royal Plaza</p>
                   </div>
                </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-6">
+            <div className="grid grid-cols-2 gap-4 pt-8">
                <button 
                 onClick={() => { setEditingPart(selectedPart); setIsModalOpen(true); }}
-                className="btn-sb-outline h-12 justify-center font-black uppercase text-[11px] tracking-widest"
+                className="btn-sb-outline h-14 justify-center font-black uppercase text-[11px] tracking-widest rounded-2xl"
                >
-                  <Edit3 size={14}/><span>Modifier</span>
+                  <Edit3 size={18}/><span>Ajuster Fiche</span>
                </button>
                <button 
                 onClick={(e) => handleDeletePart(selectedPart.id, e)}
-                className="btn-sb-outline h-12 justify-center font-black uppercase text-[11px] tracking-widest text-red-500 hover:bg-red-50 hover:border-red-200"
+                className="btn-sb-outline h-14 justify-center font-black uppercase text-[11px] tracking-widest text-red-500 hover:bg-red-50 border-red-100 rounded-2xl"
                >
-                  <Trash2 size={14}/><span>Supprimer</span>
+                  <Trash2 size={18}/><span>Supprimer</span>
                </button>
             </div>
           </div>

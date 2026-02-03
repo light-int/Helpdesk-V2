@@ -1,13 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Users, Search, Plus, UserPlus, RefreshCw, 
-  ChevronLeft, ChevronRight, Edit3, Trash2,
+  Users, Search, UserPlus, RefreshCw, 
+  ChevronLeft, ChevronRight, Edit3,
   Building2, User as UserIcon, Mail, Smartphone,
-  TrendingUp, CreditCard, ShieldCheck, MoreVertical,
-  ExternalLink, Filter, X
+  CreditCard, ExternalLink, Filter
 } from 'lucide-react';
-import { useData, useNotifications, useUser } from '../App';
+import { useData, useNotifications } from '../App';
 import { Customer } from '../types';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
@@ -30,10 +29,10 @@ const Customers: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('Tous');
   const [statusFilter, setStatusFilter] = useState('Tous');
 
-  useEffect(() => { refreshAll(); }, []);
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const filtered = useMemo(() => {
-    return (customers || []).filter(c => {
+    return (customers || []).filter((c: Customer) => {
       if (c.isArchived) return false;
       
       const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -44,13 +43,13 @@ const Customers: React.FC = () => {
       const matchesStatus = statusFilter === 'Tous' || c.status === statusFilter;
       
       return matchesSearch && matchesType && matchesStatus;
-    }).sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+    }).sort((a: Customer, b: Customer) => (b.totalSpent || 0) - (a.totalSpent || 0));
   }, [customers, searchTerm, typeFilter, statusFilter]);
 
   const stats = useMemo(() => {
     const total = filtered.length;
-    const vips = filtered.filter(c => c.status === 'VIP').length;
-    const totalSpent = filtered.reduce((acc, c) => acc + (c.totalSpent || 0), 0);
+    const vips = filtered.filter((c: Customer) => c.status === 'VIP').length;
+    const totalSpent = filtered.reduce((acc: number, c: Customer) => acc + (c.totalSpent || 0), 0);
     return { total, vips, avgSpent: total > 0 ? totalSpent / total : 0 };
   }, [filtered]);
 
@@ -107,11 +106,10 @@ const Customers: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
-      {/* Header Section */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Clients Plaza</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Gérez votre base de données CRM et segmentez vos clients.</p>
+          <p className="text-xs text-[#686868] mt-1 font-medium">Management CRM et segmentation stratégique.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={refreshAll} className="btn-sb-outline h-10 px-3">
@@ -123,7 +121,6 @@ const Customers: React.FC = () => {
         </div>
       </header>
 
-      {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: 'Total Clients', value: stats.total, icon: <Users size={16}/>, color: 'text-blue-500' },
@@ -140,14 +137,13 @@ const Customers: React.FC = () => {
         ))}
       </div>
 
-      {/* Filter & Search Bar */}
       <div className="space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 text-[#686868]" size={16} />
             <input 
               type="text" 
-              placeholder="Nom, téléphone ou entreprise..." 
+              placeholder="Rechercher par identité ou mobile..." 
               className="w-full pl-10 h-11"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -165,24 +161,16 @@ const Customers: React.FC = () => {
           <div className="sb-card p-4 flex flex-wrap gap-4 animate-sb-entry bg-[#fcfcfc]">
             <div className="space-y-1.5 flex-1 min-w-[200px]">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Type de compte</label>
-              <select 
-                value={typeFilter} 
-                onChange={e => setTypeFilter(e.target.value)}
-                className="w-full h-9 text-xs"
-              >
-                <option value="Tous">Tous les types</option>
+              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-full h-9 text-xs">
+                <option value="Tous">Tous</option>
                 <option value="Particulier">Particulier</option>
                 <option value="Entreprise">Entreprise</option>
               </select>
             </div>
             <div className="space-y-1.5 flex-1 min-w-[200px]">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Segmentation</label>
-              <select 
-                value={statusFilter} 
-                onChange={e => setStatusFilter(e.target.value)}
-                className="w-full h-9 text-xs"
-              >
-                <option value="Tous">Tous les statuts</option>
+              <label className="text-[10px] font-bold text-[#686868] uppercase"> segmentation</label>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full h-9 text-xs">
+                <option value="Tous">Tous</option>
                 <option value="VIP">VIP</option>
                 <option value="Actif">Actif</option>
                 <option value="Litige">Litige</option>
@@ -193,27 +181,26 @@ const Customers: React.FC = () => {
                 onClick={() => { setTypeFilter('Tous'); setStatusFilter('Tous'); setSearchTerm(''); }}
                 className="btn-sb-outline h-9 text-[10px] font-bold px-3 uppercase"
               >
-                Réinitialiser
+                Reset
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Main Table */}
       <div className="sb-table-container">
         <table className="w-full text-left sb-table">
           <thead>
             <tr>
-              <th className="w-1/3">Client & Entreprise</th>
-              <th>Contact</th>
-              <th>Dépenses Totales</th>
+              <th className="w-1/3">Client & Structure</th>
+              <th>Coordonnées</th>
+              <th>Consommation</th>
               <th>Segment</th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {paginated.map((c) => (
+            {paginated.map((c: Customer) => (
               <tr key={c.id} onClick={() => setSelectedCustomer(c)} className="cursor-pointer group">
                 <td>
                   <div className="flex items-center gap-3">
@@ -232,7 +219,7 @@ const Customers: React.FC = () => {
                 </td>
                 <td>
                   <p className="text-sm font-bold text-[#1c1c1c]">{c.totalSpent?.toLocaleString()} F</p>
-                  <p className="text-[10px] text-[#686868] uppercase font-bold tracking-tighter">{c.ticketsCount} interventions</p>
+                  <p className="text-[10px] text-[#686868] uppercase font-bold tracking-tighter">{c.ticketsCount} SAV</p>
                 </td>
                 <td>
                    <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-tight ${getStatusBadge(c.status)}`}>
@@ -254,9 +241,8 @@ const Customers: React.FC = () => {
           </tbody>
         </table>
         
-        {/* Pagination Section */}
         <div className="px-6 py-4 bg-[#fcfcfc] border-t border-[#ededed] flex items-center justify-between">
-          <p className="text-[11px] text-[#686868] font-medium">Affichage de {paginated.length} sur {filtered.length} clients</p>
+          <p className="text-[11px] text-[#686868] font-medium">Affichage de {paginated.length} sur {filtered.length}</p>
           <div className="flex items-center gap-1">
             <button 
               disabled={currentPage === 1} 
@@ -287,16 +273,11 @@ const Customers: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal d'ajout / édition */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title={editingCustomer ? "Modifier Client" : "Nouveau Client"}
-      >
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingCustomer ? "Édition Fiche Client" : "Création Fiche Client"}>
         <form onSubmit={handleSave} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Nom Complet</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Identité complète</label>
               <input name="name" type="text" defaultValue={editingCustomer?.name} placeholder="ex: Jean Mba" required className="w-full" />
             </div>
             <div className="space-y-1.5">
@@ -308,18 +289,18 @@ const Customers: React.FC = () => {
               <input name="email" type="email" defaultValue={editingCustomer?.email} placeholder="contact@email.ga" className="w-full" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Entreprise (Optionnel)</label>
-              <input name="companyName" type="text" defaultValue={editingCustomer?.companyName} placeholder="Nom société" className="w-full" />
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Raison sociale (B2B)</label>
+              <input name="companyName" type="text" defaultValue={editingCustomer?.companyName} placeholder="Optionnel" className="w-full" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Type de client</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
               <select name="type" defaultValue={editingCustomer?.type || 'Particulier'} className="w-full">
                 <option value="Particulier">Particulier</option>
                 <option value="Entreprise">Entreprise</option>
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Statut</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Segmentation</label>
               <select name="status" defaultValue={editingCustomer?.status || 'Actif'} className="w-full">
                 <option value="Actif">Actif</option>
                 <option value="VIP">VIP</option>
@@ -328,7 +309,7 @@ const Customers: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[#686868] uppercase">Adresse de facturation</label>
+            <label className="text-[10px] font-bold text-[#686868] uppercase">Localisation / Adresse</label>
             <textarea name="address" rows={2} defaultValue={editingCustomer?.address} placeholder="Quartier, Ville..." className="w-full" />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
@@ -343,53 +324,53 @@ const Customers: React.FC = () => {
       <Drawer 
         isOpen={!!selectedCustomer} 
         onClose={() => setSelectedCustomer(null)} 
-        title="Fiche Profil Client" 
-        subtitle={`ID: ${selectedCustomer?.id}`}
+        title="Dossier Client Certifié" 
+        subtitle={`Réf Cluster: ${selectedCustomer?.id}`}
         icon={<UserIcon size={16}/>}
       >
         {selectedCustomer && (
           <div className="space-y-8 animate-sb-entry">
-            <div className="flex flex-col items-center text-center p-8 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
+            <div className="flex flex-col items-center text-center p-8 bg-[#f8f9fa] border border-[#ededed] rounded-lg shadow-sm">
                <div className={`w-20 h-20 rounded-xl flex items-center justify-center text-3xl font-black mb-4 shadow-sm border border-white ${getInitialColor(selectedCustomer.name)}`}>
                  {selectedCustomer.name ? selectedCustomer.name[0] : '?'}
                </div>
                <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight">{selectedCustomer.name}</h3>
-               <p className="text-[11px] text-[#3ecf8e] font-black uppercase tracking-widest mt-1 border border-[#3ecf8e]/20 px-2 py-0.5 rounded bg-[#3ecf8e]/5">
+               <p className="text-[11px] text-[#3ecf8e] font-black uppercase tracking-widest mt-1 border border-[#3ecf8e]/20 px-2.5 py-1 rounded bg-[#3ecf8e]/5">
                  {selectedCustomer.status} • {selectedCustomer.type}
                </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-4 border border-[#ededed] rounded-lg bg-white">
-                <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Volume d'affaires</p>
-                <p className="text-base font-bold text-[#1c1c1c]">{selectedCustomer.totalSpent.toLocaleString()} F</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border border-[#ededed] rounded-xl bg-white shadow-sm">
+                <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Affaires Totales</p>
+                <p className="text-base font-black text-[#1c1c1c]">{selectedCustomer.totalSpent.toLocaleString()} F</p>
               </div>
-              <div className="p-4 border border-[#ededed] rounded-lg bg-white">
-                <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Dossiers SAV</p>
-                <p className="text-base font-bold text-[#1c1c1c]">{selectedCustomer.ticketsCount} Interventions</p>
+              <div className="p-4 border border-[#ededed] rounded-xl bg-white shadow-sm">
+                <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Missions SAV</p>
+                <p className="text-base font-black text-[#1c1c1c]">{selectedCustomer.ticketsCount} Interv.</p>
               </div>
             </div>
 
             <div className="space-y-4">
-               <h4 className="text-[11px] font-bold text-[#686868] uppercase tracking-widest border-b border-[#ededed] pb-2">Informations de contact</h4>
+               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#ededed] pb-2">Contrôle de Contact</h4>
                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-md">
+                  <div className="flex items-center gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-lg">
                     <Smartphone className="text-[#3ecf8e]" size={16}/> 
                     <span className="text-sm font-bold text-[#1c1c1c]">{selectedCustomer.phone}</span>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-md">
+                  <div className="flex items-center gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-lg">
                     <Mail className="text-[#3ecf8e]" size={16}/> 
-                    <span className="text-sm font-medium text-[#1c1c1c] truncate">{selectedCustomer.email || 'Non renseigné'}</span>
+                    <span className="text-sm font-medium text-[#1c1c1c] truncate">{selectedCustomer.email || 'Canal non renseigné'}</span>
                   </div>
-                  <div className="flex items-start gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-md">
+                  <div className="flex items-start gap-3 p-3 bg-[#fcfcfc] border border-[#ededed] rounded-lg">
                     <Building2 className="text-[#3ecf8e] mt-0.5" size={16} /> 
-                    <span className="text-sm font-medium text-[#1c1c1c] leading-relaxed">{selectedCustomer.address || 'Adresse inconnue'}</span>
+                    <span className="text-sm font-medium text-[#1c1c1c] leading-relaxed">{selectedCustomer.address || 'Localisation inconnue'}</span>
                   </div>
                </div>
             </div>
 
-            <button className="btn-sb-outline w-full justify-center gap-2 h-11">
-               <ExternalLink size={14} /> <span>Voir l'historique des tickets</span>
+            <button className="btn-sb-outline w-full justify-center gap-2 h-12 text-[11px] font-black uppercase tracking-widest">
+               <ExternalLink size={14} /> <span>Explorer l'historique complet</span>
             </button>
           </div>
         )}
@@ -398,7 +379,6 @@ const Customers: React.FC = () => {
   );
 };
 
-// Sub-component for icons
 const StarIcon = ({ size, className }: { size: number, className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
