@@ -2,7 +2,8 @@
 import React from 'react';
 import { 
   BookOpen, Lock, Wrench, Package, Zap, 
-  ChevronRight, Printer, Search, ShieldCheck
+  ChevronRight, Printer, Search, ShieldCheck,
+  Terminal, FileText, HelpCircle, ArrowUpRight
 } from 'lucide-react';
 import { useNotifications } from '../App';
 
@@ -10,41 +11,75 @@ const Documentation: React.FC = () => {
   const { addNotification } = useNotifications();
 
   const sections = [
-    { title: "Sécurité & Accès", icon: <Lock />, bg: "bg-[#d3e3fd]", color: "text-[#0b57d0]", items: ["Rôles IAM", "MFA Cloud", "Audit Sessions"] },
-    { title: "SAV & Flux", icon: <Wrench />, bg: "bg-[#c4eed0]", color: "text-[#137333]", items: ["Triage IA", "Interventions", "Clôture"] },
-    { title: "Stock & Rechanges", icon: <Package />, bg: "bg-[#ffdec2]", color: "text-[#b06000]", items: ["SKU Management", "Seuils Alerte", "Traçabilité"] },
-    { title: "Moteur Gemini", icon: <Zap />, bg: "bg-[#f8f0ff]", color: "text-purple-700", items: ["Modèles Pro/Flash", "Strategic Audits", "Chat Assist"] }
+    { 
+      title: "Sécurité & Accès", 
+      icon: <Lock />, 
+      bg: "bg-blue-50", 
+      color: "text-blue-600", 
+      items: ["Gestion des Rôles IAM", "Double Authentification Cloud", "Audit des Sessions Actives"] 
+    },
+    { 
+      title: "SAV & Flux Opérationnels", 
+      icon: <Wrench />, 
+      bg: "bg-[#f0fdf4]", 
+      color: "text-[#3ecf8e]", 
+      items: ["Triage Intelligent par IA", "Protocoles d'Intervention", "Clôture Financière Dossiers"] 
+    },
+    { 
+      title: "Stock & Rechanges", 
+      icon: <Package />, 
+      bg: "bg-amber-50", 
+      color: "text-amber-600", 
+      items: ["Standardisation SKU", "Seuils d'Alerte Critique", "Traçabilité des Mouvements"] 
+    },
+    { 
+      title: "Moteur IA Gemini", 
+      icon: <Zap />, 
+      bg: "bg-purple-50", 
+      color: "text-purple-700", 
+      items: ["Configuration Pro vs Flash", "Génération d'Audits Stratégiques", "Assistance Conversationnelle"] 
+    }
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 animate-m3-entry pb-20">
-      <header className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto space-y-10 animate-sb-entry pb-20">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-normal text-[#1f1f1f]">Horizon Wiki</h1>
-          <p className="text-sm text-[#747775] mt-1">Documentation technique et opérationnelle</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Horizon Wiki</h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">Documentation technique et procédures opérationnelles Royal Plaza.</p>
         </div>
-        <button onClick={() => window.print()} className="btn-md-tonal"><Printer size={18} /> <span>Imprimer</span></button>
+        <button 
+          onClick={() => window.print()} 
+          className="btn-sb-outline h-10 px-4 group"
+        >
+          <Printer size={16} className="group-hover:text-[#3ecf8e]" /> <span>Imprimer Procedure</span>
+        </button>
       </header>
 
+      {/* Search Documentation */}
       <div className="relative group no-print">
-         <Search className="absolute left-6 top-5 text-[#444746]" size={24} />
-         <input type="text" placeholder="Rechercher une procédure technique..." className="w-full pl-16 h-16 bg-[#f0f4f9] border-none rounded-[28px] text-lg focus:bg-white focus:ring-2 focus:ring-[#0b57d0] transition-all" />
+         <Search className="absolute left-4 top-3.5 text-[#686868] group-focus-within:text-[#3ecf8e] transition-colors" size={20} />
+         <input 
+            type="text" 
+            placeholder="Rechercher une procédure technique (ex: Nettoyage split, Code erreur LG...)" 
+            className="w-full pl-12 h-12 bg-white border border-[#ededed] rounded-lg text-sm shadow-sm focus:border-[#3ecf8e] transition-all" 
+         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {sections.map((sec, i) => (
-          <div key={i} className="md-card bg-white border border-[#e3e3e3] hover:border-[#0b57d0] transition-all group">
-             <div className="flex items-center gap-5 mb-8">
-                <div className={`w-14 h-14 ${sec.bg} ${sec.color} rounded-2xl flex items-center justify-center shadow-sm`}>
-                  {React.cloneElement(sec.icon as React.ReactElement, { size: 28 })}
+          <div key={i} className="sb-card hover:border-[#3ecf8e] transition-all group border-[#ededed]">
+             <div className="flex items-center gap-4 mb-6">
+                <div className={`w-12 h-12 ${sec.bg} ${sec.color} rounded-xl flex items-center justify-center shadow-sm`}>
+                  {React.cloneElement(sec.icon as React.ReactElement, { size: 22 })}
                 </div>
-                <h2 className="text-lg font-bold text-[#1f1f1f]">{sec.title}</h2>
+                <h2 className="text-base font-bold text-[#1c1c1c]">{sec.title}</h2>
              </div>
-             <ul className="space-y-2">
+             <ul className="space-y-1">
                 {sec.items.map((item, idx) => (
-                  <li key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-[#f0f4f9] cursor-pointer group/item transition-colors">
-                     <span className="text-sm font-medium text-[#444746] group-hover/item:text-[#0b57d0]">{item}</span>
-                     <ChevronRight size={16} className="text-[#c4c7c5] group-hover/item:text-[#0b57d0] transition-all" />
+                  <li key={idx} className="flex items-center justify-between p-3 rounded-md hover:bg-[#f8f9fa] cursor-pointer group/item transition-colors">
+                     <span className="text-xs font-bold text-[#4b5563] group-hover/item:text-[#1c1c1c]">{item}</span>
+                     <ArrowUpRight size={14} className="text-[#dadce0] group-hover/item:text-[#3ecf8e] transition-all" />
                   </li>
                 ))}
              </ul>
@@ -52,15 +87,40 @@ const Documentation: React.FC = () => {
         ))}
       </div>
 
-      <section className="md-card bg-[#1f1f1f] text-white p-12 overflow-hidden relative">
-         <div className="absolute top-0 right-0 w-64 h-64 bg-[#0b57d0]/20 rounded-full blur-3xl -mr-32 -mt-32" />
-         <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-            <div className="w-20 h-20 bg-[#0b57d0] rounded-3xl flex items-center justify-center shadow-2xl"><ShieldCheck size={40}/></div>
-            <div className="flex-1 text-center md:text-left">
-               <h3 className="text-2xl font-bold tracking-tight">Certification Horizon Expert</h3>
-               <p className="text-[#c4c7c5] mt-2 leading-relaxed">Les guides présents dans ce Wiki respectent les directives de qualité Royal Plaza. Toute modification nécessite une clé d'accès Administrateur.</p>
+      {/* Useful links / FAQ style */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[
+          { label: 'Glossaire Technique', icon: <FileText size={18}/> },
+          { label: 'Codes Erreurs Marques', icon: <Terminal size={18}/> },
+          { label: 'Support Itinérant', icon: <HelpCircle size={18}/> }
+        ].map((item, i) => (
+          <button key={i} className="btn-sb-outline h-14 justify-between w-full px-6 font-bold text-xs uppercase tracking-widest">
+            <div className="flex items-center gap-3">
+              <span className="text-[#3ecf8e]">{item.icon}</span>
+              {item.label}
             </div>
-            <button className="btn-md-primary bg-white !text-[#1f1f1f] hover:bg-[#f0f4f9] border-none px-10 h-14">Support IT</button>
+            <ChevronRight size={14} className="text-[#686868]"/>
+          </button>
+        ))}
+      </div>
+
+      {/* Certification Footer */}
+      <section className="bg-[#1c1c1c] text-white p-10 rounded-2xl overflow-hidden relative shadow-xl">
+         <div className="absolute top-0 right-0 w-64 h-64 bg-[#3ecf8e]/10 rounded-full blur-[100px] -mr-32 -mt-32" />
+         <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+            <div className="w-20 h-20 bg-[#3ecf8e]/20 text-[#3ecf8e] rounded-3xl flex items-center justify-center shadow-2xl border border-[#3ecf8e]/30">
+               <ShieldCheck size={40}/>
+            </div>
+            <div className="flex-1 text-center md:text-left">
+               <h3 className="text-xl font-bold tracking-tight">Certification Expert Horizon</h3>
+               <p className="text-[#9ca3af] mt-2 text-sm leading-relaxed max-w-2xl">
+                 Les guides présents dans ce Wiki respectent les standards de qualité ISO-Plaza. 
+                 Toute modification des protocoles officiels nécessite une validation par le Responsable Technique.
+               </p>
+            </div>
+            <button className="bg-[#3ecf8e] text-[#1c1c1c] font-black uppercase text-[11px] tracking-widest px-8 h-12 rounded-lg hover:bg-[#34b27b] transition-colors shadow-lg shadow-[#3ecf8e]/20">
+               Demander Accès Root
+            </button>
          </div>
       </section>
     </div>

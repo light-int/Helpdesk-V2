@@ -107,15 +107,22 @@ const App: React.FC = () => {
 
   const saveTicket = async (ticket: Ticket) => { await ApiService.tickets.saveAll([ticket]); await refreshAll(); };
   const saveTechnician = async (tech: Technician) => { await ApiService.technicians.saveAll([tech]); await refreshAll(); };
+  const deleteTechnician = async (id: string) => { await ApiService.technicians.delete(id); await refreshAll(); };
   const saveShowroom = async (s: ShowroomConfig) => { await ApiService.showrooms.save(s); await refreshAll(); };
   const saveCustomer = async (c: Customer) => { await ApiService.customers.saveAll([c]); await refreshAll(); };
   const saveProduct = async (p: Product) => { await ApiService.products.saveAll([p]); await refreshAll(); };
   const deleteProduct = async (id: string) => { await ApiService.products.delete(id); await refreshAll(); };
-  
   const savePart = async (part: Part) => { await ApiService.parts.saveAll([part]); await refreshAll(); };
   const deletePart = async (id: string) => { await ApiService.parts.delete(id); await refreshAll(); };
-
+  const saveWarranty = async (w: WarrantyRecord) => { await ApiService.warranties.saveAll([w]); await refreshAll(); };
+  const deleteWarranty = async (id: string) => { await ApiService.warranties.delete(id); await refreshAll(); };
   const updateConfig = async (updates: any) => { await ApiService.config.update(updates); await refreshAll(); };
+  
+  const saveUser = async (user: UserProfile) => { await ApiService.users.save(user); await refreshAll(); };
+  const deleteUser = async (id: string) => { await ApiService.users.delete(id); await refreshAll(); };
+  const addBrand = async (name: string) => { await ApiService.brands.add(name); await refreshAll(); };
+  const deleteBrand = async (name: string) => { await ApiService.brands.delete(name); await refreshAll(); };
+
   const addStockMovement = async (movement: any) => {
     const fullMov = { ...movement, id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString() };
     await ApiService.stockMovements.saveAll([fullMov]);
@@ -133,8 +140,9 @@ const App: React.FC = () => {
         <DataContext.Provider value={{
           tickets, products, technicians, parts, warranties, customers, users, brands, showrooms,
           reports, config, syncMetrics, isSyncing, isLoading, refreshAll, saveTicket, 
-          saveTechnician, saveShowroom, saveCustomer, saveProduct, deleteProduct, 
-          savePart, deletePart, updateConfig, addStockMovement
+          saveTechnician, deleteTechnician, saveShowroom, saveCustomer, saveProduct, deleteProduct, 
+          savePart, deletePart, saveWarranty, deleteWarranty, updateConfig, addStockMovement,
+          saveUser, deleteUser, addBrand, deleteBrand
         }}>
           <HashRouter>
             <div className="flex min-h-screen bg-[#f8f9fa]">
@@ -171,7 +179,7 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* SUPABASE STYLE TOASTS - BOTTOM RIGHT */}
+              {/* SUPABASE STYLE TOASTS */}
               <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
                 {notifications.map((n) => (
                   <div 
