@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, Search, RefreshCw, ShoppingBag, Edit3, Trash2, 
-  ChevronLeft, ChevronRight, Image as ImageIcon, Tag,
-  ShieldCheck, ArrowRight, Upload, Filter, CheckCircle2, X
+  ChevronLeft, ChevronRight, Tag,
+  ShieldCheck, ArrowRight, Upload, Filter, CheckCircle2, Package
 } from 'lucide-react';
 import { useData, useNotifications } from '../App';
 import { Product } from '../types';
@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 import * as XLSX from 'xlsx';
 
-const ITEMS_PER_PAGE = 12;
+const ITEMS_PER_PAGE = 15;
 
 const Products: React.FC = () => {
   const { products, refreshAll, isLoading, isSyncing, brands, saveProduct, deleteProduct } = useData();
@@ -33,7 +33,7 @@ const Products: React.FC = () => {
   const [importData, setImportData] = useState<any[]>([]);
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({
-    name: '', reference: '', brand: '', category: '', price: '', warranty: '', image: ''
+    name: '', reference: '', brand: '', category: '', price: '', warranty: ''
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,13 +85,12 @@ const Products: React.FC = () => {
           const newMapping = { ...mapping };
           headers.forEach(h => {
             const low = h.toLowerCase();
-            if (low.includes('nom') || low.includes('name') || low.includes('produit')) newMapping.name = h;
-            if (low.includes('ref') || low.includes('sku') || low.includes('code')) newMapping.reference = h;
+            if (low.includes('nom') || low.includes('name') || low.includes('produit') || low.includes('désignation')) newMapping.name = h;
+            if (low.includes('ref') || low.includes('sku') || low.includes('code') || low.includes('identifiant')) newMapping.reference = h;
             if (low.includes('marque') || low.includes('brand')) newMapping.brand = h;
             if (low.includes('cat')) newMapping.category = h;
-            if (low.includes('prix') || low.includes('price')) newMapping.price = h;
+            if (low.includes('prix') || low.includes('price') || low.includes('ttc')) newMapping.price = h;
             if (low.includes('garantie') || low.includes('warranty')) newMapping.warranty = h;
-            if (low.includes('image') || low.includes('url') || low.includes('photo')) newMapping.image = h;
           });
           setMapping(newMapping);
           
@@ -125,12 +124,11 @@ const Products: React.FC = () => {
           category: String(row[mapping.category] || 'Général'),
           price: Number(row[mapping.price] || 0),
           warrantyMonths: Number(row[mapping.warranty] || 12),
-          image: row[mapping.image] ? String(row[mapping.image]) : undefined
         };
         await saveProduct(product);
         count++;
       }
-      addNotification({ title: 'Catalogue synchronisé', message: `${count} produits importés avec succès.`, type: 'success' });
+      addNotification({ title: 'Catalogue synchronisé', message: `${count} produits importés.`, type: 'success' });
       setIsImportModalOpen(false);
       refreshAll();
     } catch (err) {
@@ -152,7 +150,6 @@ const Products: React.FC = () => {
       category: formData.get('category') as string,
       price: Number(formData.get('price')),
       warrantyMonths: Number(formData.get('warrantyMonths')),
-      image: (formData.get('image') as string) || editingProduct?.image
     };
     
     try {
@@ -167,7 +164,7 @@ const Products: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Retirer ce produit définitivement du catalogue ?')) return;
+    if (!window.confirm('Retirer ce produit définitivement ?')) return;
     try {
       await deleteProduct(id);
       addNotification({ title: 'Catalogue', message: 'Produit retiré.', type: 'info' });
@@ -238,37 +235,33 @@ const Products: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {paginated.map((p: Product) => (
           <div 
             key={p.id} 
             onClick={() => setSelectedProduct(p)}
-            className="sb-card group cursor-pointer flex flex-col p-0 border border-[#ededed] hover:border-[#3ecf8e] transition-all duration-300"
+            className="sb-card group cursor-pointer flex flex-col p-5 border border-[#ededed] hover:border-[#3ecf8e] transition-all duration-300 bg-white shadow-sm"
           >
-            <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative border-b border-[#f5f5f5]">
-              {p.image ? (
-                <img src={p.image} alt={p.name} className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-500" />
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-[#dadce0]">
-                  <ImageIcon size={48} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Pas d'image</span>
-                </div>
-              )}
-              <div className="absolute top-3 left-3">
-                <span className="px-2 py-1 bg-white/90 backdrop-blur-sm border border-[#ededed] text-[#1c1c1c] text-[9px] font-bold uppercase rounded shadow-sm">
+            <div className="flex justify-between items-start mb-3">
+               <span className="px-2 py-0.5 bg-[#f8f9fa] border border-[#ededed] text-[#1c1c1c] text-[9px] font-black uppercase rounded shadow-xs">
                   {p.brand}
-                </span>
-              </div>
-            </div>
-            <div className="p-4 flex-1 flex flex-col gap-2">
-              <p className="text-[9px] font-bold text-[#3ecf8e] uppercase tracking-widest leading-none">{p.category}</p>
-              <h3 className="text-[13px] font-bold text-[#1c1c1c] leading-snug line-clamp-2">{p.name}</h3>
-              <p className="text-[10px] font-mono text-[#686868]">{p.reference}</p>
-              <div className="mt-auto pt-4 flex items-center justify-between">
-                <span className="text-[15px] font-black text-[#1c1c1c]">{p.price?.toLocaleString()} F</span>
-                <div className="w-8 h-8 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center text-[#686868] group-hover:bg-[#3ecf8e] group-hover:text-white group-hover:border-[#3ecf8e] transition-all">
+               </span>
+               <div className="w-8 h-8 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center text-[#686868] group-hover:bg-[#3ecf8e] group-hover:text-white transition-all">
                   <ArrowRight size={14} />
-                </div>
+               </div>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="text-[9px] font-bold text-[#3ecf8e] uppercase tracking-widest leading-none">{p.category}</p>
+              <h3 className="text-[14px] font-bold text-[#1c1c1c] leading-snug line-clamp-2">{p.name}</h3>
+              <p className="text-[10px] font-mono text-[#686868] font-semibold">{p.reference}</p>
+            </div>
+            
+            <div className="mt-6 pt-4 border-t border-[#f5f5f5] flex items-center justify-between">
+              <span className="text-[15px] font-black text-[#1c1c1c]">{p.price?.toLocaleString()} F</span>
+              <div className="flex items-center gap-1 text-[10px] font-bold text-[#686868]">
+                 <ShieldCheck size={12} className="text-[#3ecf8e]" />
+                 {p.warrantyMonths} m
               </div>
             </div>
           </div>
@@ -277,8 +270,8 @@ const Products: React.FC = () => {
 
       {filtered.length === 0 && !isLoading && (
         <div className="py-20 text-center space-y-4">
-           <ShoppingBag size={48} className="mx-auto text-[#686868] opacity-20" />
-           <p className="text-sm font-bold text-[#686868] uppercase tracking-widest">Aucun produit trouvé</p>
+           <Package size={48} className="mx-auto text-[#686868] opacity-20" />
+           <p className="text-sm font-bold text-[#686868] uppercase tracking-widest">Aucun produit au catalogue</p>
         </div>
       )}
 
@@ -296,11 +289,11 @@ const Products: React.FC = () => {
         <form onSubmit={handleSaveProduct} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Nom commercial</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Désignation commerciale</label>
               <input name="name" type="text" defaultValue={editingProduct?.name} placeholder="ex: TV LG 55 OLED" required className="w-full" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence facturation</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence facturation / SKU</label>
               <input name="reference" type="text" defaultValue={editingProduct?.reference} placeholder="ex: REF-10293" required className="w-full" />
             </div>
             <div className="space-y-1.5">
@@ -317,7 +310,7 @@ const Products: React.FC = () => {
               </datalist>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix Public</label>
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix TTC</label>
               <input name="price" type="number" defaultValue={editingProduct?.price} placeholder="0" required className="w-full" />
             </div>
             <div className="space-y-1.5">
@@ -325,39 +318,34 @@ const Products: React.FC = () => {
               <input name="warrantyMonths" type="number" defaultValue={editingProduct?.warrantyMonths || 12} placeholder="12" required className="w-full" />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[#686868] uppercase">URL Visuel</label>
-            <input name="image" type="url" defaultValue={editingProduct?.image} placeholder="https://..." className="w-full" />
-          </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline">Annuler</button>
             <button type="submit" disabled={isSaving} className="btn-sb-primary">
-              {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Enregistrer'}
+              {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Valider Article'}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* MODAL MAPPING IMPORT */}
-      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Mapping Importation Catalogue" size="lg">
+      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Intelligence d'Importation Catalogue" size="lg">
          <div className="space-y-8">
             <div className="flex items-start gap-4 p-4 bg-[#f0f9f4] border border-[#dcfce7] rounded-xl">
                <CheckCircle2 className="text-[#3ecf8e] shrink-0" size={20} />
                <div>
-                  <p className="text-sm font-bold text-[#1c1c1c]">Fichier détecté : {importData.length} lignes</p>
-                  <p className="text-xs text-[#686868] mt-0.5">Associez les colonnes de votre fichier aux champs Horizon.</p>
+                  <p className="text-sm font-bold text-[#1c1c1c]">Source détectée : {importData.length} lignes de données</p>
+                  <p className="text-xs text-[#686868] mt-0.5">Associez les colonnes Excel aux champs du système Horizon.</p>
                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                {[
                  { key: 'name', label: 'Désignation', req: true },
-                 { key: 'reference', label: 'Réf. Facture / SKU', req: true },
+                 { key: 'reference', label: 'Référence / SKU', req: true },
                  { key: 'brand', label: 'Marque', req: false },
                  { key: 'category', label: 'Catégorie', req: false },
-                 { key: 'price', label: 'Prix Public', req: false },
-                 { key: 'warranty', label: 'Garantie (Mois)', req: false },
-                 { key: 'image', label: 'Lien Image', req: false },
+                 { key: 'price', label: 'Prix de vente TTC', req: false },
+                 { key: 'warranty', label: 'Durée Garantie (Mois)', req: false },
                ].map((field) => (
                  <div key={field.key} className="space-y-1.5">
                     <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center justify-between">
@@ -368,7 +356,7 @@ const Products: React.FC = () => {
                       value={mapping[field.key]}
                       onChange={e => setMapping({...mapping, [field.key]: e.target.value})}
                     >
-                       <option value="">-- Ignorer --</option>
+                       <option value="">-- Ignorer ce champ --</option>
                        {fileHeaders.map((h: string) => <option key={h} value={h}>{h}</option>)}
                     </select>
                  </div>
@@ -376,43 +364,47 @@ const Products: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
-               <button onClick={() => setIsImportModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase">Abandonner</button>
+               <button onClick={() => setIsImportModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase">Annuler</button>
                <button 
                 onClick={processImport} 
                 disabled={isSaving || !mapping.name || !mapping.reference} 
                 className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase shadow-lg shadow-[#3ecf8e]/20"
                >
-                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : `Importer ${importData.length} produits`}
+                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : `Synchroniser le catalogue`}
                </button>
             </div>
          </div>
       </Modal>
 
-      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Contrôle Produit" icon={<ShoppingBag size={16}/>}>
+      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Contrôle de Référence" icon={<ShoppingBag size={16}/>}>
         {selectedProduct && (
-          <div className="space-y-8 animate-sb-entry">
-            <div className="w-full aspect-video bg-white rounded-lg border border-[#ededed] flex items-center justify-center p-8 overflow-hidden shadow-sm">
-               {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-contain" alt="" /> : <ImageIcon size={64} className="text-[#dadce0]" />}
+          <div className="space-y-8 animate-sb-entry pb-10">
+            <div className="p-8 bg-[#f8f9fa] border border-[#ededed] rounded-xl flex flex-col items-center text-center shadow-sm">
+               <div className="w-16 h-16 bg-white border border-[#ededed] rounded-2xl flex items-center justify-center text-[#3ecf8e] mb-4 shadow-sm">
+                  <Package size={32} />
+               </div>
+               <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight leading-tight">{selectedProduct.name}</h3>
+               <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">SKU: {selectedProduct.reference}</p>
+               <div className="mt-4 flex gap-2">
+                 <span className="px-2.5 py-1 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded shadow-xs">{selectedProduct.brand}</span>
+                 <span className="px-2.5 py-1 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded shadow-xs">{selectedProduct.category}</span>
+               </div>
             </div>
-            <div className="flex justify-between items-start">
-              <div>
-                 <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight leading-tight">{selectedProduct.name}</h3>
-                 <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">SKU FACTURE: {selectedProduct.reference}</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }} className="p-2 border border-[#ededed] rounded hover:border-[#3ecf8e] text-[#686868] hover:text-[#3ecf8e] transition-colors"><Edit3 size={16} /></button>
-                <button onClick={() => handleDelete(selectedProduct.id)} className="p-2 border border-[#ededed] rounded hover:border-red-500 text-[#686868] hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
-              </div>
-            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Prix Public</p></div>
-                <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.price?.toLocaleString()} F</p>
+              <div className="p-6 bg-white border border-[#ededed] rounded-xl shadow-sm">
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={14}/><p className="text-[10px] font-black uppercase tracking-widest">Valeur Marchande</p></div>
+                <p className="text-xl font-black text-[#1c1c1c]">{selectedProduct.price?.toLocaleString()} F</p>
               </div>
-              <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Care Pack</p></div>
-                <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.warrantyMonths} Mois</p>
+              <div className="p-6 bg-white border border-[#ededed] rounded-xl shadow-sm">
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={14}/><p className="text-[10px] font-black uppercase tracking-widest">Couverture Care</p></div>
+                <p className="text-xl font-black text-[#1c1c1c]">{selectedProduct.warrantyMonths} Mois</p>
               </div>
+            </div>
+
+            <div className="pt-10 flex gap-3">
+              <button onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }} className="btn-sb-outline flex-1 justify-center h-14 font-black uppercase tracking-widest text-[11px]"><Edit3 size={16} /> <span>Mettre à jour</span></button>
+              <button onClick={() => handleDelete(selectedProduct.id)} className="btn-sb-outline flex-1 justify-center h-14 font-black uppercase tracking-widest text-[11px] text-red-500 border-red-100 hover:bg-red-50"><Trash2 size={16} /> <span>Déréférencer</span></button>
             </div>
           </div>
         )}
