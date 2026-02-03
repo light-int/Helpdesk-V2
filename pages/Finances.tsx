@@ -182,7 +182,7 @@ const Finances: React.FC = () => {
                  </div>
                  <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">{s.label}</p>
                  <h3 className="text-2xl font-black text-[#1c1c1c] mt-1 font-mono">
-                    {typeof s.value === 'number' ? s.value.toLocaleString() + ' F' : s.value}
+                    {typeof s.value === 'number' ? (s.value || 0).toLocaleString() + ' F' : s.value}
                  </h3>
                  <p className="text-[10px] text-[#9ca3af] mt-2 font-bold italic">{s.sub}</p>
               </div>
@@ -210,7 +210,7 @@ const Finances: React.FC = () => {
                       <YAxis axisLine={false} tickLine={false} tick={{fill: '#686868', fontSize: 10}} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
                       <Tooltip 
                         contentStyle={{borderRadius: '12px', border: '1px solid #ededed', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', fontSize: '11px', fontWeight: 'bold'}} 
-                        formatter={(value: any) => [value.toLocaleString() + ' F', 'Revenu']}
+                        formatter={(value: any) => [(Number(value) || 0).toLocaleString() + ' F', 'Revenu']}
                       />
                       <Area type="monotone" dataKey="revenue" stroke="#3ecf8e" strokeWidth={3} fillOpacity={1} fill="url(#colorRevFin)" />
                     </AreaChart>
@@ -238,7 +238,7 @@ const Finances: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: any) => value.toLocaleString() + ' F'} />
+                      <Tooltip formatter={(value: any) => (Number(value) || 0).toLocaleString() + ' F'} />
                     </PieChart>
                   </ResponsiveContainer>
                </div>
@@ -273,7 +273,7 @@ const Finances: React.FC = () => {
                       <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#1c1c1c', fontSize: 11, fontWeight: 'bold'}} />
                       <Tooltip 
                         contentStyle={{borderRadius: '12px', border: '1px solid #ededed'}}
-                        formatter={(v: any) => v.toLocaleString() + ' F'}
+                        formatter={(v: any) => (Number(v) || 0).toLocaleString() + ' F'}
                       />
                       <Bar dataKey="revenue" fill="#3ecf8e" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
@@ -337,15 +337,15 @@ const Finances: React.FC = () => {
                       <td className="px-8 py-5">
                          <div className="flex items-center gap-1.5">
                             <Star size={12} fill="#f59e0b" className="text-amber-500" />
-                            <span className="text-[13px] font-black text-[#1c1c1c]">{tech.rating.toFixed(1)}</span>
+                            <span className="text-[13px] font-black text-[#1c1c1c]">{(tech.rating || 0).toFixed(1)}</span>
                          </div>
                       </td>
                       <td className="px-8 py-5">
-                        <p className="text-[13px] font-mono font-bold text-[#686868]">{Math.round(tech.avgTicket).toLocaleString()} F</p>
+                        <p className="text-[13px] font-mono font-bold text-[#686868]">{(Math.round(tech.avgTicket) || 0).toLocaleString()} F</p>
                       </td>
                       <td className="px-8 py-5 text-right">
                         <div className="flex flex-col items-end">
-                           <p className="text-[16px] font-black text-[#1c1c1c]">{tech.revenue.toLocaleString()} F</p>
+                           <p className="text-[16px] font-black text-[#1c1c1c]">{(tech.revenue || 0).toLocaleString()} F</p>
                            <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${tech.revenue > stats.totalRev / (technicians.length || 1) ? 'text-[#3ecf8e]' : 'text-amber-500'}`}>
                              {tech.revenue > stats.totalRev / (technicians.length || 1) ? 'Over-Perf' : 'Standard'}
                            </p>
@@ -427,12 +427,12 @@ const Finances: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-5 bg-white border border-[#ededed] rounded-2xl shadow-sm space-y-1">
                  <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">C.A. Période</p>
-                 <p className="text-xl font-black text-[#1c1c1c] font-mono">{selectedExpert.revenue.toLocaleString()} F</p>
+                 <p className="text-xl font-black text-[#1c1c1c] font-mono">{(selectedExpert.revenue || 0).toLocaleString()} F</p>
                  <p className="text-[10px] text-[#3ecf8e] font-bold flex items-center gap-1 mt-1"><ArrowUpRight size={10}/> Part de revenu actif</p>
               </div>
               <div className="p-5 bg-white border border-[#ededed] rounded-2xl shadow-sm space-y-1">
                  <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Panier Moyen</p>
-                 <p className="text-xl font-black text-[#1c1c1c] font-mono">{Math.round(selectedExpert.avgTicket).toLocaleString()} F</p>
+                 <p className="text-xl font-black text-[#1c1c1c] font-mono">{(Math.round(selectedExpert.avgTicket) || 0).toLocaleString()} F</p>
                  <p className="text-[10px] text-[#686868] font-bold mt-1">Valeur unitaire par ticket</p>
               </div>
             </div>

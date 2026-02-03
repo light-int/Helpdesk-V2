@@ -35,8 +35,8 @@ const Customers: React.FC = () => {
     return (customers || []).filter((c: Customer) => {
       if (c.isArchived) return false;
       
-      const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            c.phone.includes(searchTerm) ||
+      const matchesSearch = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (c.phone || '').includes(searchTerm) ||
                             (c.companyName || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesType = typeFilter === 'Tous' || c.type === typeFilter;
@@ -125,7 +125,7 @@ const Customers: React.FC = () => {
         {[
           { label: 'Total Clients', value: stats.total, icon: <Users size={16}/>, color: 'text-blue-500' },
           { label: 'Segments VIP', value: stats.vips, icon: <StarIcon size={16}/>, color: 'text-amber-500' },
-          { label: 'Dépense Moyenne', value: `${stats.avgSpent.toLocaleString()} F`, icon: <CreditCard size={16}/>, color: 'text-[#3ecf8e]' }
+          { label: 'Dépense Moyenne', value: `${(stats.avgSpent || 0).toLocaleString()} F`, icon: <CreditCard size={16}/>, color: 'text-[#3ecf8e]' }
         ].map((s, i) => (
           <div key={i} className="sb-card flex items-center gap-4 py-4 px-6">
              <div className={`p-2.5 bg-[#f8f9fa] rounded-md ${s.color}`}>{s.icon}</div>
@@ -218,8 +218,8 @@ const Customers: React.FC = () => {
                   <p className="text-[11px] text-[#686868] truncate max-w-[150px]">{c.email || '—'}</p>
                 </td>
                 <td>
-                  <p className="text-sm font-bold text-[#1c1c1c]">{c.totalSpent?.toLocaleString()} F</p>
-                  <p className="text-[10px] text-[#686868] uppercase font-bold tracking-tighter">{c.ticketsCount} SAV</p>
+                  <p className="text-sm font-bold text-[#1c1c1c]">{(c.totalSpent || 0).toLocaleString()} F</p>
+                  <p className="text-[10px] text-[#686868] uppercase font-bold tracking-tighter">{c.ticketsCount || 0} SAV</p>
                 </td>
                 <td>
                    <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-tight ${getStatusBadge(c.status)}`}>
@@ -343,11 +343,11 @@ const Customers: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border border-[#ededed] rounded-xl bg-white shadow-sm">
                 <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Affaires Totales</p>
-                <p className="text-base font-black text-[#1c1c1c]">{selectedCustomer.totalSpent.toLocaleString()} F</p>
+                <p className="text-base font-black text-[#1c1c1c]">{(selectedCustomer.totalSpent || 0).toLocaleString()} F</p>
               </div>
               <div className="p-4 border border-[#ededed] rounded-xl bg-white shadow-sm">
                 <p className="text-[10px] font-bold text-[#686868] uppercase tracking-widest mb-1">Missions SAV</p>
-                <p className="text-base font-black text-[#1c1c1c]">{selectedCustomer.ticketsCount} Interv.</p>
+                <p className="text-base font-black text-[#1c1c1c]">{selectedCustomer.ticketsCount || 0} Interv.</p>
               </div>
             </div>
 
