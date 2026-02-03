@@ -1,396 +1,352 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Plus, Search, ShoppingBag, Filter, Upload, Edit3, Trash2, Save, X, Database, 
-  CheckCircle2, Tag, ChevronLeft, ChevronRight, CheckSquare, Square,
-  Loader2, Box, CreditCard, ShieldCheck, Package, ArrowUpRight,
-  AlertTriangle, Info, Hash, Archive, BarChart3, Camera, DollarSign, History,
-  Link as LinkIcon, Image as ImageIcon, RefreshCw, LayoutGrid, ListFilter,
-  FileDown, FileSpreadsheet, ArrowRight
+  Plus, Search, RefreshCw, ShoppingBag, Edit3, Trash2, 
+  ChevronLeft, ChevronRight, Image as ImageIcon, Tag,
+  ShieldCheck, ArrowRight, Upload, Filter, X, FileText
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { useData, useNotifications, useUser } from '../App';
-import { Product, Ticket } from '../types';
+import { Product } from '../types';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
+import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 12;
 
 const Products: React.FC = () => {
-  const { products, tickets, saveProduct, deleteProduct, brands, refreshAll, isLoading } = useData();
-  const { currentUser } = useUser();
+  const { products, refreshAll, isLoading, isSyncing, brands, saveProduct, deleteProduct } = useData();
   const { addNotification } = useNotifications();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Toutes');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  const [brandFilter, setBrandFilter] = useState('Tous');
+  const [categoryFilter, setCategoryFilter] = useState('Tous');
 
-  // États pour l'import Excel
-  const [importData, setImportData] = useState<any[]>([]);
-  const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({
-    reference: '',
-    name: '',
-    brand: '',
-    price: '',
-    category: '',
-    warrantyMonths: ''
-  });
-
-  const isEditor = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { refreshAll(); }, []);
 
   const categories = useMemo(() => {
-    const cats = new Set<string>();
-    (products || []).forEach(p => { if (p.category) cats.add(p.category); });
-    return ['Toutes', ...Array.from(cats)].sort();
+    const cats = new Set((products || []).map(p => p.category));
+    return Array.from(cats).filter(Boolean);
   }, [products]);
 
   const filtered = useMemo(() => {
     return (products || []).filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.brand.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === 'Toutes' || p.category === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (p.reference || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesBrand = brandFilter === 'Tous' || p.brand === brandFilter;
+      const matchesCategory = categoryFilter === 'Tous' || p.category === categoryFilter;
+      
+      return matchesSearch && matchesBrand && matchesCategory;
     });
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, brandFilter, categoryFilter]);
 
-  const paginatedProducts = useMemo(() => {
+  const paginated = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filtered.slice(start, start + ITEMS_PER_PAGE);
   }, [filtered, currentPage]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
 
-  // LOGIQUE IMPORT EXCEL
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
-      if (data.length > 0) {
-        setImportData(data);
-        setExcelHeaders(Object.keys(data[0] as object));
-        setIsMappingModalOpen(true);
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        let count = 0;
+        for (const row of data as any[]) {
+          // Mapping intelligent pour supporter plusieurs formats de colonnes
+          const newProd: Product = {
+            id: `PR-IMP-${Date.now()}-${count}`,
+            name: row.name || row.Nom || row.Désignation || 'Sans nom',
+            reference: String(row.reference || row.Référence || row.Ref || `REF-${count}`),
+            brand: row.brand || row.Marque || 'Inconnue',
+            category: row.category || row.Catégorie || 'Divers',
+            price: Number(row.price || row.Prix || 0),
+            warrantyMonths: Number(row.warranty || row.Garantie || row['Garantie (Mois)'] || 12),
+            image: row.image || row.Image || row.URL || row.image_url || null
+          };
+          await saveProduct(newProd);
+          count++;
+        }
+        addNotification({ title: 'Import Réussi', message: `${count} produits ajoutés au catalogue.`, type: 'success' });
+        refreshAll();
+      } catch (err) {
+        addNotification({ title: 'Erreur', message: 'Le format du fichier Excel/CSV est invalide.', type: 'error' });
       }
     };
     reader.readAsBinaryString(file);
-  };
-
-  const handleFinalImport = async () => {
-    setIsSaving(true);
-    let successCount = 0;
-    try {
-      for (const row of importData) {
-        const newProduct: Product = {
-          id: `PR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          reference: String(row[mapping.reference] || ''),
-          name: String(row[mapping.name] || ''),
-          brand: String(row[mapping.brand] || 'Royal Plaza'),
-          price: parseFloat(row[mapping.price]) || 0,
-          category: String(row[mapping.category] || 'Général'),
-          warrantyMonths: parseInt(row[mapping.warrantyMonths]) || 12
-        };
-        if (newProduct.reference && newProduct.name) {
-          await saveProduct(newProduct);
-          successCount++;
-        }
-      }
-      addNotification({ title: 'Importation Terminée', message: `${successCount} références injectées dans le cloud.`, type: 'success' });
-      setIsMappingModalOpen(false);
-      await refreshAll();
-    } catch (err) {
-      addNotification({ title: 'Erreur Import', message: 'Échec de la synchronisation des données Excel.', type: 'error' });
-    } finally {
-      setIsSaving(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSaving(true);
     const formData = new FormData(e.currentTarget);
-    const productData: Product = {
+    const data: Product = {
       id: editingProduct?.id || `PR-${Date.now()}`,
-      reference: formData.get('reference') as string,
       name: formData.get('name') as string,
+      reference: formData.get('reference') as string,
       brand: formData.get('brand') as string,
       category: formData.get('category') as string,
-      price: parseFloat(formData.get('price') as string || '0'),
-      warrantyMonths: parseInt(formData.get('warrantyMonths') as string || '12'),
-      image: previewImageUrl || undefined
+      price: Number(formData.get('price')),
+      warrantyMonths: Number(formData.get('warrantyMonths')),
+      image: formData.get('image') as string || editingProduct?.image
     };
+    
     try {
-      await saveProduct(productData);
+      await saveProduct(data);
+      addNotification({ title: 'Catalogue', message: 'Produit synchronisé avec succès.', type: 'success' });
       setIsModalOpen(false);
-      setEditingProduct(null);
-      addNotification({ title: 'Catalogue', message: 'Référence mise à jour avec succès.', type: 'success' });
-      await refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la sauvegarde Cloud.', type: 'error' });
-    } finally { setIsSaving(false); }
+      addNotification({ title: 'Erreur', message: 'Échec de la sauvegarde.', type: 'error' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><Loader2 className="animate-spin text-[#1a73e8]" size={32} /></div>;
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Retirer ce produit du catalogue ?')) return;
+    try {
+      await deleteProduct(id);
+      addNotification({ title: 'Catalogue', message: 'Produit supprimé.', type: 'info' });
+      setSelectedProduct(null);
+    } catch (err) {
+      addNotification({ title: 'Erreur', message: 'Impossible de supprimer ce produit.', type: 'error' });
+    }
+  };
 
   return (
-    <div className="space-y-8 animate-page-entry pb-20">
+    <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-light text-[#202124]">Catalogue Produits</h1>
-          <p className="text-[10px] text-[#5f6368] font-black uppercase tracking-widest mt-1">Référentiel Technique & Garanties Royal Plaza</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Catalogue Produits</h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">Référentiel matériel et marques partenaires Royal Plaza.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls, .csv" className="hidden" />
-          {isEditor && (
-            <>
-              <button onClick={() => fileInputRef.current?.click()} className="btn-google-outlined h-11 px-6" title="Importer un catalogue massif depuis un fichier Excel">
-                <FileSpreadsheet size={18} className="text-[#188038]" /> <span>Import Excel</span>
-              </button>
-              <button onClick={() => { setEditingProduct(null); setPreviewImageUrl(''); setIsModalOpen(true); }} className="btn-google-primary h-11 px-6 shadow-xl shadow-blue-600/10" title="Ajouter manuellement une nouvelle référence">
-                <Plus size={20} /> <span>Nouveau Produit</span>
-              </button>
-            </>
-          )}
-          <button onClick={refreshAll} className="btn-google-outlined h-11 px-4" title="Actualiser la liste des produits">
-            <RefreshCw size={18} />
+        <div className="flex gap-2">
+          <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
+          <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-10 px-4">
+            <Upload size={14} /> <span>Importer</span>
+          </button>
+          <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
+            <Plus size={16} /> <span>Nouveau Produit</span>
           </button>
         </div>
       </header>
 
-      {/* KPIS RAPIDES */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="stats-card border-l-4 border-blue-600" title="Nombre total de modèles au catalogue">
-          <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">Total Références</p>
-          <h3 className="text-3xl font-bold text-[#202124]">{products.length}</h3>
-        </div>
-        <div className="stats-card border-l-4 border-green-600" title="Nombre de constructeurs partenaires">
-          <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">Constructeurs</p>
-          <h3 className="text-3xl font-bold text-[#202124]">{brands.length}</h3>
-        </div>
-        <div className="stats-card border-l-4 border-amber-500" title="Volume total de tickets SAV liés à ces produits">
-          <p className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest mb-1">En Sav Associé</p>
-          <h3 className="text-3xl font-bold text-[#202124]">{tickets.length}</h3>
-        </div>
-      </div>
-
-      {/* RECHERCHE & FILTRES */}
-      <div className="google-card overflow-hidden border-none shadow-xl bg-white ring-1 ring-black/5">
-        <div className="p-8 flex flex-col md:flex-row gap-6 items-center">
-          <div className="relative flex-1 w-full group" title="Rechercher par SKU, désignation ou marque">
-             <Search className="absolute left-6 top-4 text-[#9aa0a6] group-focus-within:text-[#1a73e8] transition-colors" size={24} />
-             <input 
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 text-[#686868]" size={16} />
+            <input 
               type="text" 
-              placeholder="Rechercher une référence, un nom ou une marque..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-              className="w-full pl-16 h-14 bg-[#f8f9fa] border-none text-base font-bold shadow-inner focus:bg-white focus:ring-2 focus:ring-blue-100" 
-             />
+              placeholder="Rechercher un modèle, une référence..." 
+              className="w-full pl-10 h-11"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
           </div>
-          <div className="flex gap-4 w-full md:w-auto">
-             <div className="relative flex-1 md:min-w-[220px]" title="Filtrer les produits par rayon">
-                <select 
-                  value={selectedCategory} 
-                  onChange={(e) => setSelectedCategory(e.target.value)} 
-                  className="w-full h-14 bg-[#f1f3f4] border-none text-[10px] font-black uppercase tracking-widest px-6 appearance-none cursor-pointer hover:bg-[#e8eaed] transition-colors"
-                >
-                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-                <Filter className="absolute right-5 top-5 text-gray-400 pointer-events-none" size={16} />
-             </div>
-          </div>
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn-sb-outline h-11 px-4 ${showFilters ? 'border-[#3ecf8e] text-[#3ecf8e]' : ''}`}
+          >
+            <Filter size={16} /> <span className="text-xs">Filtres</span>
+          </button>
+          <button onClick={refreshAll} className="btn-sb-outline h-11 px-3">
+             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+          </button>
         </div>
+
+        {showFilters && (
+          <div className="sb-card p-4 flex flex-wrap gap-6 animate-sb-entry bg-[#fcfcfc]">
+            <div className="space-y-1.5 min-w-[180px]">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
+              <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} className="w-full h-9 text-xs">
+                <option value="Tous">Toutes les marques</option>
+                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5 min-w-[180px]">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
+              <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full h-9 text-xs">
+                <option value="Tous">Toutes les catégories</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button 
+                onClick={() => { setBrandFilter('Tous'); setCategoryFilter('Tous'); setSearchTerm(''); }}
+                className="btn-sb-outline h-9 text-[10px] font-bold px-3 uppercase"
+              >
+                Réinitialiser
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* GRILLE DE PRODUITS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-        {paginatedProducts.map((product) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {paginated.map((p) => (
           <div 
-            key={product.id} 
-            onClick={() => setSelectedProduct(product)}
-            className="group bg-white border border-[#dadce0] cursor-pointer hover:border-[#1a73e8] transition-all flex flex-col relative overflow-hidden"
-            title={`Consulter la fiche technique de: ${product.name}`}
+            key={p.id} 
+            onClick={() => setSelectedProduct(p)}
+            className="sb-card group cursor-pointer flex flex-col p-0 border border-[#ededed] hover:border-[#3ecf8e] transition-all duration-300"
           >
-            <div className="aspect-square bg-[#f8f9fa] flex items-center justify-center overflow-hidden border-b border-[#f1f3f4] relative">
-              {product.image ? (
-                <img 
-                  src={product.image} 
-                  alt={product.name} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" 
-                />
+            <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative border-b border-[#f5f5f5]">
+              {p.image ? (
+                <img src={p.image} alt={p.name} className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-500" />
               ) : (
-                <ImageIcon size={64} className="text-[#dadce0] opacity-30" />
+                <div className="flex flex-col items-center gap-2 text-[#dadce0]">
+                  <ImageIcon size={48} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Image indisponible</span>
+                </div>
               )}
-              <div className="absolute top-4 left-4">
-                 <span className="text-[8px] font-black text-[#1a73e8] uppercase bg-white/90 backdrop-blur-md px-2 py-1 border border-blue-100 shadow-sm">{product.brand}</span>
+              <div className="absolute top-3 left-3">
+                <span className="px-2 py-1 bg-white/90 backdrop-blur-sm border border-[#ededed] text-[#1c1c1c] text-[9px] font-bold uppercase rounded shadow-sm">
+                  {p.brand}
+                </span>
               </div>
             </div>
-            <div className="p-6 space-y-2 flex-1">
-              <span className="text-[9px] text-[#9aa0a6] font-black uppercase tracking-[0.2em]">{product.category}</span>
-              <h3 className="text-sm font-black text-[#3c4043] line-clamp-2 leading-snug group-hover:text-[#1a73e8] transition-colors">{product.name}</h3>
-              <p className="text-[10px] text-[#5f6368] font-mono mt-2 opacity-50 uppercase">SKU: {product.reference}</p>
-            </div>
-            <div className="px-6 py-4 border-t border-[#f1f3f4] flex justify-between items-center bg-[#fcfcfc]">
-              <div>
-                <p className="text-[8px] font-black text-[#9aa0a6] uppercase tracking-tighter">Prix Horizon</p>
-                <span className="text-base font-black text-[#202124]">{product.price.toLocaleString()} F</span>
+            <div className="p-4 flex-1 flex flex-col gap-2">
+              <p className="text-[9px] font-bold text-[#3ecf8e] uppercase tracking-widest leading-none">{p.category}</p>
+              <h3 className="text-[13px] font-bold text-[#1c1c1c] leading-snug line-clamp-2">{p.name}</h3>
+              <p className="text-[10px] font-mono text-[#686868]">{p.reference}</p>
+              <div className="mt-auto pt-4 flex items-center justify-between">
+                <span className="text-[15px] font-black text-[#1c1c1c]">{p.price?.toLocaleString()} F</span>
+                <div className="w-8 h-8 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center text-[#686868] group-hover:bg-[#3ecf8e] group-hover:text-white group-hover:border-[#3ecf8e] transition-all">
+                  <ArrowRight size={14} />
+                </div>
               </div>
-              <div className="p-2 text-[#dadce0] group-hover:text-[#1a73e8] transition-all"><ChevronRight size={20}/></div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-6 pt-10">
-           <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm" title="Page précédente"><ChevronLeft size={24} /></button>
-           <span className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest">Page {currentPage} de {totalPages}</span>
-           <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-3 border bg-white disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm" title="Page suivante"><ChevronRight size={24} /></button>
+        <div className="flex justify-center items-center gap-4 pt-10">
+          <button 
+            disabled={currentPage === 1} 
+            onClick={() => setCurrentPage(p => p - 1)} 
+            className="btn-sb-outline h-9 px-3 disabled:opacity-30"
+          >
+            <ChevronLeft size={16}/>
+          </button>
+          <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages}</span>
+          <button 
+            disabled={currentPage === totalPages} 
+            onClick={() => setCurrentPage(p => p + 1)} 
+            className="btn-sb-outline h-9 px-3 disabled:opacity-30"
+          >
+            <ChevronRight size={16}/>
+          </button>
         </div>
       )}
 
-      {/* MODAL MAPPING IMPORT */}
-      <Modal isOpen={isMappingModalOpen} onClose={() => setIsMappingModalOpen(false)} title="Mapping Colonnes Excel Horizon" size="lg">
-         <div className="space-y-8">
-            <div className="p-6 bg-blue-50 border border-blue-200 flex items-start gap-4">
-               <Info className="text-blue-600 mt-1" size={20} />
-               <div>
-                  <p className="text-xs font-black text-blue-900 uppercase">Configuration de l'Injecteur</p>
-                  <p className="text-[10px] text-blue-700 mt-1">Veuillez faire correspondre les en-têtes de votre fichier Excel aux champs système de Royal Plaza.</p>
-               </div>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        title={editingProduct ? "Modifier le Produit" : "Ajouter au Catalogue"}
+      >
+        <form onSubmit={handleSaveProduct} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Nom du produit</label>
+              <input name="name" type="text" defaultValue={editingProduct?.name} placeholder="ex: TV LG 55 OLED" required className="w-full" />
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               {[
-                 { id: 'reference', label: 'Référence / SKU', required: true, title: "Identifiant unique du produit" },
-                 { id: 'name', label: 'Désignation Commerciale', required: true, title: "Nom complet du produit tel qu'il apparaîtra" },
-                 { id: 'brand', label: 'Marque / Constructeur', required: false, title: "Nom de la marque (LG, Samsung...)" },
-                 { id: 'price', label: 'Prix de Vente (TTC)', required: false, title: "Valeur monétaire en FCFA" },
-                 { id: 'category', label: 'Catégorie Produit', required: false, title: "Classification magasin" },
-                 { id: 'warrantyMonths', label: 'Garantie (Mois)', required: false, title: "Nombre de mois de protection" }
-               ].map(field => (
-                 <div key={field.id} className="space-y-2">
-                    <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1" title={field.title}>
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </label>
-                    <select 
-                      value={mapping[field.id]} 
-                      onChange={e => setMapping({...mapping, [field.id]: e.target.value})}
-                      className="w-full h-11 bg-white border-[#dadce0] font-bold text-xs"
-                      title="Choisir la colonne correspondante dans l'Excel"
-                    >
-                       <option value="">-- Ignorer ce champ --</option>
-                       {excelHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                 </div>
-               ))}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence catalogue</label>
+              <input name="reference" type="text" defaultValue={editingProduct?.reference} placeholder="ex: REF-10293" required className="w-full" />
             </div>
-
-            <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-               <button onClick={handleFinalImport} disabled={isSaving || !mapping.reference || !mapping.name} className="flex-1 btn-google-primary justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl" title="Traiter les données et synchroniser avec le cloud">
-                 {isSaving ? <Loader2 size={20} className="animate-spin" /> : <><Upload size={20} /> Lancer l'injection Cloud</>}
-               </button>
-               <button onClick={() => setIsMappingModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px]" title="Annuler le processus d'importation">Annuler</button>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
+              <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="w-full">
+                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
-         </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
+              <input name="category" list="cats" defaultValue={editingProduct?.category} placeholder="ex: Électroménager" required className="w-full" />
+              <datalist id="cats">
+                {categories.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix Public (F CFA)</label>
+              <input name="price" type="number" defaultValue={editingProduct?.price} placeholder="0" required className="w-full" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#686868] uppercase">Garantie (Mois)</label>
+              <input name="warrantyMonths" type="number" defaultValue={editingProduct?.warrantyMonths || 12} placeholder="12" required className="w-full" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-[#686868] uppercase">URL de l'image</label>
+            <input name="image" type="url" defaultValue={editingProduct?.image} placeholder="https://..." className="w-full" />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#ededed]">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline">Annuler</button>
+            <button type="submit" disabled={isSaving} className="btn-sb-primary">
+              {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
-      {/* DRAWER DETAILS */}
-      <Drawer
-        isOpen={!!selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        title="Fiche Technique Horizon"
-        subtitle={`Réf: ${selectedProduct?.reference}`}
-        icon={<ShoppingBag size={20} />}
-        footer={
-          <div className="flex gap-3">
-             <button onClick={() => setSelectedProduct(null)} className="flex-1 btn-google-outlined justify-center py-4 text-xs font-black uppercase tracking-widest" title="Fermer le volet de détails">Fermer</button>
-             {isEditor && (
-               <button onClick={() => { if(selectedProduct) { setEditingProduct(selectedProduct); setPreviewImageUrl(selectedProduct.image || ''); setIsModalOpen(true); setSelectedProduct(null); } }} className="flex-1 btn-google-primary justify-center py-4 text-xs font-black uppercase tracking-widest shadow-xl" title="Éditer cette fiche produit">
-                 <Edit3 size={18} /> Modifier
-               </button>
-             )}
-          </div>
-        }
-      >
+      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Fiche Produit" icon={<ShoppingBag size={16}/>}>
         {selectedProduct && (
-          <div className="space-y-10">
-             <div className="w-full aspect-video bg-[#f8f9fa] border border-[#dadce0] flex items-center justify-center overflow-hidden shadow-inner" title="Aperçu HD du matériel">
-                {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" /> : <ImageIcon size={80} className="text-[#dadce0] opacity-20" />}
-             </div>
-             <div className="space-y-6">
-                <div>
-                   <span className="text-[10px] font-black text-[#1a73e8] uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 border border-blue-100" title="Marque constructeur certifiée">{selectedProduct.brand}</span>
-                   <h3 className="text-3xl font-black text-[#202124] tracking-tighter leading-tight mt-4">{selectedProduct.name}</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-6 bg-blue-50 border border-blue-100 rounded-none shadow-sm" title="Durée de la garantie standard applicable">
-                      <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-2 flex items-center gap-2"><ShieldCheck size={10}/> Protection</p>
-                      <p className="text-2xl font-black text-blue-900">{selectedProduct.warrantyMonths} <span className="text-xs font-bold uppercase">Mois</span></p>
-                   </div>
-                   <div className="p-6 bg-green-50 border border-green-100 rounded-none shadow-sm" title="Prix de vente public conseillé">
-                      <p className="text-[9px] font-black text-green-700 uppercase tracking-widest mb-2 flex items-center gap-2"><DollarSign size={10}/> Prix TTC</p>
-                      <p className="text-2xl font-black text-green-900">{selectedProduct.price.toLocaleString()} <span className="text-xs font-bold uppercase">F</span></p>
-                   </div>
-                </div>
-             </div>
+          <div className="space-y-8 animate-sb-entry">
+            <div className="w-full aspect-video bg-white rounded-lg border border-[#ededed] flex items-center justify-center p-8 overflow-hidden">
+               {selectedProduct.image ? <img src={selectedProduct.image} className="w-full h-full object-contain" alt="" /> : <ImageIcon size={64} className="text-[#dadce0]" />}
+            </div>
+            <div className="flex justify-between items-start">
+              <div>
+                 <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight leading-tight">{selectedProduct.name}</h3>
+                 <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">REF: {selectedProduct.reference}</p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }}
+                  className="p-2 border border-[#ededed] rounded hover:border-[#3ecf8e] text-[#686868] hover:text-[#3ecf8e] transition-colors"
+                >
+                  <Edit3 size={16} />
+                </button>
+                <button 
+                  onClick={() => handleDelete(selectedProduct.id)}
+                  className="p-2 border border-[#ededed] rounded hover:border-red-500 text-[#686868] hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Tarif Public</p></div>
+                <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.price?.toLocaleString()} F</p>
+              </div>
+              <div className="p-5 bg-[#f8f9fa] border border-[#ededed] rounded-lg">
+                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={12}/><p className="text-[9px] font-bold uppercase tracking-widest">Garantie</p></div>
+                <p className="text-lg font-black text-[#1c1c1c]">{selectedProduct.warrantyMonths} Mois</p>
+              </div>
+            </div>
           </div>
         )}
       </Drawer>
-
-      {/* MODAL ÉDITION MANUELLE */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Édition Catalogue Horizon" size="lg">
-        <form onSubmit={handleSaveProduct} className="space-y-10">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Référence Unique</label>
-                 <input name="reference" type="text" defaultValue={editingProduct?.reference} required className="h-12 bg-[#f8f9fa] border-none font-mono uppercase font-black" title="Le SKU ou code article unique" />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Constructeur</label>
-                 <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="h-12 bg-[#f8f9fa] border-none font-black px-4" title="Marque partenaire">
-                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                 </select>
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Nom Commercial</label>
-                 <input name="name" type="text" defaultValue={editingProduct?.name} required className="h-12 bg-[#f8f9fa] border-none font-black" title="Nom de l'article" />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">URL Visuel HD</label>
-                 <input type="url" value={previewImageUrl} onChange={e => setPreviewImageUrl(e.target.value)} className="h-12 bg-[#f8f9fa] border-none text-xs" placeholder="https://..." title="Lien direct vers l'image du produit" />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black text-[#5f6368] uppercase tracking-widest ml-1">Prix Public (F)</label>
-                 <input name="price" type="number" defaultValue={editingProduct?.price} className="h-12 bg-[#f8f9fa] border-none font-black text-blue-600" title="Prix de vente TTC" />
-              </div>
-           </div>
-           <div className="flex gap-4 pt-8 border-t border-[#dadce0]">
-              <button type="submit" disabled={isSaving} className="btn-google-primary flex-1 justify-center py-5 text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20" title="Enregistrer les modifications">
-                {isSaving ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20} /> Valider la fiche</>}
-              </button>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-google-outlined px-12 font-black uppercase text-[10px] tracking-widest" title="Ignorer les changements">Annuler</button>
-           </div>
-        </form>
-      </Modal>
     </div>
   );
 };

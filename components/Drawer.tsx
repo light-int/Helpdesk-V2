@@ -22,7 +22,7 @@ const Drawer: React.FC<DrawerProps> = ({
   icon, 
   children, 
   footer,
-  width = '50%' 
+  width = '500px' 
 }) => {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -44,27 +44,27 @@ const Drawer: React.FC<DrawerProps> = ({
     <div className="fixed inset-0 z-[100] overflow-hidden">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1px] animate-backdrop"
+        className="absolute inset-0 bg-[#1c273c]/40 backdrop-blur-[1px] animate-backdrop"
         onClick={onClose}
       />
       
-      {/* Drawer Panel - Sharp Edges */}
+      {/* Drawer Panel - DashForge style */}
       <div 
-        className="absolute right-0 top-0 h-full bg-white shadow-2xl flex flex-col animate-royal-drawer w-full md:max-w-full border-l border-[#dadce0]"
-        style={{ width: window.innerWidth < 768 ? '100%' : width, transition: 'width 0.3s ease-in-out' }}
+        className="absolute right-0 top-0 h-full bg-white shadow-2xl flex flex-col transition-all duration-300 transform translate-x-0 w-full md:max-w-full border-l border-[#e2e8f0]"
+        style={{ width: window.innerWidth < 768 ? '100%' : width }}
       >
         {/* Header */}
-        <div className="p-6 border-b border-[#dadce0] flex items-center justify-between bg-[#f8f9fa] shrink-0">
-          <div className="flex items-center gap-4">
+        <div className="p-6 border-b border-[#e2e8f0] flex items-center justify-between bg-[#f8f9fa] shrink-0">
+          <div className="flex items-center gap-3">
             {icon && (
-              <div className="w-10 h-10 bg-white text-[#1a73e8] flex items-center justify-center border border-[#dadce0]">
+              <div className="w-10 h-10 bg-white text-[#1a73e8] flex items-center justify-center border border-[#e2e8f0] rounded-md shadow-sm">
                 {icon}
               </div>
             )}
             <div>
-              <h2 className="text-xs font-black text-[#202124] uppercase tracking-[0.2em] leading-none">{title}</h2>
+              <h2 className="text-sm font-bold text-[#1c273c] uppercase tracking-tight leading-none">{title}</h2>
               {subtitle && (
-                <p className="text-[10px] text-[#5f6368] font-bold uppercase tracking-widest mt-2">
+                <p className="text-[10px] text-[#8392a5] font-semibold mt-1 uppercase">
                   {subtitle}
                 </p>
               )}
@@ -72,9 +72,9 @@ const Drawer: React.FC<DrawerProps> = ({
           </div>
           <button 
             onClick={onClose} 
-            className="p-1 hover:bg-[#e8eaed] text-[#5f6368] transition-all"
+            className="p-1.5 hover:bg-[#e8eaed] text-[#5f6368] hover:text-[#1c273c] transition-all rounded-full"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
@@ -85,7 +85,7 @@ const Drawer: React.FC<DrawerProps> = ({
 
         {/* Footer */}
         {footer && (
-          <div className="p-6 border-t border-[#dadce0] bg-[#f8f9fa] shrink-0">
+          <div className="p-4 border-t border-[#e2e8f0] bg-[#f8f9fa] shrink-0">
             {footer}
           </div>
         )}

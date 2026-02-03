@@ -1,18 +1,16 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
-  Search, Filter, Send, Phone, MoreHorizontal, 
-  MessageSquare, Facebook, Mail, Menu, Loader2,
-  Check, CheckCheck, Smartphone, Reply, User,
-  BellRing, ShieldCheck, Zap, X, Image as ImageIcon,
-  Smile, Mic, Paperclip, MoreVertical, LayoutDashboard
+  Search, Send, Phone, MessageSquare, Loader2, Smartphone, 
+  Paperclip, MoreVertical, X, CheckCheck, User, Info, MoreHorizontal
 } from 'lucide-react';
-import { useNotifications, useUser } from '../App';
+import { useNotifications, useUser, useData } from '../App';
 import { ApiService } from '../services/apiService';
 import { Conversation, Message } from '../types';
 
 const Inbox: React.FC = () => {
   const { currentUser } = useUser();
+  const { isSyncing } = useData();
   const { addNotification } = useNotifications();
   
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -25,33 +23,38 @@ const Inbox: React.FC = () => {
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchInbox = async () => {
-    try {
-      const data = await ApiService.inbox.getConversations();
-      setConversations(data);
-      if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
-    } catch (e) {
-      addNotification({ title: 'Erreur Flux', message: 'Impossible de charger les messages.', type: 'error' });
-    } finally { setIsLoading(false); }
-  };
+  useEffect(() => {
+    const fetchInbox = async () => {
+      try {
+        const data = await ApiService.inbox.getConversations();
+        setConversations(data);
+        if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
+      } catch (e) {
+        addNotification({ title: 'Erreur', message: 'Impossible de charger les messages.', type: 'error' });
+      } finally { setIsLoading(false); }
+    };
+    fetchInbox();
+  }, [addNotification, selectedId]);
 
-  const fetchMessages = async (id: string) => {
-    try {
-      const data = await ApiService.inbox.getMessages(id);
-      setMessages(data);
-      await ApiService.inbox.markAsRead(id);
-      setConversations(prev => prev.map(c => c.id === id ? { ...c, unread_count: 0 } : c));
-    } catch (e) { console.error(e); }
-  };
+  useEffect(() => {
+    if (selectedId) {
+      const fetchMessages = async () => {
+        try {
+          const data = await ApiService.inbox.getMessages(selectedId);
+          setMessages(data);
+          await ApiService.inbox.markAsRead(selectedId);
+          setConversations(prev => prev.map(c => c.id === selectedId ? { ...c, unread_count: 0 } : c));
+        } catch (e) { console.error(e); }
+      };
+      fetchMessages();
+    }
+  }, [selectedId]);
 
-  useEffect(() => { fetchInbox(); }, []);
-  useEffect(() => { if (selectedId) fetchMessages(selectedId); }, [selectedId]);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(c => 
-      c.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.last_message || '').toLowerCase().includes(searchTerm.toLowerCase())
+      c.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [conversations, searchTerm]);
 
@@ -73,90 +76,136 @@ const Inbox: React.FC = () => {
       setMessages(prev => [...prev, newMessage]);
       setConversations(prev => prev.map(c => c.id === selectedId ? { ...c, last_message: content, last_activity: new Date().toISOString() } : c));
     } catch (e) {
-      addNotification({ title: 'Erreur', message: 'Le message n\'a pas pu être transmis.', type: 'error' });
+      addNotification({ title: 'Erreur', message: 'Échec de transmission.', type: 'error' });
     } finally { setIsSending(false); }
   };
 
-  if (isLoading) return <div className="h-[calc(100vh-130px)] flex items-center justify-center bg-white border border-[#dadce0]"><Loader2 className="animate-spin text-[#1a73e8]" size={32} /></div>;
+  if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><Loader2 className="animate-spin text-[#3ecf8e]" size={32} /></div>;
 
   return (
-    <div className="h-[calc(100vh-130px)] bg-white border border-[#dadce0] flex overflow-hidden animate-page-entry shadow-2xl">
-      <div className="w-80 md:w-96 border-r border-[#dadce0] flex flex-col bg-[#f8f9fa] shrink-0">
-        <div className="p-8 border-b border-[#dadce0] bg-white space-y-6">
+    <div className="h-[calc(100vh-140px)] flex bg-white rounded-lg border border-[#ededed] overflow-hidden shadow-sm animate-sb-entry">
+      {/* Sidebar Inbox */}
+      <div className="w-80 md:w-96 border-r border-[#ededed] flex flex-col bg-[#fcfcfc]">
+        <div className="p-5 space-y-4 bg-white border-b border-[#ededed]">
           <div className="flex items-center justify-between">
-             <h2 className="text-xl font-light text-[#202124]">Messages</h2>
-             <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black text-green-600 uppercase bg-green-50 px-2 py-0.5 border border-green-100">Live</span>
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-             </div>
+            <h2 className="text-lg font-bold text-[#1c1c1c] tracking-tight">Messages</h2>
+            <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-[#3ecf8e] animate-pulse' : 'bg-[#ededed]'}`} />
           </div>
-          <div className="relative group">
-             <Search className="absolute left-4 top-3.5 text-[#9aa0a6] transition-colors" size={20} />
-             <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 h-12 bg-[#f1f3f4] border-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-blue-100" />
+          <div className="relative">
+             <Search className="absolute left-3 top-2.5 text-[#686868]" size={16} />
+             <input 
+              type="text" placeholder="Rechercher un client..." 
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)} 
+              className="w-full pl-10 h-10 text-[13px] font-medium" 
+             />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {filteredConversations.map((chat) => (
-            <div key={chat.id} onClick={() => setSelectedId(chat.id)} className={`px-8 py-5 flex gap-4 cursor-pointer transition-all border-b border-[#f1f3f4] ${selectedId === chat.id ? 'bg-white shadow-[inset_4px_0_0_0_#1a73e8]' : 'hover:bg-white/60'}`}>
-              <div className="w-14 h-14 bg-[#e8f0fe] text-[#1a73e8] flex items-center justify-center font-black border border-[#d2e3fc] shrink-0">{chat.customer_name[0]}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center mb-1">
-                  <p className={`text-sm truncate ${chat.unread_count > 0 ? 'font-black text-[#202124]' : 'font-bold text-[#5f6368]'}`}>{chat.customer_name}</p>
-                  <span className="text-[10px] text-[#9aa0a6] font-bold uppercase">{new Date(chat.last_activity).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          {filteredConversations.length > 0 ? (
+            filteredConversations.map((chat) => (
+              <div 
+                key={chat.id} 
+                onClick={() => setSelectedId(chat.id)} 
+                className={`p-4 cursor-pointer transition-all border-b border-[#f5f5f5] flex gap-3 ${selectedId === chat.id ? 'bg-[#f0fdf4] border-l-4 border-l-[#3ecf8e]' : 'hover:bg-white'}`}
+              >
+                <div className="w-11 h-11 rounded-lg bg-white border border-[#ededed] text-[#3ecf8e] flex items-center justify-center font-bold text-lg shrink-0 shadow-sm uppercase">
+                  {chat.customer_name[0]}
                 </div>
-                <p className={`text-xs truncate ${chat.unread_count > 0 ? 'font-black text-[#1a73e8]' : 'text-[#80868b] font-medium'}`}>{chat.last_message || 'Fichier'}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <p className={`text-[13px] truncate ${chat.unread_count > 0 ? 'font-black text-[#1c1c1c]' : 'font-bold text-[#4b5563]'}`}>{chat.customer_name}</p>
+                    <span className="text-[10px] text-[#686868] font-bold">
+                      {new Date(chat.last_activity).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[8px] font-black text-[#3ecf8e] uppercase tracking-tighter border border-[#3ecf8e]/30 px-1 rounded-sm leading-none">{chat.source}</span>
+                    <p className={`text-[12px] truncate ${chat.unread_count > 0 ? 'text-[#1c1c1c] font-bold' : 'text-[#686868]'}`}>
+                      {chat.last_message || '—'}
+                    </p>
+                  </div>
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="p-10 text-center space-y-2 opacity-50">
+              <Search size={32} className="mx-auto text-[#686868]" />
+              <p className="text-[12px] font-bold text-[#686868] uppercase tracking-widest">Aucune conversation</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
+      {/* Message Area */}
       <div className="flex-1 flex flex-col bg-white">
         {selectedConv ? (
           <>
-            <div className="px-10 py-5 border-b border-[#dadce0] flex items-center justify-between bg-white shrink-0 z-10 shadow-sm">
-              <div className="flex items-center gap-5">
-                <div className="w-12 h-12 bg-[#f8f9fa] flex items-center justify-center border border-[#dadce0] text-[#5f6368]">{selectedConv.customer_name[0]}</div>
+            <div className="px-6 py-4 border-b border-[#ededed] flex items-center justify-between shrink-0 bg-white">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center text-[#3ecf8e] font-bold uppercase shadow-sm">
+                  {selectedConv.customer_name[0]}
+                </div>
                 <div>
-                   <p className="text-base font-black text-[#202124] tracking-tight">{selectedConv.customer_name}</p>
-                   <p className="text-[9px] text-[#1a73e8] font-black uppercase tracking-widest">{selectedConv.source}</p>
+                   <p className="text-[14px] font-black text-[#1c1c1c]">{selectedConv.customer_name}</p>
+                   <div className="flex items-center gap-2 mt-0.5">
+                      <span className="w-1.5 h-1.5 bg-[#3ecf8e] rounded-full" />
+                      <p className="text-[10px] text-[#3ecf8e] font-black uppercase tracking-widest">{selectedConv.source}</p>
+                   </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button className="p-3 text-[#5f6368] hover:bg-[#f1f3f4] transition-all"><Phone size={20} /></button>
-                <button className="p-3 text-[#5f6368] hover:bg-[#f1f3f4] transition-all"><MoreVertical size={20} /></button>
+              <div className="flex gap-1">
+                <button className="p-2 hover:bg-[#f8f9fa] rounded-md text-[#686868] transition-colors"><Phone size={18} /></button>
+                <button className="p-2 hover:bg-[#f8f9fa] rounded-md text-[#686868] transition-colors"><Info size={18} /></button>
+                <button className="p-2 hover:bg-[#f8f9fa] rounded-md text-[#686868] transition-colors"><MoreHorizontal size={18} /></button>
               </div>
             </div>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar bg-[#fdfdfd]">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[#fcfcfc]">
               {messages.map((msg, i) => {
                 const isAgent = msg.sender_type === 'agent';
                 return (
-                  <div key={i} className={`flex ${isAgent ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`max-w-[80%] space-y-2`}>
-                      <div className={`px-6 py-4 text-sm shadow-sm ${isAgent ? 'bg-[#1a73e8] text-white border-none' : 'bg-white border border-[#dadce0] text-[#3c4043]'}`}>
+                  <div key={i} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
+                    <div className="max-w-[75%] space-y-1.5">
+                      <div className={`px-4 py-3 text-[13px] leading-relaxed shadow-sm ${
+                        isAgent 
+                        ? 'bg-[#1c1c1c] text-white rounded-2xl rounded-tr-none' 
+                        : 'bg-white border border-[#ededed] text-[#1c1c1c] rounded-2xl rounded-tl-none'
+                      }`}>
                         {msg.content}
                       </div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest text-[#9aa0a6] ${isAgent ? 'text-right' : 'text-left'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </p>
+                      <div className={`flex items-center gap-2 ${isAgent ? 'justify-end' : ''}`}>
+                         <p className="text-[10px] text-[#686868] font-bold uppercase tracking-tighter">
+                            {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                         </p>
+                         {isAgent && <CheckCheck size={12} className="text-[#3ecf8e]" />}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="p-8 border-t border-[#dadce0] bg-white">
-              <div className="flex items-center gap-4 bg-[#f1f3f4] p-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#1a73e8]/20 transition-all border border-transparent shadow-inner">
-                <button className="p-3 text-[#5f6368] hover:text-[#1a73e8]"><Paperclip size={20} /></button>
-                <input type="text" value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder={`Répondre via ${selectedConv.source}...`} className="flex-1 bg-transparent border-none text-sm font-bold focus:ring-0 h-12" />
-                <button onClick={handleSend} disabled={!inputText.trim() || isSending} className="p-4 bg-[#1a73e8] text-white disabled:opacity-30 shadow-xl shadow-blue-600/20 active:scale-95 transition-all"><Send size={22} /></button>
+            <div className="p-5 bg-white border-t border-[#ededed]">
+              <div className="flex items-center gap-2">
+                <button className="p-2.5 text-[#686868] hover:bg-[#f8f9fa] rounded-md transition-colors"><Paperclip size={18} /></button>
+                <div className="flex-1 flex items-center bg-[#f8f9fa] rounded-md border border-[#ededed] px-4 focus-within:border-[#3ecf8e] focus-within:ring-1 focus-within:ring-[#3ecf8e]/20 transition-all">
+                  <input 
+                    type="text" value={inputText} 
+                    onChange={e => setInputText(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSend()} 
+                    placeholder="Écrire une réponse..." 
+                    className="flex-1 bg-transparent border-none text-[13px] font-medium h-11 focus:ring-0" 
+                  />
+                  <button onClick={handleSend} disabled={!inputText.trim() || isSending} className="p-2 text-[#3ecf8e] disabled:opacity-30 transition-transform active:scale-90">
+                    <Send size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-20 bg-[#f8f9fa]">
-             <MessageSquare size={48} className="text-[#1a73e8] mb-10" />
-             <h3 className="text-2xl font-black text-[#202124] uppercase tracking-tighter">Horizon Omnichannel Inbox</h3>
-             <p className="text-sm text-[#5f6368] mt-4 max-w-sm leading-relaxed font-medium">Sélectionnez une conversation pour engager l'assistance.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-10 bg-[#fcfcfc]">
+             <div className="w-20 h-20 bg-white border border-[#ededed] rounded-2xl flex items-center justify-center text-[#3ecf8e] mb-6 shadow-sm"><MessageSquare size={36} /></div>
+             <h3 className="text-xl font-bold text-[#1c1c1c]">Inbox Horizon</h3>
+             <p className="text-sm text-[#686868] mt-2 max-w-[280px] font-medium">Sélectionnez une conversation dans la liste de gauche pour répondre à vos clients.</p>
           </div>
         )}
       </div>
