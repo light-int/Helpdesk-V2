@@ -155,7 +155,10 @@ const App: React.FC = () => {
                       <Route path="/inbox" element={<Inbox />} />
                       <Route path="/tickets" element={<Tickets />} />
                       <Route path="/customers" element={<Customers />} />
-                      <Route path="/maintenance" element={<MaintenanceLog />} />
+                      <Route 
+                        path="/maintenance" 
+                        element={currentUser.role === 'TECHNICIAN' ? <MaintenanceLog /> : <Navigate to="/" replace />} 
+                      />
                       <Route path="/warranties" element={<WarrantyLog />} />
                       <Route path="/parts" element={<PartsInventory />} />
                       <Route path="/finances" element={<Finances />} />
@@ -180,7 +183,7 @@ const App: React.FC = () => {
               )}
 
               {/* SUPABASE STYLE TOASTS */}
-              <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+              <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 w-full max-sm pointer-events-none">
                 {notifications.map((n) => (
                   <div 
                     key={n.id} 
