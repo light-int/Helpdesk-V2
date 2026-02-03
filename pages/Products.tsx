@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, Search, RefreshCw, ShoppingBag, Edit3, Trash2, 
   ChevronLeft, ChevronRight, Image as ImageIcon, Tag,
-  ShieldCheck, ArrowRight, Upload, Filter
+  ShieldCheck, ArrowRight, Upload, Filter, CheckCircle2, X
 } from 'lucide-react';
 import { useData, useNotifications } from '../App';
 import { Product } from '../types';
@@ -28,13 +28,21 @@ const Products: React.FC = () => {
   const [brandFilter, setBrandFilter] = useState('Tous');
   const [categoryFilter, setCategoryFilter] = useState('Tous');
 
+  // Import State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [fileHeaders, setFileHeaders] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({
+    name: '', reference: '', brand: '', category: '', price: '', warranty: '', image: ''
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const categories = useMemo(() => {
     const cats = new Set((products || []).map((p: Product) => p.category));
-    return Array.from(cats).filter(Boolean);
+    return Array.from(cats).filter((c): c is string => !!c);
   }, [products]);
 
   const filtered = useMemo(() => {
@@ -56,42 +64,80 @@ const Products: React.FC = () => {
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
 
-  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (evt) => {
+    reader.onload = (evt) => {
       try {
         const bstr = evt.target?.result as string;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws) as any[];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
         
-        let count = 0;
-        for (const row of data) {
-          const newProd: Product = {
-            id: `PR-IMP-${Date.now()}-${count}`,
-            name: row.name || row.Nom || row.Désignation || 'Sans nom',
-            reference: String(row.reference || row.Référence || row.Ref || `REF-${count}`),
-            brand: row.brand || row.Marque || 'Inconnue',
-            category: row.category || row.Catégorie || 'Divers',
-            price: Number(row.price || row.Prix || 0),
-            warrantyMonths: Number(row.warranty || row.Garantie || row['Garantie (Mois)'] || 12),
-            image: row.image || row.Image || row.URL || row.image_url || undefined
-          };
-          await saveProduct(newProd);
-          count++;
+        if (data.length > 0) {
+          const headers = (data[0] as any[]).map(h => String(h || ''));
+          setFileHeaders(headers);
+          
+          // Auto-mapping intelligent
+          const newMapping = { ...mapping };
+          headers.forEach(h => {
+            const low = h.toLowerCase();
+            if (low.includes('nom') || low.includes('name') || low.includes('produit')) newMapping.name = h;
+            if (low.includes('ref') || low.includes('sku') || low.includes('code')) newMapping.reference = h;
+            if (low.includes('marque') || low.includes('brand')) newMapping.brand = h;
+            if (low.includes('cat')) newMapping.category = h;
+            if (low.includes('prix') || low.includes('price')) newMapping.price = h;
+            if (low.includes('garantie') || low.includes('warranty')) newMapping.warranty = h;
+            if (low.includes('image') || low.includes('url') || low.includes('photo')) newMapping.image = h;
+          });
+          setMapping(newMapping);
+          
+          const rows = XLSX.utils.sheet_to_json(ws);
+          setImportData(rows);
+          setIsImportModalOpen(true);
         }
-        addNotification({ title: 'Import Réussi', message: `${count} articles synchronisés.`, type: 'success' });
-        refreshAll();
       } catch (err) {
-        addNotification({ title: 'Erreur', message: 'Fichier invalide.', type: 'error' });
+        addNotification({ title: 'Erreur Fichier', message: 'Format Excel non supporté.', type: 'error' });
       }
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const processImport = async () => {
+    if (!mapping.name || !mapping.reference) {
+      addNotification({ title: 'Mapping incomplet', message: 'Le Nom et la Référence sont obligatoires.', type: 'warning' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let count = 0;
+      for (const row of importData) {
+        const product: Product = {
+          id: `PR-IMP-${Date.now()}-${count}`,
+          name: String(row[mapping.name] || 'Sans nom'),
+          reference: String(row[mapping.reference] || `REF-${Date.now()}-${count}`),
+          brand: String(row[mapping.brand] || 'Royal Plaza'),
+          category: String(row[mapping.category] || 'Général'),
+          price: Number(row[mapping.price] || 0),
+          warrantyMonths: Number(row[mapping.warranty] || 12),
+          image: row[mapping.image] ? String(row[mapping.image]) : undefined
+        };
+        await saveProduct(product);
+        count++;
+      }
+      addNotification({ title: 'Catalogue synchronisé', message: `${count} produits importés avec succès.`, type: 'success' });
+      setIsImportModalOpen(false);
+      refreshAll();
+    } catch (err) {
+      addNotification({ title: 'Erreur Import', message: 'Une erreur est survenue lors de l\'intégration.', type: 'error' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -121,7 +167,7 @@ const Products: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Retirer ce produit ?')) return;
+    if (!window.confirm('Retirer ce produit définitivement du catalogue ?')) return;
     try {
       await deleteProduct(id);
       addNotification({ title: 'Catalogue', message: 'Produit retiré.', type: 'info' });
@@ -139,9 +185,9 @@ const Products: React.FC = () => {
           <p className="text-xs text-[#686868] mt-1 font-medium">Référentiel produits et marques Royal Plaza.</p>
         </div>
         <div className="flex gap-2">
-          <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx, .xls, .csv" />
           <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-10 px-4">
-            <Upload size={14} /> <span>Importer</span>
+            <Upload size={14} /> <span>Import Excel</span>
           </button>
           <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
             <Plus size={16} /> <span>Nouveau Produit</span>
@@ -178,14 +224,14 @@ const Products: React.FC = () => {
               <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
               <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} className="w-full h-9 text-xs">
                 <option value="Tous">Toutes</option>
-                {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
+                {brands.map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5 min-w-[180px]">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
               <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full h-9 text-xs">
                 <option value="Tous">Toutes</option>
-                {categories.map((c: any) => <option key={String(c)} value={String(c)}>{String(c)}</option>)}
+                {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
@@ -229,12 +275,19 @@ const Products: React.FC = () => {
         ))}
       </div>
 
+      {filtered.length === 0 && !isLoading && (
+        <div className="py-20 text-center space-y-4">
+           <ShoppingBag size={48} className="mx-auto text-[#686868] opacity-20" />
+           <p className="text-sm font-bold text-[#686868] uppercase tracking-widest">Aucun produit trouvé</p>
+        </div>
+      )}
+
       <div className="flex justify-center items-center gap-4 pt-10">
         <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
           <ChevronLeft size={16}/>
         </button>
-        <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages}</span>
-        <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
+        <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages || 1}</span>
+        <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
           <ChevronRight size={16}/>
         </button>
       </div>
@@ -253,14 +306,14 @@ const Products: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
               <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="w-full">
-                {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
+                {brands.map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
               <input name="category" list="cats" defaultValue={editingProduct?.category} placeholder="ex: Électroménager" required className="w-full" />
               <datalist id="cats">
-                {categories.map((c: any) => <option key={String(c)} value={String(c)} />)}
+                {categories.map((c: string) => <option key={c} value={c} />)}
               </datalist>
             </div>
             <div className="space-y-1.5">
@@ -283,6 +336,56 @@ const Products: React.FC = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* MODAL MAPPING IMPORT */}
+      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Mapping Importation Catalogue" size="lg">
+         <div className="space-y-8">
+            <div className="flex items-start gap-4 p-4 bg-[#f0f9f4] border border-[#dcfce7] rounded-xl">
+               <CheckCircle2 className="text-[#3ecf8e] shrink-0" size={20} />
+               <div>
+                  <p className="text-sm font-bold text-[#1c1c1c]">Fichier détecté : {importData.length} lignes</p>
+                  <p className="text-xs text-[#686868] mt-0.5">Associez les colonnes de votre fichier aux champs Horizon.</p>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+               {[
+                 { key: 'name', label: 'Désignation', req: true },
+                 { key: 'reference', label: 'Réf. Facture / SKU', req: true },
+                 { key: 'brand', label: 'Marque', req: false },
+                 { key: 'category', label: 'Catégorie', req: false },
+                 { key: 'price', label: 'Prix Public', req: false },
+                 { key: 'warranty', label: 'Garantie (Mois)', req: false },
+                 { key: 'image', label: 'Lien Image', req: false },
+               ].map((field) => (
+                 <div key={field.key} className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center justify-between">
+                       <span>{field.label} {field.req && <span className="text-red-500">*</span>}</span>
+                    </label>
+                    <select 
+                      className={`w-full h-11 transition-all ${mapping[field.key] ? 'border-[#3ecf8e] bg-[#f0fdf4]/50' : 'border-[#ededed]'}`}
+                      value={mapping[field.key]}
+                      onChange={e => setMapping({...mapping, [field.key]: e.target.value})}
+                    >
+                       <option value="">-- Ignorer --</option>
+                       {fileHeaders.map((h: string) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                 </div>
+               ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
+               <button onClick={() => setIsImportModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase">Abandonner</button>
+               <button 
+                onClick={processImport} 
+                disabled={isSaving || !mapping.name || !mapping.reference} 
+                className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase shadow-lg shadow-[#3ecf8e]/20"
+               >
+                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : `Importer ${importData.length} produits`}
+               </button>
+            </div>
+         </div>
       </Modal>
 
       <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Contrôle Produit" icon={<ShoppingBag size={16}/>}>
