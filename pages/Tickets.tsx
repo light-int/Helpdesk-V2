@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, Search, RefreshCw, Ticket as TicketIcon,
   Filter, MapPin, Edit3, CheckCircle2, Phone, 
   User, ShieldCheck, Zap, Info, ArrowRight,
-  Clock, FileCheck, Package, ClipboardList, X, Trash2
+  Clock, FileCheck, Package, ClipboardList, X, Trash2,
+  Wrench, AlertTriangle, FileText, Lock, ListChecks
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart } from '../types';
@@ -32,7 +34,8 @@ const Tickets: React.FC = () => {
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
-  const isManager = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  // Droits d'accès élargis pour la gestion
+  const canManage = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER' || currentUser?.role === 'AGENT';
   const isTechnician = currentUser?.role === 'TECHNICIAN';
 
   const filtered = useMemo(() => {
@@ -323,32 +326,84 @@ const Tickets: React.FC = () => {
                   <p className="text-[11px] text-[#686868] font-mono mt-1 font-bold">SERIAL: {selectedTicket.serialNumber || "NON RÉPERTORIÉ"}</p>
                 </div>
                 <div className="pt-4 border-t border-[#f5f5f5]">
-                   <p className="text-[10px] font-black text-[#686868] uppercase mb-2">Diagnostic / Problème</p>
+                   <p className="text-[10px] font-black text-[#686868] uppercase mb-2">Symptôme rapporté</p>
                    <p className="text-[13px] text-[#4b5563] leading-relaxed font-medium italic">"{selectedTicket.description}"</p>
                 </div>
               </div>
             </section>
 
-            {selectedTicket.interventionReport && (
-              <section className="space-y-4">
-                <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#f5f5f5] pb-2">Rapport d'Expertise</h4>
-                <div className="p-5 bg-[#f0fdf4] border border-[#dcfce7] rounded-2xl shadow-sm">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle2 size={16} className="text-[#16a34a]"/>
-                    <p className="text-[11px] font-black text-[#16a34a] uppercase">Statut Matériel</p>
+            {selectedTicket.interventionReport?.equipmentStatus && (
+              <section className="space-y-6">
+                <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#f5f5f5] pb-2">Rapport d'Expertise Certifié</h4>
+                
+                <div className="p-6 bg-[#f0fdf4] border border-[#dcfce7] rounded-2xl shadow-sm space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={16} className="text-[#16a34a]"/>
+                      <p className="text-[11px] font-black text-[#16a34a] uppercase tracking-widest">État Final</p>
+                    </div>
+                    {selectedTicket.interventionReport.isWarrantyValid && (
+                      <span className="px-2 py-0.5 bg-white text-[#16a34a] text-[9px] font-black rounded border border-[#dcfce7] uppercase">Sous Garantie</span>
+                    )}
                   </div>
-                  <p className="text-[13px] font-black text-[#1c1c1c]">{selectedTicket.interventionReport.equipmentStatus}</p>
-                  {selectedTicket.interventionReport.recommendations && (
-                    <p className="text-[11px] text-[#686868] mt-2 leading-relaxed"><strong>Conseils :</strong> {selectedTicket.interventionReport.recommendations}</p>
+                  
+                  <p className="text-[15px] font-black text-[#1c1c1c]">{selectedTicket.interventionReport.equipmentStatus}</p>
+
+                  {selectedTicket.interventionReport.detailedDiagnostic && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[#686868]"><Info size={12}/><p className="text-[9px] font-black uppercase">Analyse Technique</p></div>
+                      <p className="text-[12px] text-[#4b5563] leading-relaxed bg-white/50 p-3 rounded-xl border border-[#dcfce7]">{selectedTicket.interventionReport.detailedDiagnostic}</p>
+                    </div>
                   )}
-                  {selectedTicket.interventionReport.actionsTaken && (
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {selectedTicket.interventionReport.actionsTaken.map((a: string, idx: number) => (
-                        <span key={idx} className="px-2 py-0.5 bg-white/50 rounded border border-[#dcfce7] text-[9px] font-bold text-[#16a34a]">{a}</span>
-                      ))}
+
+                  {selectedTicket.interventionReport.repairProcedure && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[#686868]"><Wrench size={12}/><p className="text-[9px] font-black uppercase">Travaux effectués</p></div>
+                      <p className="text-[12px] text-[#4b5563] leading-relaxed bg-white/50 p-3 rounded-xl border border-[#dcfce7]">{selectedTicket.interventionReport.repairProcedure}</p>
+                    </div>
+                  )}
+
+                  {/* --- AFFICHAGE DES ACTIONS EFFECTUÉES --- */}
+                  {selectedTicket.interventionReport.actionsTaken && selectedTicket.interventionReport.actionsTaken.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[#686868]"><ListChecks size={12}/><p className="text-[9px] font-black uppercase">Actions menées</p></div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTicket.interventionReport.actionsTaken.map((a: string, idx: number) => (
+                          <span key={idx} className="px-2.5 py-1.5 bg-white text-[10px] font-bold text-[#16a34a] rounded-lg border border-[#dcfce7] shadow-sm flex items-center gap-1.5">
+                            <CheckCircle2 size={10} /> {a}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTicket.interventionReport.partsUsed && selectedTicket.interventionReport.partsUsed.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[#686868]"><Package size={12}/><p className="text-[9px] font-black uppercase">Consommation de pièces</p></div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedTicket.interventionReport.partsUsed.map((p: UsedPart, idx: number) => (
+                          <span key={idx} className="px-2 py-1 bg-white text-[10px] font-bold rounded-lg border border-[#dcfce7]">{p.name} (x{p.quantity})</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTicket.interventionReport.recommendations && (
+                    <div className="space-y-2 pt-4 border-t border-white/50">
+                      <p className="text-[12px] text-[#4b5563] leading-relaxed"><strong>Préconisations :</strong> {selectedTicket.interventionReport.recommendations}</p>
                     </div>
                   )}
                 </div>
+
+                {canManage && selectedTicket.interventionReport.internalNotes && (
+                   <div className="p-5 bg-red-50 border border-red-100 rounded-2xl space-y-3">
+                      <div className="flex items-center gap-2 text-red-500">
+                        <Lock size={14}/>
+                        <p className="text-[10px] font-black uppercase tracking-widest">Notes de Service Internes</p>
+                      </div>
+                      <p className="text-[12px] text-red-700 leading-relaxed italic">{selectedTicket.interventionReport.internalNotes}</p>
+                   </div>
+                )}
               </section>
             )}
 
@@ -361,7 +416,8 @@ const Tickets: React.FC = () => {
                   <Edit3 size={16}/> <span>Éditer Dossier</span>
                 </button>
               )}
-              {isManager && selectedTicket.status === 'Résolu' && (
+              {/* Clôture autorisée pour Admin, Manager et Agent sur les dossiers résolus ou en attente */}
+              {canManage && (selectedTicket.status === 'Résolu' || selectedTicket.status === "En attente d'approbation") && (
                 <button 
                   onClick={() => handleCloseTicket(selectedTicket)}
                   className="btn-sb-primary h-12 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg shadow-[#3ecf8e]/20"

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, RefreshCw, MapPin, 
@@ -5,7 +6,7 @@ import {
   Clock, Activity, Wrench, ChevronLeft, ChevronRight,
   Edit3, ClipboardCheck, LayoutList, Calendar as CalendarIcon,
   Plus, Trash2, Package, Tag, AlertTriangle, Info, X, Zap,
-  User, Phone
+  User, Phone, ShieldCheck, ClipboardList
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, InterventionReport, Technician, Part, UsedPart } from '../types';
@@ -97,6 +98,10 @@ const MaintenanceLog: React.FC = () => {
       equipmentStatus: existingReport.equipmentStatus || 'Bon',
       actionsTaken: existingReport.actionsTaken || [],
       recommendations: existingReport.recommendations || '',
+      detailedDiagnostic: existingReport.detailedDiagnostic || '',
+      repairProcedure: existingReport.repairProcedure || '',
+      internalNotes: existingReport.internalNotes || '',
+      isWarrantyValid: existingReport.isWarrantyValid ?? true,
       durationMs: existingReport.durationMs || 0,
       startedAt: existingReport.startedAt || new Date().toISOString()
     });
@@ -172,7 +177,7 @@ const MaintenanceLog: React.FC = () => {
 
     try {
       await saveTicket(updatedTicket);
-      addNotification({ title: 'Certification réussie', message: 'Le rapport a été transmis pour validation managériale.', type: 'success' });
+      addNotification({ title: 'Certification réussie', message: 'Le rapport détaillé a été synchronisé.', type: 'success' });
       setIsInterventionModalOpen(false);
       setSelectedMaintenance(updatedTicket);
       refreshAll();
@@ -339,9 +344,28 @@ const MaintenanceLog: React.FC = () => {
                        <p className="text-[9px] font-black text-[#16a34a] uppercase mb-1">État Final Matériel</p>
                        <p className="text-sm font-black text-[#1c1c1c]">{selectedMaintenance.interventionReport.equipmentStatus}</p>
                     </div>
+
+                    {selectedMaintenance.interventionReport.detailedDiagnostic && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-[#686868] uppercase">Diagnostic Technique</p>
+                        <p className="text-xs text-[#4b5563] leading-relaxed bg-[#fcfcfc] p-3 rounded-lg border border-[#ededed] italic">
+                          {selectedMaintenance.interventionReport.detailedDiagnostic}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedMaintenance.interventionReport.repairProcedure && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-[#686868] uppercase">Procédure appliquée</p>
+                        <p className="text-xs text-[#4b5563] leading-relaxed bg-[#fcfcfc] p-3 rounded-lg border border-[#ededed]">
+                          {selectedMaintenance.interventionReport.repairProcedure}
+                        </p>
+                      </div>
+                    )}
+
                     {selectedMaintenance.interventionReport.actionsTaken && selectedMaintenance.interventionReport.actionsTaken.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[9px] font-black text-[#686868] uppercase">Actions Effectuées</p>
+                        <p className="text-[9px] font-black text-[#686868] uppercase">Check-list des points</p>
                         <div className="flex flex-wrap gap-2">
                           {selectedMaintenance.interventionReport.actionsTaken.map((a: string, idx: number) => (
                             <span key={idx} className="px-3 py-1 bg-[#fcfcfc] border border-[#ededed] rounded-lg text-[10px] font-bold text-[#1c1c1c]">{a}</span>
@@ -349,6 +373,7 @@ const MaintenanceLog: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    
                     {selectedMaintenance.interventionReport.partsUsed && selectedMaintenance.interventionReport.partsUsed.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-[9px] font-black text-[#686868] uppercase">Pièces Remplacées</p>
@@ -376,8 +401,9 @@ const MaintenanceLog: React.FC = () => {
         )}
       </Drawer>
 
-      <Modal isOpen={isInterventionModalOpen} onClose={() => setIsInterventionModalOpen(false)} title="Rapport d'Expertise Technique" size="lg">
+      <Modal isOpen={isInterventionModalOpen} onClose={() => setIsInterventionModalOpen(false)} title="Rapport d'Expertise Technique Détaillé" size="lg">
          <form onSubmit={handleSaveReport} className="space-y-8 animate-sb-entry">
+            {/* --- SECTION STATUT & TEMPS --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Tag size={12} className="text-[#3ecf8e]"/> Diagnostic Final</label>
@@ -408,8 +434,46 @@ const MaintenanceLog: React.FC = () => {
                </div>
             </div>
 
+            {/* --- NOUVEAUX CHAMPS DÉTAILLÉS --- */}
+            <div className="space-y-6 bg-[#fcfcfc] p-6 rounded-2xl border border-[#ededed]">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><ClipboardList size={12} className="text-[#3ecf8e]"/> Diagnostic Approfondi</label>
+                  <textarea 
+                    rows={3} 
+                    className="w-full font-bold p-4 rounded-xl border-[#ededed]" 
+                    placeholder="Préciser l'origine technique du problème (ex: Court-circuit sur la carte de puissance dû à une surtension)..." 
+                    value={reportData.detailedDiagnostic} 
+                    onChange={e => setReportData({...reportData, detailedDiagnostic: e.target.value})} 
+                  />
+               </div>
+
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Wrench size={12} className="text-[#3ecf8e]"/> Procédure de Réparation</label>
+                  <textarea 
+                    rows={3} 
+                    className="w-full font-bold p-4 rounded-xl border-[#ededed]" 
+                    placeholder="Décrire les étapes de la réparation effectuée..." 
+                    value={reportData.repairProcedure} 
+                    onChange={e => setReportData({...reportData, repairProcedure: e.target.value})} 
+                  />
+               </div>
+
+               <div className="flex items-center gap-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="warrantyCheck" 
+                      checked={reportData.isWarrantyValid} 
+                      onChange={e => setReportData({...reportData, isWarrantyValid: e.target.checked})}
+                      className="w-4 h-4 text-[#3ecf8e] rounded" 
+                    />
+                    <label htmlFor="warrantyCheck" className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest">Dossier sous garantie certifié</label>
+                  </div>
+               </div>
+            </div>
+
             <div className="space-y-4">
-               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Activity size={12} className="text-[#3ecf8e]"/> Actions Techniques Menées</label>
+               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Activity size={12} className="text-[#3ecf8e]"/> Points de contrôle menés</label>
                
                <div className="flex gap-2 mb-4">
                   <input 
@@ -482,14 +546,19 @@ const MaintenanceLog: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Info size={12} className="text-[#3ecf8e]"/> Préconisations Expert & Conseils</label>
+               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} className="text-[#3ecf8e]"/> Préconisations Expert & Conseils Client</label>
                <textarea rows={2} className="w-full font-bold p-4 rounded-xl border-[#ededed]" placeholder="Conseils pour prolonger la durée de vie de l'appareil..." value={reportData.recommendations} onChange={e => setReportData({...reportData, recommendations: e.target.value})} />
+            </div>
+
+            <div className="space-y-4">
+               <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2"><Lock size={12} /> Notes Internes (Confidentiel)</label>
+               <textarea rows={2} className="w-full font-bold p-4 rounded-xl border-red-100 bg-red-50/30" placeholder="Informations destinées uniquement au management (ex: Suspicion de mauvaise utilisation par le client)..." value={reportData.internalNotes} onChange={e => setReportData({...reportData, internalNotes: e.target.value})} />
             </div>
 
             <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
                <button type="button" onClick={() => setIsInterventionModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase rounded-xl">Abandonner</button>
                <button type="submit" disabled={isSaving} className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
-                  {isSaving ? <RefreshCw className="animate-spin" size={18}/> : 'Certifier Rapport'}
+                  {isSaving ? <RefreshCw className="animate-spin" size={18}/> : 'Transmettre Rapport Complet'}
                </button>
             </div>
          </form>

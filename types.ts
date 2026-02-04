@@ -171,6 +171,10 @@ export interface InterventionReport {
   performedAt?: string;
   startedAt?: string;
   durationMs?: number;
+  detailedDiagnostic?: string;
+  repairProcedure?: string;
+  internalNotes?: string;
+  isWarrantyValid?: boolean;
   recommendations?: string;
   actionsTaken?: string[];
   partsUsed?: UsedPart[];
