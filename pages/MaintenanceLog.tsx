@@ -26,7 +26,7 @@ const PREDEFINED_ACTIONS = [
 ];
 
 const MaintenanceLog: React.FC = () => {
-  const { tickets, technicians, parts, isLoading, refreshAll, isSyncing, saveTicket } = useData();
+  const { tickets, technicians, parts, isLoading, refreshAll, isSyncing, saveTicket, addStockMovement } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   
@@ -159,10 +159,13 @@ const MaintenanceLog: React.FC = () => {
     setIsSaving(true);
     const finalDuration = reportData.durationMs && !isNaN(reportData.durationMs) ? reportData.durationMs : 0;
 
+    // Nettoyage des pièces : on ne garde que celles qui ont un nom
+    const cleanedParts = usedParts.filter((p: UsedPart) => p.name.trim() !== '');
+
     const finalReport: InterventionReport = {
       ...reportData,
       durationMs: finalDuration,
-      partsUsed: usedParts.filter((p: UsedPart) => p.name.trim() !== ''),
+      partsUsed: cleanedParts,
       performedAt: new Date().toISOString(),
       actionsTaken: reportData.actionsTaken || []
     };
@@ -175,8 +178,33 @@ const MaintenanceLog: React.FC = () => {
     };
 
     try {
+      // 1. Sauvegarde du ticket/rapport
       await saveTicket(updatedTicket);
-      addNotification({ title: 'Certification réussie', message: 'Le rapport détaillé a été synchronisé.', type: 'success' });
+
+      // 2. LOGIQUE DE RÉDUCTION DES STOCKS
+      // On diminue le stock pour chaque pièce sélectionnée dans le catalogue
+      // Uniquement si le ticket n'était pas déjà en attente (pour éviter les doubles décomptes en cas d'édit simple)
+      if (selectedMaintenance.status !== 'En attente d\'approbation') {
+        for (const p of cleanedParts) {
+          if (p.id && p.quantity > 0) {
+            try {
+              await addStockMovement({
+                partId: p.id,
+                partName: p.name,
+                quantity: p.quantity,
+                type: 'OUT',
+                reason: `Intervention Ticket #${selectedMaintenance.id}`,
+                performedBy: currentUser?.name || 'Technicien Royal Plaza',
+                ticketId: selectedMaintenance.id
+              });
+            } catch (stockErr) {
+              console.error(`Échec décompte stock pour ${p.name}:`, stockErr);
+            }
+          }
+        }
+      }
+
+      addNotification({ title: 'Certification réussie', message: 'Le rapport détaillé a été synchronisé et les stocks mis à jour.', type: 'success' });
       setIsInterventionModalOpen(false);
       setSelectedMaintenance(updatedTicket);
       refreshAll();
@@ -537,7 +565,7 @@ const MaintenanceLog: React.FC = () => {
                        <div className="w-24">
                           <input type="number" className="w-full h-11 text-xs font-bold text-center" placeholder="Qté" value={part.quantity} onChange={e => handlePartChange(idx, 'quantity', parseInt(e.target.value))} />
                        </div>
-                       <button type="button" onClick={() => handleRemovePart(idx)} className="p-3 text-[#686868] hover:text-red-500 border border-[#ededed] rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                       <button type="button" onClick={() => handleRemovePart(idx)} className="p-3 text-[#686868] hover:text-red-50 border border-[#ededed] rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
                     </div>
                   ))}
                   {usedParts.length === 0 && <p className="text-[11px] text-[#9ca3af] font-medium italic py-4 text-center border-2 border-dashed border-[#f8f9fa] rounded-xl">Aucune pièce détachée utilisée déclarée.</p>}
