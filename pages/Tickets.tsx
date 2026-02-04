@@ -5,10 +5,10 @@ import {
   Filter, MapPin, Edit3, CheckCircle2, Phone, 
   User, ShieldCheck, Zap, Info, ArrowRight,
   Clock, FileCheck, Package, ClipboardList, X, Trash2,
-  Wrench, AlertTriangle, FileText, Lock, ListChecks
+  Wrench, AlertTriangle, FileText, Lock, ListChecks, ShieldAlert
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart } from '../types';
+import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart, WarrantyRecord } from '../types';
 import Drawer from '../components/Drawer';
 import Modal from '../components/Modal';
 
@@ -17,7 +17,7 @@ import Modal from '../components/Modal';
  * Permet le suivi des dossiers techniques et l'affectation des experts.
  */
 const Tickets: React.FC = () => {
-  const { tickets, products, brands, technicians, refreshAll, isSyncing, saveTicket, isLoading, showrooms } = useData();
+  const { tickets, products, brands, technicians, refreshAll, isSyncing, saveTicket, isLoading, showrooms, warranties } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   
@@ -32,7 +32,42 @@ const Tickets: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('Tous');
   const [showFilters, setShowFilters] = useState(false);
 
+  // États pour la détection de garantie dans le formulaire
+  const [formSN, setFormSN] = useState('');
+  const [detectedWarranty, setDetectedWarranty] = useState<WarrantyRecord | null>(null);
+  const [manualWarranty, setManualWarranty] = useState(false);
+
   useEffect(() => { refreshAll(); }, [refreshAll]);
+
+  // Réinitialiser la détection quand on ouvre/ferme le modal
+  useEffect(() => {
+    if (!isModalOpen) {
+      setFormSN('');
+      setDetectedWarranty(null);
+      setManualWarranty(false);
+    } else if (editingTicket) {
+      setFormSN(editingTicket.serialNumber || '');
+      setManualWarranty(editingTicket.interventionReport?.isWarrantyValid || false);
+    }
+  }, [isModalOpen, editingTicket]);
+
+  // Logique de détection automatique de la garantie
+  useEffect(() => {
+    if (formSN.length > 4) {
+      const match = warranties.find((w: WarrantyRecord) => 
+        w.serialNumber.toLowerCase() === formSN.trim().toLowerCase()
+      );
+      if (match) {
+        const isExpired = new Date(match.expiryDate) < new Date();
+        setDetectedWarranty(!isExpired ? match : null);
+        if (!isExpired) setManualWarranty(true);
+      } else {
+        setDetectedWarranty(null);
+      }
+    } else {
+      setDetectedWarranty(null);
+    }
+  }, [formSN, warranties]);
 
   // Droits d'accès élargis pour la gestion
   const canManage = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER' || currentUser?.role === 'AGENT';
@@ -41,7 +76,6 @@ const Tickets: React.FC = () => {
   const filtered = useMemo(() => {
     return (tickets || []).filter((t: Ticket) => {
       if (t.isArchived) return false;
-      // Les techniciens ne voient que leurs dossiers
       if (isTechnician && t.assignedTechnicianId !== currentUser?.id) return false;
       
       const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -75,13 +109,17 @@ const Tickets: React.FC = () => {
       priority: (formData.get('priority') as any) || 'Moyenne',
       productName: formData.get('productName') as string,
       brand: formData.get('brand') as string,
-      serialNumber: formData.get('serialNumber') as string,
+      serialNumber: formSN,
       description: formData.get('description') as string,
       location: formData.get('location') as string,
       clientImpact: (formData.get('clientImpact') as any) || 'Faible',
       assignedTechnicianId: (formData.get('technicianId') as string) || undefined,
       createdAt: editingTicket?.createdAt || new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
+      interventionReport: {
+        ...editingTicket?.interventionReport,
+        isWarrantyValid: manualWarranty
+      },
       financials: editingTicket?.financials || {
         partsTotal: 0, partsCost: 0, laborTotal: 0, laborCost: 0, travelFee: 5000, 
         logisticsCost: 2000, discount: 0, grandTotal: 5000, netMargin: 0, isPaid: false
@@ -229,7 +267,7 @@ const Tickets: React.FC = () => {
             <tr>
               <th className="w-24">ID</th>
               <th>Client & Site</th>
-              <th>Produit</th>
+              <th>Produit & S/N</th>
               <th>Expert</th>
               <th className="text-right">Statut</th>
             </tr>
@@ -246,9 +284,12 @@ const Tickets: React.FC = () => {
                 </td>
                 <td>
                   <p className="text-[12px] font-black text-[#1c1c1c] truncate max-w-[150px]">{t.productName || t.category}</p>
-                  <span className={`px-2 py-0.5 rounded border text-[9px] font-black uppercase ${getPriorityStyle(t.priority)}`}>
-                    {t.priority}
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${getPriorityStyle(t.priority)}`}>
+                      {t.priority}
+                    </span>
+                    {t.serialNumber && <span className="text-[9px] font-mono text-[#686868] font-bold">SN: {t.serialNumber}</span>}
+                  </div>
                 </td>
                 <td>
                   <div className="flex items-center gap-2">
@@ -292,9 +333,16 @@ const Tickets: React.FC = () => {
                 <p className="text-[10px] font-black text-[#686868] uppercase tracking-[0.2em] mb-1">Identifiant Dossier</p>
                 <h3 className="text-xl font-black text-[#1c1c1c]">#{selectedTicket.id}</h3>
               </div>
-              <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusStyle(selectedTicket.status)}`}>
-                {selectedTicket.status}
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusStyle(selectedTicket.status)}`}>
+                  {selectedTicket.status}
+                </span>
+                {selectedTicket.interventionReport?.isWarrantyValid && (
+                  <span className="flex items-center gap-1 text-[9px] font-black text-[#16a34a] uppercase bg-[#f0fdf4] px-2 py-0.5 rounded border border-[#dcfce7]">
+                    <ShieldCheck size={10} /> Sous Garantie
+                  </span>
+                )}
+              </div>
             </div>
 
             <section className="space-y-4">
@@ -320,10 +368,23 @@ const Tickets: React.FC = () => {
             <section className="space-y-4">
               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#f5f5f5] pb-2">Audit Technique</h4>
               <div className="p-5 bg-white border border-[#ededed] rounded-2xl space-y-4 shadow-sm">
-                <div>
-                  <p className="text-[10px] text-[#3ecf8e] font-black uppercase mb-1">{selectedTicket.brand || "Marque Standard"}</p>
-                  <p className="text-base font-black text-[#1c1c1c]">{selectedTicket.productName || selectedTicket.category}</p>
-                  <p className="text-[11px] text-[#686868] font-mono mt-1 font-bold">SERIAL: {selectedTicket.serialNumber || "NON RÉPERTORIÉ"}</p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] text-[#3ecf8e] font-black uppercase mb-1">{selectedTicket.brand || "Marque Standard"}</p>
+                    <p className="text-base font-black text-[#1c1c1c]">{selectedTicket.productName || selectedTicket.category}</p>
+                    <p className="text-[11px] text-[#686868] font-mono mt-1 font-bold">SERIAL: {selectedTicket.serialNumber || "NON RÉPERTORIÉ"}</p>
+                  </div>
+                  {selectedTicket.interventionReport?.isWarrantyValid ? (
+                    <div className="flex flex-col items-center p-2 bg-[#f0fdf4] border border-[#dcfce7] rounded-lg">
+                      <ShieldCheck size={20} className="text-[#16a34a]"/>
+                      <span className="text-[8px] font-black text-[#16a34a] uppercase mt-1 text-center">Protection<br/>Active</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center p-2 bg-red-50 border border-red-100 rounded-lg opacity-50">
+                      <ShieldAlert size={20} className="text-red-500"/>
+                      <span className="text-[8px] font-black text-red-500 uppercase mt-1 text-center">Hors<br/>Garantie</span>
+                    </div>
+                  )}
                 </div>
                 <div className="pt-4 border-t border-[#f5f5f5]">
                    <p className="text-[10px] font-black text-[#686868] uppercase mb-2">Symptôme rapporté</p>
@@ -363,7 +424,6 @@ const Tickets: React.FC = () => {
                     </div>
                   )}
 
-                  {/* --- AFFICHAGE DES ACTIONS EFFECTUÉES --- */}
                   {selectedTicket.interventionReport.actionsTaken && selectedTicket.interventionReport.actionsTaken.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-[#686868]"><ListChecks size={12}/><p className="text-[9px] font-black uppercase">Actions menées</p></div>
@@ -416,7 +476,6 @@ const Tickets: React.FC = () => {
                   <Edit3 size={16}/> <span>Éditer Dossier</span>
                 </button>
               )}
-              {/* Clôture autorisée pour Admin, Manager et Agent sur les dossiers résolus ou en attente */}
               {canManage && (selectedTicket.status === 'Résolu' || selectedTicket.status === "En attente d'approbation") && (
                 <button 
                   onClick={() => handleCloseTicket(selectedTicket)}
@@ -463,6 +522,61 @@ const Tickets: React.FC = () => {
                 <option value="Urgent">URGENT / CRITIQUE</option>
               </select>
             </div>
+
+            <div className="space-y-1.5 col-span-1 md:col-span-2 p-4 bg-[#f8f9fa] border border-[#ededed] rounded-xl">
+               <h5 className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest mb-4 flex items-center gap-2">
+                 <Package size={14} className="text-[#3ecf8e]"/> Matériel & Protection
+               </h5>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Modèle Matériel</label>
+                    <input name="productName" type="text" defaultValue={editingTicket?.productName} placeholder="ex: Split LG ArtCool 12k" className="w-full" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Marque Certifiée</label>
+                    <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full">
+                      {brands?.map((b: string) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest flex items-center justify-between">
+                      Numéro de Série (S/N)
+                      {detectedWarranty && (
+                        <span className="flex items-center gap-1 text-[8px] text-[#16a34a] font-black uppercase">
+                          <ShieldCheck size={10}/> Registre Trouvé
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={formSN} 
+                        onChange={e => setFormSN(e.target.value)} 
+                        placeholder="Vérification auto..." 
+                        required 
+                        className={`w-full font-mono font-bold tracking-tight pr-10 ${detectedWarranty ? 'border-[#16a34a] bg-[#f0fdf4]/50' : ''}`} 
+                      />
+                      <div className="absolute right-3 top-2.5">
+                        {detectedWarranty ? <ShieldCheck size={18} className="text-[#16a34a] animate-pulse"/> : <Search size={18} className="text-[#686868]"/>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 pt-6">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={manualWarranty} 
+                        onChange={e => setManualWarranty(e.target.checked)}
+                        className="w-5 h-5 rounded border-[#ededed] text-[#3ecf8e] focus:ring-[#3ecf8e]"
+                      />
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${manualWarranty ? 'text-[#16a34a]' : 'text-[#686868]'}`}>
+                        {manualWarranty ? 'Dossier Sous Garantie' : 'Hors Garantie / Hors Base'}
+                      </span>
+                    </label>
+                  </div>
+               </div>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Site Showroom</label>
               <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full">
@@ -477,16 +591,6 @@ const Tickets: React.FC = () => {
                 <option value="Email">Support central (Email)</option>
                 <option value="Phone">Accueil téléphonique</option>
                 <option value="Interne">Comptoir Boutique</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Modèle Matériel</label>
-              <input name="productName" type="text" defaultValue={editingTicket?.productName} placeholder="ex: Split LG ArtCool 12k" className="w-full" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Marque Certifiée</label>
-              <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full">
-                {brands?.map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
