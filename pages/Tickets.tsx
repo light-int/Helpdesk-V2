@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, Search, RefreshCw, Ticket as TicketIcon,
@@ -7,7 +6,7 @@ import {
   Clock, FileCheck, Package, ClipboardList, X, Trash2
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { Ticket, TicketCategory, Product, Technician, ShowroomConfig } from '../types';
+import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart } from '../types';
 import Drawer from '../components/Drawer';
 import Modal from '../components/Modal';
 
@@ -341,6 +340,13 @@ const Tickets: React.FC = () => {
                   <p className="text-[13px] font-black text-[#1c1c1c]">{selectedTicket.interventionReport.equipmentStatus}</p>
                   {selectedTicket.interventionReport.recommendations && (
                     <p className="text-[11px] text-[#686868] mt-2 leading-relaxed"><strong>Conseils :</strong> {selectedTicket.interventionReport.recommendations}</p>
+                  )}
+                  {selectedTicket.interventionReport.actionsTaken && (
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {selectedTicket.interventionReport.actionsTaken.map((a: string, idx: number) => (
+                        <span key={idx} className="px-2 py-0.5 bg-white/50 rounded border border-[#dcfce7] text-[9px] font-bold text-[#16a34a]">{a}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
               </section>

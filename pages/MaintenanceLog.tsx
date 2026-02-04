@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, RefreshCw, MapPin, 
@@ -159,7 +158,7 @@ const MaintenanceLog: React.FC = () => {
     const finalReport: InterventionReport = {
       ...reportData,
       durationMs: finalDuration,
-      partsUsed: usedParts.filter(p => p.name.trim() !== ''),
+      partsUsed: usedParts.filter((p: UsedPart) => p.name.trim() !== ''),
       performedAt: new Date().toISOString(),
       actionsTaken: reportData.actionsTaken || []
     };
@@ -271,10 +270,10 @@ const MaintenanceLog: React.FC = () => {
               </div>
            </div>
            <div className="grid grid-cols-7 border-b border-[#ededed] bg-[#f8f9fa]">
-              {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => <div key={day} className="py-2.5 text-center text-[10px] font-black text-[#686868] uppercase border-r border-[#ededed] last:border-r-0">{day}</div>)}
+              {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((day: string) => <div key={day} className="py-2.5 text-center text-[10px] font-black text-[#686868] uppercase border-r border-[#ededed] last:border-r-0">{day}</div>)}
            </div>
            <div className="grid grid-cols-7">
-              {daysInMonth.map((date, i) => {
+              {daysInMonth.map((date: Date | null, i: number) => {
                 const dayInterventions = date ? filteredMaintenance.filter((m: Ticket) => new Date(m.createdAt || '').toDateString() === date.toDateString()) : [];
                 return (
                   <div key={i} className={`min-h-[120px] p-2 border-r border-b border-[#ededed] ${!date ? 'bg-[#fcfcfc]' : 'bg-white'} ${i % 7 === 6 ? 'border-r-0' : ''}`}>
@@ -344,7 +343,7 @@ const MaintenanceLog: React.FC = () => {
                       <div className="space-y-2">
                         <p className="text-[9px] font-black text-[#686868] uppercase">Actions Effectuées</p>
                         <div className="flex flex-wrap gap-2">
-                          {selectedMaintenance.interventionReport.actionsTaken.map((a, idx) => (
+                          {selectedMaintenance.interventionReport.actionsTaken.map((a: string, idx: number) => (
                             <span key={idx} className="px-3 py-1 bg-[#fcfcfc] border border-[#ededed] rounded-lg text-[10px] font-bold text-[#1c1c1c]">{a}</span>
                           ))}
                         </div>
@@ -354,7 +353,7 @@ const MaintenanceLog: React.FC = () => {
                       <div className="space-y-2">
                         <p className="text-[9px] font-black text-[#686868] uppercase">Pièces Remplacées</p>
                         <div className="flex flex-wrap gap-2">
-                          {selectedMaintenance.interventionReport.partsUsed.map((p, idx) => (
+                          {selectedMaintenance.interventionReport.partsUsed.map((p: UsedPart, idx: number) => (
                             <span key={idx} className="px-3 py-1 bg-white border border-[#ededed] rounded-lg text-[10px] font-black shadow-sm flex items-center gap-2">
                               <Package size={10} className="text-[#3ecf8e]"/> {p.name} (x{p.quantity})
                             </span>
@@ -430,7 +429,7 @@ const MaintenanceLog: React.FC = () => {
                   <div>
                     <p className="text-[9px] font-black text-[#686868] uppercase mb-2">Suggestions Rapides</p>
                     <div className="flex flex-wrap gap-2">
-                      {PREDEFINED_ACTIONS.map(action => (
+                      {PREDEFINED_ACTIONS.map((action: string) => (
                         <button 
                           key={action} 
                           type="button" 
@@ -446,7 +445,7 @@ const MaintenanceLog: React.FC = () => {
                   <div className="border-t border-[#ededed] pt-4">
                     <p className="text-[9px] font-black text-[#1c1c1c] uppercase mb-2">Actions Certifiées dans ce rapport</p>
                     <div className="flex flex-wrap gap-2 min-h-[40px]">
-                      {(reportData.actionsTaken || []).map((a, idx) => (
+                      {(reportData.actionsTaken || []).map((a: string, idx: number) => (
                         <span key={idx} className="px-3 py-1.5 bg-[#1c1c1c] text-white rounded-lg text-[10px] font-bold flex items-center gap-2 animate-sb-entry">
                           {a}
                           <button type="button" onClick={() => removeAction(idx)} className="hover:text-red-400"><X size={12}/></button>
@@ -466,7 +465,7 @@ const MaintenanceLog: React.FC = () => {
                   <button type="button" onClick={handleAddPart} className="text-[10px] font-black text-[#3ecf8e] uppercase flex items-center gap-1 hover:bg-[#f0fdf4] px-2 py-1 rounded transition-colors"><Plus size={12}/> Ajouter Pièce</button>
                </div>
                <div className="space-y-3">
-                  {usedParts.map((part, idx) => (
+                  {usedParts.map((part: UsedPart, idx: number) => (
                     <div key={idx} className="flex gap-3 animate-sb-entry">
                        <div className="flex-1">
                           <input list="parts-list" className="w-full h-11 text-xs font-bold" placeholder="Rechercher une pièce dans le catalogue..." value={part.name} onChange={e => handlePartChange(idx, 'name', e.target.value)} />
