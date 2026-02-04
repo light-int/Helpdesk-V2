@@ -28,9 +28,15 @@ const Sidebar: React.FC = () => {
             const isActive = location.pathname === item.path;
             const role = currentUser.role;
             
-            // Accès restreints par rôles
-            if (item.path === '/finances' && (role !== 'ADMIN' && role !== 'MANAGER')) return null;
-            if (item.path === '/technicians' && (role !== 'ADMIN' && role !== 'MANAGER')) return null;
+            // --- LOGIQUE DE RESTRICTION PAR RÔLE ---
+            
+            // Accès restreints ADMIN/MANAGER uniquement
+            if (['/finances', '/technicians', '/settings'].includes(item.path) && 
+                (role !== 'ADMIN' && role !== 'MANAGER')) return null;
+            
+            // Menus interdits aux TECHNICIENS
+            if (role === 'TECHNICIAN' && 
+                ['/customers', '/products', '/inbox', '/documentation'].includes(item.path)) return null;
             
             // La page maintenance n'est accessible qu'au compte technicien
             if (item.path === '/maintenance' && role !== 'TECHNICIAN') return null;

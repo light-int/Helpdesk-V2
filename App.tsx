@@ -134,6 +134,8 @@ const App: React.FC = () => {
     await refreshAll();
   };
 
+  const isTech = currentUser?.role === 'TECHNICIAN';
+
   return (
     <UserContext.Provider value={{ currentUser, login, logout, updateUser }}>
       <NotificationContext.Provider value={{ notifications, addNotification, removeNotification }}>
@@ -152,21 +154,24 @@ const App: React.FC = () => {
                   <main className="flex-1 ml-64 p-8 min-h-screen relative overflow-x-hidden">
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
-                      <Route path="/inbox" element={<Inbox />} />
+                      
+                      {/* Routes interdites aux techniciens */}
+                      <Route path="/inbox" element={!isTech ? <Inbox /> : <Navigate to="/maintenance" replace />} />
+                      <Route path="/customers" element={!isTech ? <Customers /> : <Navigate to="/maintenance" replace />} />
+                      <Route path="/products" element={!isTech ? <Products /> : <Navigate to="/maintenance" replace />} />
+                      <Route path="/documentation" element={!isTech ? <Documentation /> : <Navigate to="/maintenance" replace />} />
+                      
                       <Route path="/tickets" element={<Tickets />} />
-                      <Route path="/customers" element={<Customers />} />
                       <Route 
                         path="/maintenance" 
                         element={currentUser.role === 'TECHNICIAN' ? <MaintenanceLog /> : <Navigate to="/" replace />} 
                       />
                       <Route path="/warranties" element={<WarrantyLog />} />
                       <Route path="/parts" element={<PartsInventory />} />
-                      <Route path="/finances" element={<Finances />} />
-                      <Route path="/technicians" element={<Technicians />} />
-                      <Route path="/products" element={<Products />} />
-                      <Route path="/documentation" element={<Documentation />} />
+                      <Route path="/finances" element={!isTech ? <Finances /> : <Navigate to="/maintenance" replace />} />
+                      <Route path="/technicians" element={!isTech ? <Technicians /> : <Navigate to="/maintenance" replace />} />
                       <Route path="/profile" element={<ProfilePage />} />
-                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings" element={!isTech ? <Settings /> : <Navigate to="/maintenance" replace />} />
                       <Route path="/knowledge" element={<KnowledgeBase />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

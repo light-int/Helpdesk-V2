@@ -13,7 +13,8 @@ import Drawer from '../components/Drawer';
 import Modal from '../components/Modal';
 
 const Tickets: React.FC = () => {
-  const { tickets, products, brands, technicians, refreshAll, isSyncing, saveTicket } = useData();
+  // Destructure isLoading from useData to fix line 269 error
+  const { tickets, products, brands, technicians, refreshAll, isSyncing, saveTicket, isLoading } = useData();
   const { currentUser } = useUser();
   const { addNotification } = useNotifications();
   
@@ -32,10 +33,15 @@ const Tickets: React.FC = () => {
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const isManager = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const isTechnician = currentUser?.role === 'TECHNICIAN';
 
   const filtered = useMemo(() => {
     return (tickets || []).filter((t: Ticket) => {
       if (t.isArchived) return false;
+      
+      // --- RESTRICTION TECHNICIEN ---
+      // Si c'est un technicien, il ne voit que ses propres tickets
+      if (isTechnician && t.assignedTechnicianId !== currentUser?.id) return false;
       
       const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (t.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -48,7 +54,7 @@ const Tickets: React.FC = () => {
       
       return matchesSearch && matchesStatus && matchesCategory && matchesPriority;
     }).sort((a: Ticket, b: Ticket) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime());
-  }, [tickets, searchTerm, statusFilter, categoryFilter, priorityFilter]);
+  }, [tickets, searchTerm, statusFilter, categoryFilter, priorityFilter, isTechnician, currentUser?.id]);
 
   const handleSaveTicket = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -147,16 +153,22 @@ const Tickets: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Dossiers SAV</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Monitoring centralisé des interventions techniques Plaza.</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">
+            {isTechnician ? 'Mes Dossiers SAV' : 'Dossiers SAV'}
+          </h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">
+            {isTechnician ? 'Liste des interventions techniques qui vous sont affectées.' : 'Monitoring centralisé des interventions techniques Plaza.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <button onClick={refreshAll} className="btn-sb-outline h-10 px-3">
             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
           </button>
-          <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
-            <Plus size={16} /> <span>Ouvrir Ticket</span>
-          </button>
+          {!isTechnician && (
+            <button onClick={() => { setEditingTicket(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
+              <Plus size={16} /> <span>Ouvrir Ticket</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -255,11 +267,21 @@ const Tickets: React.FC = () => {
                 </td>
               </tr>
             ))}
+            {filtered.length === 0 && !isLoading && (
+              <tr>
+                <td colSpan={6} className="py-20 text-center">
+                  <div className="flex flex-col items-center opacity-30">
+                    <TicketIcon size={48} className="mb-4" />
+                    <p className="text-xs font-black uppercase tracking-widest">Aucun dossier à traiter</p>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* DRAWER VUE DÉTAILLÉE POUR MANAGER */}
+      {/* DRAWER VUE DÉTAILLÉE POUR MANAGER/TECH */}
       <Drawer 
         isOpen={!!selectedTicket} 
         onClose={() => setSelectedTicket(null)} 
@@ -325,7 +347,7 @@ const Tickets: React.FC = () => {
               </section>
             </div>
 
-            {/* Rapport d'intervention (Manager view) */}
+            {/* Rapport d'intervention */}
             <section className="space-y-4">
               <div className="flex items-center justify-between border-b border-[#f5f5f5] pb-2">
                  <h4 className="text-[11px] font-black uppercase text-[#1c1c1c] tracking-widest flex items-center gap-2">
@@ -423,7 +445,7 @@ const Tickets: React.FC = () => {
                   onClick={() => handleCloseTicket(selectedTicket)}
                   disabled={!selectedTicket.interventionReport?.equipmentStatus || selectedTicket.status === 'Fermé'}
                   className={`w-full btn-sb-primary h-14 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg transition-all ${
-                    (!selectedTicket.interventionReport?.equipmentStatus || selectedTicket.status === 'Fermé') 
+                    (!selectedTicket.interventionReport?.equipmentStatus || selectedTicket.status === 'Fermé' || isTechnician) 
                       ? 'opacity-40 grayscale cursor-not-allowed shadow-none' 
                       : 'shadow-[#3ecf8e]/20'
                   }`}
@@ -431,7 +453,13 @@ const Tickets: React.FC = () => {
                   <CheckCircle2 size={18}/><span>{selectedTicket.status === 'Fermé' ? 'Dossier Clos' : 'Clôturer le Dossier'}</span>
                 </button>
                 
-                {!selectedTicket.interventionReport?.equipmentStatus && (
+                {isTechnician && (
+                  <div className="absolute -top-12 left-0 right-0 hidden group-hover:block bg-[#1c1c1c] text-white text-[9px] font-black p-2 rounded text-center animate-sb-entry uppercase tracking-tighter">
+                    Clôture réservée aux Managers
+                  </div>
+                )}
+                
+                {!isTechnician && !selectedTicket.interventionReport?.equipmentStatus && (
                   <div className="absolute -top-12 left-0 right-0 hidden group-hover:block bg-[#1c1c1c] text-white text-[9px] font-black p-2 rounded text-center animate-sb-entry uppercase tracking-tighter">
                     Le rapport technicien est obligatoire
                   </div>
@@ -442,7 +470,7 @@ const Tickets: React.FC = () => {
         )}
       </Drawer>
 
-      {/* MODAL CREATION / EDITION (Inchangé mais pour référence) */}
+      {/* MODAL CREATION / EDITION */}
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTicket(null); }} title={editingTicket ? `Modification Dossier ${editingTicket.id}` : "Ouverture de Dossier SAV"}>
         <form onSubmit={handleSaveTicket} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
