@@ -32,12 +32,18 @@ const MaintenanceLog: React.FC = () => {
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
+  const isTechnician = currentUser?.role === 'TECHNICIAN';
+
   const filteredMaintenance = useMemo(() => {
     return (tickets || []).filter((t: Ticket) => {
       const isTerrain = t.category === 'Maintenance' || t.category === 'Installation' || t.category === 'SAV';
       if (!isTerrain) return false;
-      if (currentUser?.role === 'TECHNICIAN' && t.assignedTechnicianId !== currentUser.id) return false;
-      if (techFilter !== 'Tous' && t.assignedTechnicianId !== techFilter) return false;
+      
+      // RESTRICTION RÔLE : Un tech ne voit que son travail
+      if (isTechnician && t.assignedTechnicianId !== currentUser?.id) return false;
+      
+      // Filtre manager
+      if (!isTechnician && techFilter !== 'Tous' && t.assignedTechnicianId !== techFilter) return false;
       
       const matchesSearch = (t.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (t.id || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -45,7 +51,20 @@ const MaintenanceLog: React.FC = () => {
       
       return matchesSearch && matchesStatus;
     }).sort((a: Ticket, b: Ticket) => new Date(b.lastUpdate || b.createdAt || '').getTime() - new Date(a.lastUpdate || a.createdAt || '').getTime());
-  }, [tickets, searchTerm, statusFilter, techFilter, currentUser]);
+  }, [tickets, searchTerm, statusFilter, techFilter, currentUser, isTechnician]);
+
+  // CALCULS STATISTIQUES PERSONNALISÉS
+  const techStats = useMemo(() => {
+    const total = filteredMaintenance.length;
+    const resolved = filteredMaintenance.filter(m => m.status === 'Résolu' || m.status === 'Fermé').length;
+    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 100;
+    
+    return {
+      active: filteredMaintenance.filter(m => m.status === 'En cours').length,
+      pending: filteredMaintenance.filter(m => m.status === 'En attente d\'approbation' || m.status === 'Nouveau').length,
+      rate: resolutionRate
+    };
+  }, [filteredMaintenance]);
 
   const daysInMonth = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -115,8 +134,12 @@ const MaintenanceLog: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Maintenance Terrain</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Logistique et suivi des interventions Plaza.</p>
+          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">
+            {isTechnician ? 'Mon Planning Maintenance' : 'Maintenance Terrain'}
+          </h1>
+          <p className="text-xs text-[#686868] mt-1 font-medium">
+            {isTechnician ? 'Gestion de vos interventions et rapports techniques.' : 'Logistique et suivi des interventions Plaza.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <div className="flex bg-white border border-[#ededed] rounded-lg p-1 shadow-sm">
@@ -139,12 +162,12 @@ const MaintenanceLog: React.FC = () => {
         </div>
       </header>
 
-      {/* KPI Section */}
+      {/* KPI Section - FILTRÉE POUR TECH */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Missions Actives', value: filteredMaintenance.filter((m: Ticket) => m.status === 'En cours').length, icon: <Activity size={16}/>, color: 'text-blue-500' },
-          { label: 'Validation Requise', value: filteredMaintenance.filter((m: Ticket) => m.status === 'En attente d\'approbation').length, icon: <Clock size={16}/>, color: 'text-amber-500' },
-          { label: 'Taux de Résolution', value: '94%', icon: <CheckCircle2 size={16}/>, color: 'text-[#3ecf8e]' }
+          { label: isTechnician ? 'Mes Missions Actives' : 'Missions Actives', value: techStats.active, icon: <Activity size={16}/>, color: 'text-blue-500' },
+          { label: 'Validation Requise', value: techStats.pending, icon: <Clock size={16}/>, color: 'text-amber-500' },
+          { label: isTechnician ? 'Mon Taux de Résolution' : 'Taux Global Cluster', value: `${techStats.rate}%`, icon: <CheckCircle2 size={16}/>, color: 'text-[#3ecf8e]' }
         ].map((s, i) => (
           <div key={i} className="sb-card flex items-center gap-4 py-4 px-6 shadow-sm border-[#ededed]">
              <div className={`p-2.5 bg-[#f8f9fa] rounded-md ${s.color}`}>{s.icon}</div>
@@ -180,13 +203,15 @@ const MaintenanceLog: React.FC = () => {
 
             {showAdvancedFilters && (
               <div className="sb-card p-5 flex flex-wrap gap-6 animate-sb-entry bg-[#fcfcfc] border-[#ededed]">
-                <div className="space-y-1.5 min-w-[180px]">
-                  <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Technicien</label>
-                  <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className="w-full h-10 text-xs font-bold">
-                    <option value="Tous">Tous les experts</option>
-                    {(technicians || []).map((t: Technician) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
+                {!isTechnician && (
+                  <div className="space-y-1.5 min-w-[180px]">
+                    <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Technicien</label>
+                    <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className="w-full h-10 text-xs font-bold">
+                      <option value="Tous">Tous les experts</option>
+                      {(technicians || []).map((t: Technician) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-1.5 min-w-[180px]">
                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">État du Dossier</label>
                   <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full h-10 text-xs font-bold">
@@ -207,7 +232,7 @@ const MaintenanceLog: React.FC = () => {
                   <th className="w-24">ID</th>
                   <th>Client & Secteur</th>
                   <th>Matériel</th>
-                  <th>Expert</th>
+                  {!isTechnician && <th>Expert</th>}
                   <th className="text-right">État</th>
                 </tr>
               </thead>
@@ -223,12 +248,14 @@ const MaintenanceLog: React.FC = () => {
                       <p className="text-[12px] font-black text-[#1c1c1c] truncate max-w-[180px]">{t.productName || 'Matériel non spécifié'}</p>
                       <p className="text-[10px] text-[#3ecf8e] font-black uppercase tracking-tighter">{t.brand}</p>
                     </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <img src={(technicians || []).find((tec: Technician) => tec.id === t.assignedTechnicianId)?.avatar} className="w-7 h-7 rounded-lg border border-[#ededed] bg-white object-cover" alt="" />
-                        <span className="text-[11px] font-black text-[#4b5563]">{(technicians || []).find((tec: Technician) => tec.id === t.assignedTechnicianId)?.name.split(' ')[0] || 'Unassigned'}</span>
-                      </div>
-                    </td>
+                    {!isTechnician && (
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <img src={(technicians || []).find((tec: Technician) => tec.id === t.assignedTechnicianId)?.avatar} className="w-7 h-7 rounded-lg border border-[#ededed] bg-white object-cover" alt="" />
+                          <span className="text-[11px] font-black text-[#4b5563]">{(technicians || []).find((tec: Technician) => tec.id === t.assignedTechnicianId)?.name.split(' ')[0] || 'Unassigned'}</span>
+                        </div>
+                      </td>
+                    )}
                     <td className="text-right">
                       <span className={`px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusChip(t.status)}`}>
                         {t.status}
@@ -293,6 +320,7 @@ const MaintenanceLog: React.FC = () => {
         </div>
       )}
 
+      {/* ... Le reste du code Drawer et Modal reste identique car il gère l'édition du rapport déjà filtré ... */}
       <Drawer isOpen={!!selectedMaintenance} onClose={() => setSelectedMaintenance(null)} title="Contrôle Technique Intervention" icon={<ClipboardCheck size={18}/>}>
         {selectedMaintenance && (
           <div className="space-y-8 animate-sb-entry pb-10">
