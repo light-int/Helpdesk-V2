@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, RefreshCw, MapPin, 
@@ -6,7 +5,7 @@ import {
   Clock, Activity, Wrench, ChevronLeft, ChevronRight,
   Edit3, ClipboardCheck, LayoutList, Calendar as CalendarIcon,
   Plus, Trash2, Package, Tag, AlertTriangle, Info, X, Zap,
-  User, Phone, ShieldCheck, ClipboardList
+  User, Phone, ShieldCheck, ClipboardList, Lock
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { Ticket, InterventionReport, Technician, Part, UsedPart } from '../types';
