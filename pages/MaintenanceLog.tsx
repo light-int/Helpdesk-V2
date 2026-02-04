@@ -53,15 +53,15 @@ const MaintenanceLog: React.FC = () => {
     }).sort((a: Ticket, b: Ticket) => new Date(b.lastUpdate || b.createdAt || '').getTime() - new Date(a.lastUpdate || a.createdAt || '').getTime());
   }, [tickets, searchTerm, statusFilter, techFilter, currentUser, isTechnician]);
 
-  // CALCULS STATISTIQUES PERSONNALISÉS
+  // CALCULS STATISTIQUES PERSONNALISÉS - AJOUT DU TYPE Ticket SUR LE PARAMETRE 'm'
   const techStats = useMemo(() => {
     const total = filteredMaintenance.length;
-    const resolved = filteredMaintenance.filter(m => m.status === 'Résolu' || m.status === 'Fermé').length;
+    const resolved = filteredMaintenance.filter((m: Ticket) => m.status === 'Résolu' || m.status === 'Fermé').length;
     const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 100;
     
     return {
-      active: filteredMaintenance.filter(m => m.status === 'En cours').length,
-      pending: filteredMaintenance.filter(m => m.status === 'En attente d\'approbation' || m.status === 'Nouveau').length,
+      active: filteredMaintenance.filter((m: Ticket) => m.status === 'En cours').length,
+      pending: filteredMaintenance.filter((m: Ticket) => m.status === 'En attente d\'approbation' || m.status === 'Nouveau').length,
       rate: resolutionRate
     };
   }, [filteredMaintenance]);

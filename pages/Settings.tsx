@@ -133,7 +133,8 @@ const Settings: React.FC = () => {
     e.preventDefault();
     if (!newBrandName.trim()) return;
     
-    if (brands.some(b => b.toLowerCase() === newBrandName.trim().toLowerCase())) {
+    // AJOUT DU TYPE string SUR LE PARAMETRE 'b'
+    if (brands.some((b: string) => b.toLowerCase() === newBrandName.trim().toLowerCase())) {
       addNotification({ title: 'Doublon', message: 'Cette marque existe déjà.', type: 'warning' });
       return;
     }

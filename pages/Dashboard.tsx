@@ -34,11 +34,11 @@ const Dashboard: React.FC = () => {
     const totalRevenue = activeTickets.reduce((acc: number, t: Ticket) => acc + (t.financials?.grandTotal || 0), 0);
     const criticalTickets = activeTickets.filter((t: Ticket) => t.priority === 'Urgent' && t.status !== 'Fermé').length;
     
-    // Pour le graphique par showroom
+    // Pour le graphique par showroom - AJOUT DU TYPE SUR LE PARAMETRE 'd'
     const showroomData = (showrooms || []).map((s: ShowroomConfig) => ({
       name: s.id,
       value: activeTickets.filter((t: Ticket) => t.showroom === s.id).length
-    })).filter(d => d.value > 0 || !isTechnician); // Cacher les sites vides pour les techs
+    })).filter((d: { name: string; value: number }) => d.value > 0 || !isTechnician);
 
     // Trouver le profil tech correspondant pour les indicateurs de performance
     const techProfile = technicians.find((t: Technician) => t.id === currentUser?.id);
