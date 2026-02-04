@@ -5,7 +5,7 @@ import {
   Minus, Layers, Activity, 
   BarChart3, MapPin, Upload, 
   AlertTriangle, Boxes, CheckCircle2,
-  Zap, ArrowRight
+  Zap, ArrowRight, Sparkles
 } from 'lucide-react';
 import { Part } from '../types';
 import { useNotifications, useData, useUser } from '../App';
@@ -59,6 +59,63 @@ const PartsInventory: React.FC = () => {
     const totalValuation = (parts || []).reduce((acc: number, p: Part) => acc + (p.currentStock * p.unitPrice), 0);
     return { totalParts, critical, outOfStock, totalValuation };
   }, [parts]);
+
+  const handleGenerateSamples = async () => {
+    setIsSaving(true);
+    const sampleParts: Part[] = [
+      {
+        id: `PT-SAMPLE-1-${Date.now()}`,
+        name: 'Carte Mère Inverter LG - Split 12k',
+        sku: 'LG-PCB-INV-01',
+        category: 'Électronique',
+        brand: 'LG',
+        currentStock: 8,
+        minStock: 2,
+        unitPrice: 45000,
+        location: 'Zone A1 - Glass'
+      },
+      {
+        id: `PT-SAMPLE-2-${Date.now()}`,
+        name: 'Thermostat Digital Beko 220V',
+        sku: 'BK-THR-772',
+        category: 'Mécanique',
+        brand: 'Beko',
+        currentStock: 15,
+        minStock: 5,
+        unitPrice: 12500,
+        location: 'Zone B4 - Oloumi'
+      },
+      {
+        id: `PT-SAMPLE-3-${Date.now()}`,
+        name: 'Compresseur Hisense R600 Silent',
+        sku: 'HS-COMP-600',
+        category: 'Mécanique',
+        brand: 'Hisense',
+        currentStock: 4,
+        minStock: 3,
+        unitPrice: 78000,
+        location: 'Zone C1 - BDM'
+      }
+    ];
+
+    try {
+      await ApiService.parts.saveAll(sampleParts);
+      addNotification({ 
+        title: 'Synchronisation Réussie', 
+        message: '3 pièces détachées critiques ont été injectées dans le catalogue.', 
+        type: 'success' 
+      });
+      refreshAll();
+    } catch (err) {
+      addNotification({ 
+        title: 'Erreur Cluster', 
+        message: 'Impossible de synchroniser les données de test.', 
+        type: 'error' 
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleAdjustStock = async (id: string, delta: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -255,6 +312,13 @@ const PartsInventory: React.FC = () => {
           <p className="text-xs text-[#686868] mt-1 font-medium">Gestion du catalogue de composants techniques Plaza.</p>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={handleGenerateSamples} 
+            disabled={isSaving}
+            className="btn-sb-outline h-10 px-4 text-[#3ecf8e] border-[#3ecf8e]/30 hover:bg-[#f0fdf4]"
+          >
+            <Sparkles size={16} className={isSaving ? 'animate-pulse' : ''} /> <span>Générer 3 Pièces</span>
+          </button>
           {parts.length > 0 && (
              <button onClick={handleClearAll} className="btn-sb-outline h-10 px-4 text-red-500 hover:bg-red-50 border-red-100">
                <Trash2 size={16} /> <span>Vider tout</span>
