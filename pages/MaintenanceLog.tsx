@@ -282,7 +282,7 @@ const MaintenanceLog: React.FC = () => {
                       <>
                         <p className="text-[11px] font-black text-[#686868] mb-2">{date.getDate()}</p>
                         <div className="space-y-1">
-                          {dayInterventions.map(m => (
+                          {dayInterventions.map((m: Ticket) => (
                             <div key={m.id} onClick={() => setSelectedMaintenance(m)} className="text-[9px] p-1 bg-[#f0fdf4] border border-[#dcfce7] rounded shadow-xs truncate font-black text-[#16a34a] cursor-pointer hover:border-[#3ecf8e]">
                                {m.customerName}
                             </div>

@@ -7,7 +7,7 @@ import {
   Clock, FileCheck, Package, ClipboardList, X, Trash2
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { Ticket, TicketCategory, Product, Technician } from '../types';
+import { Ticket, TicketCategory, Product, Technician, ShowroomConfig } from '../types';
 import Drawer from '../components/Drawer';
 import Modal from '../components/Modal';
 
@@ -233,7 +233,7 @@ const Tickets: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
+            {filtered.map((t: Ticket) => (
               <tr key={t.id} onClick={() => setSelectedTicket(t)} className="cursor-pointer group hover:bg-[#fafafa]">
                 <td className="font-mono text-[11px] font-black group-hover:text-[#3ecf8e]">#{t.id}</td>
                 <td>
@@ -251,12 +251,12 @@ const Tickets: React.FC = () => {
                 <td>
                   <div className="flex items-center gap-2">
                     <img 
-                      src={technicians.find(tec => tec.id === t.assignedTechnicianId)?.avatar || "https://ui-avatars.com/api/?name=Unassigned"} 
+                      src={technicians.find((tec: Technician) => tec.id === t.assignedTechnicianId)?.avatar || "https://ui-avatars.com/api/?name=Unassigned"} 
                       className="w-7 h-7 rounded-lg border border-[#ededed] object-cover" 
                       alt="" 
                     />
                     <span className="text-[11px] font-black text-[#4b5563]">
-                      {technicians.find(tec => tec.id === t.assignedTechnicianId)?.name.split(' ')[0] || "En attente"}
+                      {technicians.find((tec: Technician) => tec.id === t.assignedTechnicianId)?.name.split(' ')[0] || "En attente"}
                     </span>
                   </div>
                 </td>
@@ -404,7 +404,7 @@ const Tickets: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Site Showroom</label>
               <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full">
-                {showrooms?.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+                {showrooms?.map((s: ShowroomConfig) => <option key={s.id} value={s.id}>{s.id}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
@@ -424,14 +424,14 @@ const Tickets: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Marque Certifiée</label>
               <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full">
-                {brands?.map(b => <option key={b} value={b}>{b}</option>)}
+                {brands?.map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Expert Technique</label>
               <select name="technicianId" defaultValue={editingTicket?.assignedTechnicianId} className="w-full">
                 <option value="">-- Non affecté --</option>
-                {technicians?.map(tec => <option key={tec.id} value={tec.id}>{tec.name}</option>)}
+                {technicians?.map((tec: Technician) => <option key={tec.id} value={tec.id}>{tec.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
