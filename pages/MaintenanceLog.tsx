@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, RefreshCw, MapPin, 
@@ -69,7 +70,7 @@ const MaintenanceLog: React.FC = () => {
     const resolved = filteredMaintenance.filter((m: Ticket) => m.status === 'Résolu' || m.status === 'Fermé').length;
     return {
       active: filteredMaintenance.filter((m: Ticket) => m.status === 'En cours').length,
-      pending: filteredMaintenance.filter((m: Ticket) => m.status === 'En attente d\'approbation' || m.status === 'Nouveau').length,
+      pending: filteredMaintenance.filter((m: Ticket) => m.status === "En attente d'approbation" || m.status === 'Nouveau').length,
       rate: total > 0 ? Math.round((resolved / total) * 100) : 100
     };
   }, [filteredMaintenance]);
@@ -89,9 +90,11 @@ const MaintenanceLog: React.FC = () => {
   const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
   const handleOpenReport = (ticket: Ticket) => {
+    if (ticket.status === 'Fermé') {
+      addNotification({ title: 'Lecture Seule', message: 'Ce rapport est archivé et ne peut plus être modifié.', type: 'info' });
+    }
     setSelectedMaintenance(ticket);
     
-    // Initialisation sécurisée du rapport
     const existingReport = ticket.interventionReport || {};
     setReportData({
       equipmentStatus: existingReport.equipmentStatus || 'Bon',
@@ -109,6 +112,7 @@ const MaintenanceLog: React.FC = () => {
   };
 
   const addAction = (action: string) => {
+    if (selectedMaintenance?.status === 'Fermé') return;
     const trimmed = action.trim();
     if (!trimmed) return;
     const currentActions = reportData.actionsTaken || [];
@@ -119,20 +123,24 @@ const MaintenanceLog: React.FC = () => {
   };
 
   const removeAction = (index: number) => {
+    if (selectedMaintenance?.status === 'Fermé') return;
     const currentActions = [...(reportData.actionsTaken || [])];
     currentActions.splice(index, 1);
     setReportData({ ...reportData, actionsTaken: currentActions });
   };
 
   const handleAddPart = () => {
+    if (selectedMaintenance?.status === 'Fermé') return;
     setUsedParts([...usedParts, { name: '', quantity: 1, unitPrice: 0 }]);
   };
 
   const handleRemovePart = (index: number) => {
+    if (selectedMaintenance?.status === 'Fermé') return;
     setUsedParts(usedParts.filter((_, i) => i !== index));
   };
 
   const handlePartChange = (index: number, field: keyof UsedPart, value: any) => {
+    if (selectedMaintenance?.status === 'Fermé') return;
     const updated = [...usedParts];
     if (field === 'name') {
       const part = parts.find((p: Part) => p.name === value);
@@ -149,7 +157,7 @@ const MaintenanceLog: React.FC = () => {
 
   const handleSaveReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMaintenance) return;
+    if (!selectedMaintenance || selectedMaintenance.status === 'Fermé') return;
 
     if (!reportData.equipmentStatus) {
       addNotification({ title: 'Rapport incomplet', message: 'Veuillez sélectionner un diagnostic final.', type: 'warning' });
@@ -157,14 +165,11 @@ const MaintenanceLog: React.FC = () => {
     }
 
     setIsSaving(true);
-    const finalDuration = reportData.durationMs && !isNaN(reportData.durationMs) ? reportData.durationMs : 0;
-
-    // Nettoyage des pièces : on ne garde que celles qui ont un nom
     const cleanedParts = usedParts.filter((p: UsedPart) => p.name.trim() !== '');
 
     const finalReport: InterventionReport = {
       ...reportData,
-      durationMs: finalDuration,
+      durationMs: reportData.durationMs || 0,
       partsUsed: cleanedParts,
       performedAt: new Date().toISOString(),
       actionsTaken: reportData.actionsTaken || []
@@ -172,19 +177,16 @@ const MaintenanceLog: React.FC = () => {
 
     const updatedTicket: Ticket = {
       ...selectedMaintenance,
-      status: 'En attente d\'approbation',
+      status: "En attente d'approbation",
       lastUpdate: new Date().toISOString(),
       interventionReport: finalReport
     };
 
     try {
-      // 1. Sauvegarde du ticket/rapport
       await saveTicket(updatedTicket);
 
-      // 2. LOGIQUE DE RÉDUCTION DES STOCKS
-      // On diminue le stock pour chaque pièce sélectionnée dans le catalogue
-      // Uniquement si le ticket n'était pas déjà en attente (pour éviter les doubles décomptes en cas d'édit simple)
-      if (selectedMaintenance.status !== 'En attente d\'approbation') {
+      // Réduction des stocks uniquement pour les nouvelles soumissions (pas déjà validées)
+      if (selectedMaintenance.status !== "En attente d'approbation" && selectedMaintenance.status !== 'Résolu') {
         for (const p of cleanedParts) {
           if (p.id && p.quantity > 0) {
             try {
@@ -204,12 +206,11 @@ const MaintenanceLog: React.FC = () => {
         }
       }
 
-      addNotification({ title: 'Certification réussie', message: 'Le rapport détaillé a été synchronisé et les stocks mis à jour.', type: 'success' });
+      addNotification({ title: 'Rapport Transmis', message: 'Le dossier a été synchronisé et les stocks ajustés.', type: 'success' });
       setIsInterventionModalOpen(false);
       setSelectedMaintenance(updatedTicket);
       refreshAll();
     } catch (err) {
-      console.error("Submission Error:", err);
       addNotification({ title: 'Erreur Cluster', message: 'Échec de la transmission du rapport technique.', type: 'error' });
     } finally {
       setIsSaving(false);
@@ -263,7 +264,7 @@ const MaintenanceLog: React.FC = () => {
             </thead>
             <tbody>
               {filteredMaintenance.map((t: Ticket) => (
-                <tr key={t.id} onClick={() => setSelectedMaintenance(t)} className="cursor-pointer group hover:bg-[#fafafa]">
+                <tr key={t.id} onClick={() => setSelectedMaintenance(t)} className={`cursor-pointer group hover:bg-[#fafafa] ${t.status === 'Fermé' ? 'opacity-70' : ''}`}>
                   <td className="font-mono text-[11px] font-black group-hover:text-[#3ecf8e]">#{t.id}</td>
                   <td>
                     <p className="text-[13px] font-black text-[#1c1c1c]">{t.customerName}</p>
@@ -284,7 +285,8 @@ const MaintenanceLog: React.FC = () => {
                   <td className="text-right">
                     <span className={`px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
                       t.status === 'Résolu' ? 'bg-[#f0fdf4] text-[#16a34a] border-[#dcfce7]' : 
-                      t.status === 'En cours' ? 'bg-[#eff6ff] text-[#2563eb] border-[#dbeafe]' : 'bg-[#f9fafb] text-[#4b5563] border-[#f3f4f6]'
+                      t.status === 'En cours' ? 'bg-[#eff6ff] text-[#2563eb] border-[#dbeafe]' : 
+                      t.status === 'Fermé' ? 'bg-[#1c1c1c] text-white border-[#1c1c1c]' : 'bg-[#f9fafb] text-[#4b5563] border-[#f3f4f6]'
                     }`}>{t.status}</span>
                   </td>
                 </tr>
@@ -328,10 +330,9 @@ const MaintenanceLog: React.FC = () => {
         </div>
       )}
 
-      <Drawer isOpen={!!selectedMaintenance} onClose={() => setSelectedMaintenance(null)} title="Détails Intervention" icon={<ClipboardCheck size={18}/>}>
+      <Drawer isOpen={!!selectedMaintenance} onClose={() => setSelectedMaintenance(null)} title="Détails Intervention" icon={selectedMaintenance?.status === 'Fermé' ? <Lock size={18}/> : <ClipboardCheck size={18}/>}>
         {selectedMaintenance && (
           <div className="space-y-8 pb-10">
-            {/* --- SECTION BENEFICIAIRE (ACCES TECHNICIEN) --- */}
             <div className="space-y-4">
               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2">
                 <User size={14} className="text-[#3ecf8e]"/> Coordonnées Bénéficiaire
@@ -354,13 +355,13 @@ const MaintenanceLog: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-6 bg-[#f8f9fa] border border-[#ededed] rounded-2xl">
+            <div className={`p-6 border rounded-2xl ${selectedMaintenance.status === 'Fermé' ? 'bg-[#1c1c1c] border-[#1c1c1c] text-white' : 'bg-[#f8f9fa] border-[#ededed]'}`}>
                <div className="flex items-center gap-2 text-[#3ecf8e] mb-3">
-                  <Activity size={14} />
+                  {selectedMaintenance.status === 'Fermé' ? <Lock size={14}/> : <Activity size={14} />}
                   <span className="text-[10px] font-black uppercase tracking-widest">Certification Technique</span>
                </div>
-               <h3 className="text-xl font-black text-[#1c1c1c]">{selectedMaintenance.productName || 'Matériel Royal Plaza'}</h3>
-               <p className="text-xs text-[#686868] font-bold mt-1 uppercase">S/N: {selectedMaintenance.serialNumber || 'NON SPÉCIFIÉ'}</p>
+               <h3 className="text-xl font-black">{selectedMaintenance.productName || 'Matériel Royal Plaza'}</h3>
+               <p className={`text-xs font-bold mt-1 uppercase ${selectedMaintenance.status === 'Fermé' ? 'text-[#9ca3af]' : 'text-[#686868]'}`}>S/N: {selectedMaintenance.serialNumber || 'NON SPÉCIFIÉ'}</p>
             </div>
 
             <div className="space-y-6">
@@ -420,9 +421,18 @@ const MaintenanceLog: React.FC = () => {
                     <p className="text-[11px] font-black text-[#686868] uppercase tracking-widest">Rapport en attente</p>
                  </div>
                )}
-               <button onClick={() => handleOpenReport(selectedMaintenance)} className="btn-sb-primary w-full justify-center h-14 font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg shadow-[#3ecf8e]/10">
-                 <Edit3 size={18}/> {selectedMaintenance.interventionReport?.equipmentStatus ? 'Ajuster Rapport' : 'Éditer Rapport'}
-               </button>
+               
+               {/* BOUTON ÉDITION BLOQUÉ SI FERMÉ */}
+               {selectedMaintenance.status !== 'Fermé' ? (
+                 <button onClick={() => handleOpenReport(selectedMaintenance)} className="btn-sb-primary w-full justify-center h-14 font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg shadow-[#3ecf8e]/10">
+                   <Edit3 size={18}/> {selectedMaintenance.interventionReport?.equipmentStatus ? 'Ajuster Rapport' : 'Éditer Rapport'}
+                 </button>
+               ) : (
+                 <div className="p-4 bg-gray-100 rounded-xl flex items-center justify-center gap-2 border border-gray-200">
+                   <Lock size={16} className="text-gray-500" />
+                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Rapport Scellé par Clôture</span>
+                 </div>
+               )}
             </div>
           </div>
         )}
@@ -430,7 +440,6 @@ const MaintenanceLog: React.FC = () => {
 
       <Modal isOpen={isInterventionModalOpen} onClose={() => setIsInterventionModalOpen(false)} title="Rapport d'Expertise Technique Détaillé" size="lg">
          <form onSubmit={handleSaveReport} className="space-y-8 animate-sb-entry">
-            {/* --- SECTION STATUT & TEMPS --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Tag size={12} className="text-[#3ecf8e]"/> Diagnostic Final</label>
@@ -438,6 +447,7 @@ const MaintenanceLog: React.FC = () => {
                     className="w-full h-12 font-bold px-4 rounded-xl border-[#ededed]" 
                     value={reportData.equipmentStatus} 
                     onChange={e => setReportData({...reportData, equipmentStatus: e.target.value as any})}
+                    disabled={selectedMaintenance?.status === 'Fermé'}
                     required
                   >
                      <option value="Excellent">Parfait État / Neuf</option>
@@ -452,6 +462,7 @@ const MaintenanceLog: React.FC = () => {
                     type="number" 
                     className="w-full h-12 font-bold px-4 rounded-xl border-[#ededed]" 
                     placeholder="Minutes d'intervention" 
+                    disabled={selectedMaintenance?.status === 'Fermé'}
                     value={reportData.durationMs ? reportData.durationMs / 60000 : ''} 
                     onChange={e => {
                       const mins = parseInt(e.target.value);
@@ -461,14 +472,14 @@ const MaintenanceLog: React.FC = () => {
                </div>
             </div>
 
-            {/* --- NOUVEAUX CHAMPS DÉTAILLÉS --- */}
             <div className="space-y-6 bg-[#fcfcfc] p-6 rounded-2xl border border-[#ededed]">
                <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><ClipboardList size={12} className="text-[#3ecf8e]"/> Diagnostic Approfondi</label>
                   <textarea 
                     rows={3} 
                     className="w-full font-bold p-4 rounded-xl border-[#ededed]" 
-                    placeholder="Préciser l'origine technique du problème (ex: Court-circuit sur la carte de puissance dû à une surtension)..." 
+                    placeholder="Préciser l'origine technique du problème..." 
+                    disabled={selectedMaintenance?.status === 'Fermé'}
                     value={reportData.detailedDiagnostic} 
                     onChange={e => setReportData({...reportData, detailedDiagnostic: e.target.value})} 
                   />
@@ -480,6 +491,7 @@ const MaintenanceLog: React.FC = () => {
                     rows={3} 
                     className="w-full font-bold p-4 rounded-xl border-[#ededed]" 
                     placeholder="Décrire les étapes de la réparation effectuée..." 
+                    disabled={selectedMaintenance?.status === 'Fermé'}
                     value={reportData.repairProcedure} 
                     onChange={e => setReportData({...reportData, repairProcedure: e.target.value})} 
                   />
@@ -491,6 +503,7 @@ const MaintenanceLog: React.FC = () => {
                       type="checkbox" 
                       id="warrantyCheck" 
                       checked={reportData.isWarrantyValid} 
+                      disabled={selectedMaintenance?.status === 'Fermé'}
                       onChange={e => setReportData({...reportData, isWarrantyValid: e.target.checked})}
                       className="w-4 h-4 text-[#3ecf8e] rounded" 
                     />
@@ -502,49 +515,52 @@ const MaintenanceLog: React.FC = () => {
             <div className="space-y-4">
                <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Activity size={12} className="text-[#3ecf8e]"/> Points de contrôle menés</label>
                
-               <div className="flex gap-2 mb-4">
-                  <input 
-                    type="text" 
-                    className="flex-1 h-11 text-xs font-bold" 
-                    placeholder="Saisir une action spécifique..." 
-                    value={currentActionInput} 
-                    onChange={e => setCurrentActionInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addAction(currentActionInput))}
-                  />
-                  <button type="button" onClick={() => addAction(currentActionInput)} className="btn-sb-primary h-11 px-4">
-                    <Plus size={16}/>
-                  </button>
-               </div>
+               {selectedMaintenance?.status !== 'Fermé' && (
+                 <div className="flex gap-2 mb-4">
+                    <input 
+                      type="text" 
+                      className="flex-1 h-11 text-xs font-bold" 
+                      placeholder="Saisir une action spécifique..." 
+                      value={currentActionInput} 
+                      onChange={e => setCurrentActionInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addAction(currentActionInput))}
+                    />
+                    <button type="button" onClick={() => addAction(currentActionInput)} className="btn-sb-primary h-11 px-4">
+                      <Plus size={16}/>
+                    </button>
+                 </div>
+               )}
 
                <div className="bg-[#f8f9fa] border border-[#ededed] rounded-xl p-4 space-y-4">
-                  <div>
-                    <p className="text-[9px] font-black text-[#686868] uppercase mb-2">Suggestions Rapides</p>
-                    <div className="flex flex-wrap gap-2">
-                      {PREDEFINED_ACTIONS.map((action: string) => (
-                        <button 
-                          key={action} 
-                          type="button" 
-                          onClick={() => addAction(action)}
-                          className="px-2.5 py-1.5 bg-white border border-[#ededed] rounded-lg text-[10px] font-bold text-[#1c1c1c] hover:border-[#3ecf8e] hover:text-[#3ecf8e] transition-colors flex items-center gap-1.5"
-                        >
-                          <Zap size={10} fill="currentColor"/> {action}
-                        </button>
-                      ))}
+                  {selectedMaintenance?.status !== 'Fermé' && (
+                    <div>
+                      <p className="text-[9px] font-black text-[#686868] uppercase mb-2">Suggestions Rapides</p>
+                      <div className="flex flex-wrap gap-2">
+                        {PREDEFINED_ACTIONS.map((action: string) => (
+                          <button 
+                            key={action} 
+                            type="button" 
+                            onClick={() => addAction(action)}
+                            className="px-2.5 py-1.5 bg-white border border-[#ededed] rounded-lg text-[10px] font-bold text-[#1c1c1c] hover:border-[#3ecf8e] hover:text-[#3ecf8e] transition-colors flex items-center gap-1.5"
+                          >
+                            <Zap size={10} fill="currentColor"/> {action}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="border-t border-[#ededed] pt-4">
+                  <div className={`pt-4 ${selectedMaintenance?.status !== 'Fermé' ? 'border-t border-[#ededed]' : ''}`}>
                     <p className="text-[9px] font-black text-[#1c1c1c] uppercase mb-2">Actions Certifiées dans ce rapport</p>
                     <div className="flex flex-wrap gap-2 min-h-[40px]">
                       {(reportData.actionsTaken || []).map((a: string, idx: number) => (
                         <span key={idx} className="px-3 py-1.5 bg-[#1c1c1c] text-white rounded-lg text-[10px] font-bold flex items-center gap-2 animate-sb-entry">
                           {a}
-                          <button type="button" onClick={() => removeAction(idx)} className="hover:text-red-400"><X size={12}/></button>
+                          {selectedMaintenance?.status !== 'Fermé' && (
+                            <button type="button" onClick={() => removeAction(idx)} className="hover:text-red-400"><X size={12}/></button>
+                          )}
                         </span>
                       ))}
-                      {(reportData.actionsTaken || []).length === 0 && (
-                        <p className="text-[10px] text-[#9ca3af] italic">Aucune action ajoutée.</p>
-                      )}
                     </div>
                   </div>
                </div>
@@ -553,40 +569,73 @@ const MaintenanceLog: React.FC = () => {
             <div className="space-y-4">
                <div className="flex items-center justify-between">
                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><Package size={12} className="text-[#3ecf8e]"/> Consommation de Pièces</label>
-                  <button type="button" onClick={handleAddPart} className="text-[10px] font-black text-[#3ecf8e] uppercase flex items-center gap-1 hover:bg-[#f0fdf4] px-2 py-1 rounded transition-colors"><Plus size={12}/> Ajouter Pièce</button>
+                  {selectedMaintenance?.status !== 'Fermé' && (
+                    <button type="button" onClick={handleAddPart} className="text-[10px] font-black text-[#3ecf8e] uppercase flex items-center gap-1 hover:bg-[#f0fdf4] px-2 py-1 rounded transition-colors"><Plus size={12}/> Ajouter Pièce</button>
+                  )}
                </div>
                <div className="space-y-3">
                   {usedParts.map((part: UsedPart, idx: number) => (
                     <div key={idx} className="flex gap-3 animate-sb-entry">
                        <div className="flex-1">
-                          <input list="parts-list" className="w-full h-11 text-xs font-bold" placeholder="Rechercher une pièce dans le catalogue..." value={part.name} onChange={e => handlePartChange(idx, 'name', e.target.value)} />
+                          <input 
+                            list="parts-list" 
+                            className="w-full h-11 text-xs font-bold" 
+                            placeholder="Rechercher une pièce..." 
+                            disabled={selectedMaintenance?.status === 'Fermé'}
+                            value={part.name} 
+                            onChange={e => handlePartChange(idx, 'name', e.target.value)} 
+                          />
                           <datalist id="parts-list">{(parts || []).map((p: Part) => <option key={p.id} value={p.name} />)}</datalist>
                        </div>
                        <div className="w-24">
-                          <input type="number" className="w-full h-11 text-xs font-bold text-center" placeholder="Qté" value={part.quantity} onChange={e => handlePartChange(idx, 'quantity', parseInt(e.target.value))} />
+                          <input 
+                            type="number" 
+                            className="w-full h-11 text-xs font-bold text-center" 
+                            placeholder="Qté" 
+                            disabled={selectedMaintenance?.status === 'Fermé'}
+                            value={part.quantity} 
+                            onChange={e => handlePartChange(idx, 'quantity', parseInt(e.target.value))} 
+                          />
                        </div>
-                       <button type="button" onClick={() => handleRemovePart(idx)} className="p-3 text-[#686868] hover:text-red-50 border border-[#ededed] rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                       {selectedMaintenance?.status !== 'Fermé' && (
+                         <button type="button" onClick={() => handleRemovePart(idx)} className="p-3 text-[#686868] hover:text-red-50 border border-[#ededed] rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                       )}
                     </div>
                   ))}
-                  {usedParts.length === 0 && <p className="text-[11px] text-[#9ca3af] font-medium italic py-4 text-center border-2 border-dashed border-[#f8f9fa] rounded-xl">Aucune pièce détachée utilisée déclarée.</p>}
                </div>
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} className="text-[#3ecf8e]"/> Préconisations Expert & Conseils Client</label>
-               <textarea rows={2} className="w-full font-bold p-4 rounded-xl border-[#ededed]" placeholder="Conseils pour prolonger la durée de vie de l'appareil..." value={reportData.recommendations} onChange={e => setReportData({...reportData, recommendations: e.target.value})} />
+               <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} className="text-[#3ecf8e]"/> Préconisations Expert</label>
+               <textarea 
+                rows={2} 
+                className="w-full font-bold p-4 rounded-xl border-[#ededed]" 
+                placeholder="Conseils pour le client..." 
+                disabled={selectedMaintenance?.status === 'Fermé'}
+                value={reportData.recommendations} 
+                onChange={e => setReportData({...reportData, recommendations: e.target.value})} 
+              />
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2"><Lock size={12} /> Notes Internes (Confidentiel)</label>
-               <textarea rows={2} className="w-full font-bold p-4 rounded-xl border-red-100 bg-red-50/30" placeholder="Informations destinées uniquement au management (ex: Suspicion de mauvaise utilisation par le client)..." value={reportData.internalNotes} onChange={e => setReportData({...reportData, internalNotes: e.target.value})} />
+               <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2"><Lock size={12} /> Notes Internes</label>
+               <textarea 
+                rows={2} 
+                className="w-full font-bold p-4 rounded-xl border-red-100 bg-red-50/30" 
+                placeholder="Confidentiel management..." 
+                disabled={selectedMaintenance?.status === 'Fermé'}
+                value={reportData.internalNotes} 
+                onChange={e => setReportData({...reportData, internalNotes: e.target.value})} 
+              />
             </div>
 
             <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
-               <button type="button" onClick={() => setIsInterventionModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase rounded-xl">Abandonner</button>
-               <button type="submit" disabled={isSaving} className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
-                  {isSaving ? <RefreshCw className="animate-spin" size={18}/> : 'Transmettre Rapport Complet'}
-               </button>
+               <button type="button" onClick={() => setIsInterventionModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase rounded-xl">Fermer</button>
+               {selectedMaintenance?.status !== 'Fermé' && (
+                 <button type="submit" disabled={isSaving} className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
+                    {isSaving ? <RefreshCw className="animate-spin" size={18}/> : 'Transmettre Rapport Complet'}
+                 </button>
+               )}
             </div>
          </form>
       </Modal>

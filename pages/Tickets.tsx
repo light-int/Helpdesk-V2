@@ -95,6 +95,12 @@ const Tickets: React.FC = () => {
     e.preventDefault();
     if (isTechnician) return;
     
+    // VERROUILLAGE : Interdire modification si fermé
+    if (editingTicket?.status === 'Fermé') {
+      addNotification({ title: 'Accès Refusé', message: 'Ce dossier est clôturé et ne peut plus être modifié.', type: 'warning' });
+      return;
+    }
+
     setIsSaving(true);
     const formData = new FormData(e.currentTarget);
     
@@ -145,18 +151,24 @@ const Tickets: React.FC = () => {
 
   const handleCloseTicket = async (ticket: Ticket) => {
     if (!ticket.interventionReport?.equipmentStatus) {
-      addNotification({ title: 'Clôture impossible', message: 'Le rapport d\'intervention est manquant.', type: 'warning' });
+      addNotification({ title: 'Clôture impossible', message: 'Le rapport d\'intervention doit être complété avant la clôture.', type: 'warning' });
       return;
     }
-    if (!window.confirm('Voulez-vous clôturer définitivement ce dossier SAV ?')) return;
+    if (!window.confirm('Voulez-vous clôturer définitivement ce dossier SAV ? Toute manipulation ultérieure sera bloquée.')) return;
     setIsSaving(true);
     try {
-      const updated: Ticket = { ...ticket, status: 'Fermé', lastUpdate: new Date().toISOString() };
+      const updated: Ticket = { 
+        ...ticket, 
+        status: 'Fermé', 
+        lastUpdate: new Date().toISOString(),
+        isArchived: true // Archivage automatique pour les listes standards si souhaité
+      };
       await saveTicket(updated);
-      addNotification({ title: 'Succès', message: 'Dossier SAV clôturé et archivé.', type: 'success' });
+      addNotification({ title: 'Dossier Clôturé', message: 'Le SAV est désormais verrouillé en lecture seule.', type: 'success' });
       setSelectedTicket(updated);
+      refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec de la clôture.', type: 'error' });
+      addNotification({ title: 'Erreur', message: 'Échec de la clôture définitive.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -167,7 +179,7 @@ const Tickets: React.FC = () => {
       case 'Résolu': return 'bg-[#f0fdf4] text-[#16a34a] border-[#dcfce7]';
       case 'En cours': return 'bg-[#fffbeb] text-[#b45309] border-[#fef3c7]';
       case 'Nouveau': return 'bg-[#eff6ff] text-[#2563eb] border-[#dbeafe]';
-      case 'Fermé': return 'bg-[#f9fafb] text-[#4b5563] border-[#f3f4f6]';
+      case 'Fermé': return 'bg-[#1c1c1c] text-white border-[#1c1c1c]';
       case "En attente d'approbation": return 'bg-[#fff5f5] text-[#c53030] border-[#fed7d7]';
       default: return 'bg-[#f9fafb] text-[#4b5563] border-[#f3f4f6]';
     }
@@ -274,7 +286,7 @@ const Tickets: React.FC = () => {
           </thead>
           <tbody>
             {filtered.map((t: Ticket) => (
-              <tr key={t.id} onClick={() => setSelectedTicket(t)} className="cursor-pointer group hover:bg-[#fafafa]">
+              <tr key={t.id} onClick={() => setSelectedTicket(t)} className={`cursor-pointer group hover:bg-[#fafafa] ${t.status === 'Fermé' ? 'opacity-70' : ''}`}>
                 <td className="font-mono text-[11px] font-black group-hover:text-[#3ecf8e]">#{t.id}</td>
                 <td>
                   <p className="text-[13px] font-black text-[#1c1c1c]">{t.customerName}</p>
@@ -305,7 +317,7 @@ const Tickets: React.FC = () => {
                 </td>
                 <td className="text-right">
                   <span className={`px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusStyle(t.status)}`}>
-                    {t.status}
+                    {t.status === 'Fermé' && <Lock size={10} className="inline mr-1" />} {t.status}
                   </span>
                 </td>
               </tr>
@@ -324,26 +336,39 @@ const Tickets: React.FC = () => {
         isOpen={!!selectedTicket} 
         onClose={() => setSelectedTicket(null)} 
         title="Dossier SAV Plaza" 
-        icon={<TicketIcon size={18}/>}
+        icon={selectedTicket?.status === 'Fermé' ? <Lock size={18}/> : <TicketIcon size={18}/>}
       >
         {selectedTicket && (
           <div className="space-y-8 pb-10">
-            <div className="flex items-center justify-between p-6 bg-[#f8f9fa] border border-[#ededed] rounded-2xl shadow-sm">
+            <div className={`flex items-center justify-between p-6 border rounded-2xl shadow-sm ${selectedTicket.status === 'Fermé' ? 'bg-[#1c1c1c] text-white border-[#1c1c1c]' : 'bg-[#f8f9fa] border-[#ededed]'}`}>
               <div>
-                <p className="text-[10px] font-black text-[#686868] uppercase tracking-[0.2em] mb-1">Identifiant Dossier</p>
-                <h3 className="text-xl font-black text-[#1c1c1c]">#{selectedTicket.id}</h3>
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${selectedTicket.status === 'Fermé' ? 'text-[#3ecf8e]' : 'text-[#686868]'}`}>Identifiant Dossier</p>
+                <h3 className="text-xl font-black">#{selectedTicket.id}</h3>
               </div>
               <div className="flex flex-col items-end gap-2">
                 <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${getStatusStyle(selectedTicket.status)}`}>
                   {selectedTicket.status}
                 </span>
-                {selectedTicket.interventionReport?.isWarrantyValid && (
+                {selectedTicket.status === 'Fermé' ? (
+                  <span className="flex items-center gap-1 text-[9px] font-black text-[#3ecf8e] uppercase">
+                    <Lock size={10} /> Dossier Archivé
+                  </span>
+                ) : selectedTicket.interventionReport?.isWarrantyValid && (
                   <span className="flex items-center gap-1 text-[9px] font-black text-[#16a34a] uppercase bg-[#f0fdf4] px-2 py-0.5 rounded border border-[#dcfce7]">
                     <ShieldCheck size={10} /> Sous Garantie
                   </span>
                 )}
               </div>
             </div>
+
+            {selectedTicket.status === 'Fermé' && (
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3">
+                <ShieldAlert className="text-amber-600" size={20} />
+                <p className="text-[11px] font-bold text-amber-800 leading-snug">
+                  Ce dossier est scellé. Aucune modification (pièces, main d'œuvre, diagnostic) n'est possible sur un dossier clôturé.
+                </p>
+              </div>
+            )}
 
             <section className="space-y-4">
               <h4 className="text-[11px] font-black text-[#686868] uppercase tracking-widest border-b border-[#f5f5f5] pb-2">Identité Client</h4>
@@ -467,22 +492,31 @@ const Tickets: React.FC = () => {
               </section>
             )}
 
-            <div className="pt-8 grid grid-cols-2 gap-3">
-              {!isTechnician && selectedTicket.status !== 'Fermé' && (
-                <button 
-                  onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }}
-                  className="btn-sb-outline h-12 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl"
-                >
-                  <Edit3 size={16}/> <span>Éditer Dossier</span>
-                </button>
-              )}
-              {canManage && (selectedTicket.status === 'Résolu' || selectedTicket.status === "En attente d'approbation") && (
-                <button 
-                  onClick={() => handleCloseTicket(selectedTicket)}
-                  className="btn-sb-primary h-12 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg shadow-[#3ecf8e]/20"
-                >
-                  <CheckCircle2 size={16}/> <span>Certifier & Fermer</span>
-                </button>
+            <div className="pt-8 grid grid-cols-1 gap-3">
+              {/* BOUTONS D'ACTION VERROUILLÉS SI FERMÉ */}
+              {selectedTicket.status !== 'Fermé' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {!isTechnician && (
+                    <button 
+                      onClick={() => { setEditingTicket(selectedTicket); setIsModalOpen(true); }}
+                      className="btn-sb-outline h-12 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl"
+                    >
+                      <Edit3 size={16}/> <span>Éditer Dossier</span>
+                    </button>
+                  )}
+                  {canManage && (selectedTicket.status === 'Résolu' || selectedTicket.status === "En attente d'approbation") && (
+                    <button 
+                      onClick={() => handleCloseTicket(selectedTicket)}
+                      className="btn-sb-primary h-12 justify-center font-black uppercase text-[11px] tracking-widest rounded-xl shadow-lg shadow-[#3ecf8e]/20"
+                    >
+                      <CheckCircle2 size={16}/> <span>Certifier & Clôturer</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-[#f8f9fa] border border-[#ededed] rounded-xl text-center">
+                  <p className="text-[10px] font-black text-[#686868] uppercase tracking-widest italic">Ce dossier est clôturé par le management.</p>
+                </div>
               )}
             </div>
           </div>
@@ -498,15 +532,15 @@ const Tickets: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Identité Client</label>
-              <input name="customerName" type="text" defaultValue={editingTicket?.customerName} placeholder="Nom complet" required className="w-full" />
+              <input name="customerName" type="text" defaultValue={editingTicket?.customerName} placeholder="Nom complet" required className="w-full" disabled={editingTicket?.status === 'Fermé'} />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Numéro Mobile</label>
-              <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} placeholder="+241 ..." required className="w-full" />
+              <input name="customerPhone" type="tel" defaultValue={editingTicket?.customerPhone} placeholder="+241 ..." required className="w-full" disabled={editingTicket?.status === 'Fermé'} />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Type d'Intervention</label>
-              <select name="category" defaultValue={editingTicket?.category || 'SAV'} className="w-full">
+              <select name="category" defaultValue={editingTicket?.category || 'SAV'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 <option value="SAV">SAV / Réparation</option>
                 <option value="Installation">Installation</option>
                 <option value="Maintenance">Maintenance préventive</option>
@@ -515,7 +549,7 @@ const Tickets: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Priorité Opérationnelle</label>
-              <select name="priority" defaultValue={editingTicket?.priority || 'Moyenne'} className="w-full">
+              <select name="priority" defaultValue={editingTicket?.priority || 'Moyenne'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 <option value="Basse">Basse</option>
                 <option value="Moyenne">Moyenne</option>
                 <option value="Haute">Haute</option>
@@ -530,11 +564,11 @@ const Tickets: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Modèle Matériel</label>
-                    <input name="productName" type="text" defaultValue={editingTicket?.productName} placeholder="ex: Split LG ArtCool 12k" className="w-full" />
+                    <input name="productName" type="text" defaultValue={editingTicket?.productName} placeholder="ex: Split LG ArtCool 12k" className="w-full" disabled={editingTicket?.status === 'Fermé'} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Marque Certifiée</label>
-                    <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full">
+                    <select name="brand" defaultValue={editingTicket?.brand || 'LG'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                       {brands?.map((b: string) => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
@@ -554,6 +588,7 @@ const Tickets: React.FC = () => {
                         onChange={e => setFormSN(e.target.value)} 
                         placeholder="Vérification auto..." 
                         required 
+                        disabled={editingTicket?.status === 'Fermé'}
                         className={`w-full font-mono font-bold tracking-tight pr-10 ${detectedWarranty ? 'border-[#16a34a] bg-[#f0fdf4]/50' : ''}`} 
                       />
                       <div className="absolute right-3 top-2.5">
@@ -567,6 +602,7 @@ const Tickets: React.FC = () => {
                         type="checkbox" 
                         checked={manualWarranty} 
                         onChange={e => setManualWarranty(e.target.checked)}
+                        disabled={editingTicket?.status === 'Fermé'}
                         className="w-5 h-5 rounded border-[#ededed] text-[#3ecf8e] focus:ring-[#3ecf8e]"
                       />
                       <span className={`text-[10px] font-black uppercase tracking-widest ${manualWarranty ? 'text-[#16a34a]' : 'text-[#686868]'}`}>
@@ -579,13 +615,13 @@ const Tickets: React.FC = () => {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Site Showroom</label>
-              <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full">
+              <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 {showrooms?.map((s: ShowroomConfig) => <option key={s.id} value={s.id}>{s.id}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Canal d'Entrée</label>
-              <select name="source" defaultValue={editingTicket?.source || 'Interne'} className="w-full">
+              <select name="source" defaultValue={editingTicket?.source || 'Interne'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 <option value="WhatsApp">WhatsApp support</option>
                 <option value="Messenger">Messenger Plaza</option>
                 <option value="Email">Support central (Email)</option>
@@ -595,14 +631,14 @@ const Tickets: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Expert Technique</label>
-              <select name="technicianId" defaultValue={editingTicket?.assignedTechnicianId} className="w-full">
+              <select name="technicianId" defaultValue={editingTicket?.assignedTechnicianId} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 <option value="">-- Non affecté --</option>
                 {technicians?.map((tec: Technician) => <option key={tec.id} value={tec.id}>{tec.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Sévérité Impact</label>
-              <select name="clientImpact" defaultValue={editingTicket?.clientImpact || 'Faible'} className="w-full">
+              <select name="clientImpact" defaultValue={editingTicket?.clientImpact || 'Faible'} className="w-full" disabled={editingTicket?.status === 'Fermé'}>
                 <option value="Faible">Faible impact</option>
                 <option value="Modéré">Dysfonctionnement partiel</option>
                 <option value="Critique">Arrêt total de service</option>
@@ -611,13 +647,15 @@ const Tickets: React.FC = () => {
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-[#686868] uppercase tracking-widest">Description des symptômes</label>
-            <textarea name="description" rows={3} defaultValue={editingTicket?.description} placeholder="Saisir les détails rapportés par le client..." required className="w-full" />
+            <textarea name="description" rows={3} defaultValue={editingTicket?.description} placeholder="Saisir les détails rapportés par le client..." required className="w-full" disabled={editingTicket?.status === 'Fermé'} />
           </div>
           <div className="flex justify-end gap-3 pt-6 border-t border-[#f5f5f5]">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline h-11 px-8 text-[11px] font-black uppercase rounded-xl">Annuler</button>
-            <button type="submit" disabled={isSaving} className="btn-sb-primary h-11 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
-              {isSaving ? <RefreshCw className="animate-spin" size={16}/> : (editingTicket ? 'Valider Mise à jour' : 'Émettre Ticket')}
-            </button>
+            {editingTicket?.status !== 'Fermé' && (
+              <button type="submit" disabled={isSaving} className="btn-sb-primary h-11 px-12 text-[11px] font-black uppercase rounded-xl shadow-lg shadow-[#3ecf8e]/20">
+                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : (editingTicket ? 'Valider Mise à jour' : 'Émettre Ticket')}
+              </button>
+            )}
           </div>
         </form>
       </Modal>
