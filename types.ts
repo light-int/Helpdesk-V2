@@ -1,5 +1,6 @@
 
 export type UserRole = 'ADMIN' | 'TECHNICIAN' | 'AGENT' | 'MANAGER';
+export type AiProvider = 'google' | 'openrouter';
 
 export interface StrategicReport {
   id: string;
@@ -13,7 +14,8 @@ export interface StrategicReport {
 
 export interface SystemConfig {
   aiEnabled: boolean;
-  aiModel: 'flash' | 'pro';
+  aiProvider: AiProvider;
+  aiModel: string; // 'flash', 'pro', ou l'ID du modèle OpenRouter
   aiAutoCategorization: boolean;
   aiStrategicAudit: boolean;
   aiChatbotEnabled: boolean;

@@ -75,10 +75,23 @@ const App: React.FC = () => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   }, []);
 
+  const playNotificationSound = useCallback(() => {
+    try {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+      audio.volume = 0.4;
+      audio.play().catch(() => {
+        // Ignorer les erreurs de lecture automatique bloquées par le navigateur
+      });
+    } catch (e) {
+      console.warn("Audio feedback unavailable");
+    }
+  }, []);
+
   const addNotification = useCallback((n: any) => {
     const id = Math.random().toString(36).substr(2, 9);
     setNotifications(prev => [{ ...n, id, timestamp: new Date().toISOString(), read: false }, ...prev]);
-  }, []);
+    playNotificationSound();
+  }, [playNotificationSound]);
 
   const refreshAll = useCallback(async () => {
     setIsSyncing(true);
@@ -103,7 +116,6 @@ const App: React.FC = () => {
   const login = (user: UserProfile) => { setCurrentUser(user); PlazaDB.save('currentUser', user); };
   const logout = () => { setCurrentUser(null); localStorage.removeItem('currentUser'); };
   
-  // Fix: Added updateUser to support ProfilePage.tsx
   const updateUser = async (updates: Partial<UserProfile>) => {
     if (!currentUser) return;
     const updated = { ...currentUser, ...updates };
@@ -141,84 +153,72 @@ const App: React.FC = () => {
     await refreshAll(); 
   };
 
-  // Fix: Added deletePart to support PartsInventory.tsx
   const deletePart = async (id: string) => {
     await ApiService.parts.delete(id);
     await logActivity('SUPPR_STOCK', id, `Article retiré de l'inventaire.`);
     await refreshAll();
   };
 
-  // Fix: Added saveProduct to support Products.tsx
   const saveProduct = async (p: Product) => {
     await ApiService.products.saveAll([p]);
     await logActivity('MAJ_PRODUIT', p.name, `Produit ${p.name} mis à jour.`);
     await refreshAll();
   };
 
-  // Fix: Added deleteProduct to support Products.tsx
   const deleteProduct = async (id: string) => {
     await ApiService.products.delete(id);
     await logActivity('SUPPR_PRODUIT', id, `Produit déréférencé.`);
     await refreshAll();
   };
 
-  // Fix: Added saveTechnician to support Technicians.tsx
   const saveTechnician = async (t: Technician) => {
     await ApiService.technicians.saveAll([t]);
     await logActivity('MAJ_TECH', t.name, `Profil technique de ${t.name} synchronisé.`);
     await refreshAll();
   };
 
-  // Fix: Added deleteTechnician to support Technicians.tsx
   const deleteTechnician = async (id: string) => {
     await ApiService.technicians.delete(id);
     await logActivity('SUPPR_TECH', id, `Expert retiré de l'infrastructure.`);
     await refreshAll();
   };
 
-  // Fix: Added saveWarranty to support WarrantyLog.tsx
   const saveWarranty = async (w: WarrantyRecord) => {
     await ApiService.warranties.saveAll([w]);
     await logActivity('MAJ_GARANTIE', w.serialNumber, `Contrat de garantie ${w.id} mis à jour.`);
     await refreshAll();
   };
 
-  // Fix: Added deleteWarranty to support WarrantyLog.tsx
   const deleteWarranty = async (id: string) => {
     await ApiService.warranties.delete(id);
     await logActivity('SUPPR_GARANTIE', id, `Certificat de garantie révoqué.`);
     await refreshAll();
   };
 
-  // Fix: Added updateConfig to support Settings.tsx
   const updateConfig = async (updates: Partial<SystemConfig>) => {
     await ApiService.config.update(updates);
     await logActivity('MAJ_CONFIG', 'GLOBAL', `Configuration système modifiée.`);
     await refreshAll();
   };
 
-  // Fix: Added saveUser to support Settings.tsx
   const saveUser = async (u: UserProfile) => {
     await ApiService.users.save(u);
     await logActivity('MAJ_USER', u.name, `Accès utilisateur ${u.name} synchronisé.`);
     await refreshAll();
   };
 
-  // Fix: Added deleteUser to support Settings.tsx
   const deleteUser = async (id: string) => {
     await ApiService.users.delete(id);
     await logActivity('SUPPR_USER', id, `Accès collaborateur révoqué.`);
     await refreshAll();
   };
 
-  // Fix: Added addBrand to support Settings.tsx
   const addBrand = async (name: string) => {
     await ApiService.brands.add(name);
     await logActivity('ADD_BRAND', name, `Nouvelle marque certifiée : ${name}.`);
     await refreshAll();
   };
 
-  // Fix: Added deleteBrand to support Settings.tsx
   const deleteBrand = async (name: string) => {
     await ApiService.brands.delete(name);
     await logActivity('SUPPR_BRAND', name, `Marque ${name} retirée du référentiel.`);

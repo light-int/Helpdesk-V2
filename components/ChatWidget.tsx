@@ -29,7 +29,8 @@ const ChatWidget: React.FC = () => {
     setMessages(prev => [...prev, { role: 'user', parts: [{ text: userMsg }] }]);
     
     setIsLoading(true);
-    const aiResponse = await chatWithAI(userMsg, messages, config.aiModel);
+    // Correctly pass the whole config object instead of just the model string
+    const aiResponse = await chatWithAI(userMsg, messages, config);
     setMessages(prev => [...prev, { role: 'model', parts: [{ text: aiResponse || "Erreur de connexion Gemini." }] }]);
     setIsLoading(false);
   };

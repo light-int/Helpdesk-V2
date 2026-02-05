@@ -22,7 +22,8 @@ import { Ticket, Technician, StrategicReport } from '../types';
 
 const Finances: React.FC = () => {
   const navigate = useNavigate();
-  const { tickets: allTickets, technicians, reports, refreshAll, isLoading, isSyncing } = useData();
+  // Extract config from useData to be used in generateStrategicReport
+  const { tickets: allTickets, technicians, reports, refreshAll, isLoading, isSyncing, config } = useData();
   const { addNotification } = useNotifications();
   
   const [activeTab, setActiveTab] = useState<'overview' | 'experts' | 'archives'>('overview');
@@ -97,13 +98,14 @@ const Finances: React.FC = () => {
     }
     setIsGenerating(true);
     try {
+      // Pass the config object as the second argument to fix the TypeScript error
       const reportMarkdown = await generateStrategicReport({ 
         ca: stats.totalRev, 
         marge: stats.totalMargin, 
         volume: stats.count,
         parts: stats.totalParts,
         labor: stats.totalLabor
-      });
+      }, config);
       const htmlContent = marked.parse(reportMarkdown || '') as string;
       setAiReportHtml(htmlContent);
       setShowAiModal(true);

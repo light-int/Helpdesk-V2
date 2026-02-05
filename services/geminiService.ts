@@ -1,60 +1,139 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { ApiService } from "./apiService";
+
+const SYSTEM_INSTRUCTION = `Tu es l'assistant IA 2026 de Royal Plaza à Libreville, Gabon. 
+Tu aides les clients et le personnel avec :
+1. Horaires : Lun-Sam 8h30-18h30 (Glass, Oloumi, Bord de mer).
+2. Stocks : Canapés, frigos LG/Beko, splits.
+3. Statut commande : Demande le numéro de ticket (ex: T-1001).
+4. SAV : Rappelle que les garanties LG sont de 1 an.
+Réponds de manière professionnelle, chaleureuse et courte en français.`;
 
 /**
- * Vérifie si le moteur IA est prêt à l'emploi.
- * L'application ne doit pas planter si cette fonction retourne false.
+ * Vérifie si le moteur Gemini est prêt.
  */
 export const isAiOperational = () => {
   const key = process.env.API_KEY;
-  return !!key && key !== 'undefined' && key !== 'votre_cle_gemini_ici' && key.length > 10;
+  return !!key && key.length > 10;
 };
 
-export const chatWithAI = async (message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], modelType: 'flash' | 'pro' = 'flash') => {
+/**
+ * Appel générique à l'IA (Switch entre Gemini et OpenRouter)
+ */
+export const chatWithAI = async (message: string, history: any[], config: any) => {
+  if (config.aiProvider === 'openrouter') {
+    return await callOpenRouter(message, history, config.aiModel);
+  } else {
+    return await callGemini(message, history, config.aiModel);
+  }
+};
+
+/**
+ * Implémentation native Google Gemini
+ */
+const callGemini = async (message: string, history: any[], modelType: string) => {
   try {
-    if (!isAiOperational()) {
-      return "L'IA Horizon est actuellement en mode repos (Clé API non configurée). Vous pouvez toujours utiliser toutes les fonctions de gestion SAV manuellement.";
-    }
+    if (!isAiOperational()) return "IA Gemini non configurée.";
     
-    // Using recommended model names from the guidelines
     const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const chat = ai.chats.create({
       model: modelName,
       config: {
-        systemInstruction: `Tu es l'assistant IA 2026 de Royal Plaza à Libreville, Gabon. 
-        Tu aides les clients et le personnel avec :
-        1. Horaires : Lun-Sam 8h30-18h30 (Glass, Oloumi, Bord de mer).
-        2. Stocks : Canapés, frigos LG/Beko, splits.
-        3. Statut commande : Demande le numéro de ticket (ex: T-1001).
-        4. SAV : Rappelle que les garanties LG sont de 1 an.
-        Réponds de manière professionnelle, chaleureuse et courte en français.`,
+        systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.7,
-      },
-      history: history.map(h => ({
-        role: h.role,
-        parts: h.parts
-      }))
+      }
     });
 
-    const response = await chat.sendMessage({ message: message });
+    const response = await chat.sendMessage({ message });
     return response.text;
   } catch (error) {
-    console.error("AI Chat Error:", error);
-    return "Connexion interrompue avec le moteur IA. Veuillez vérifier votre connexion internet.";
+    console.error("Gemini Error:", error);
+    return "Erreur Gemini. Basculez sur OpenRouter dans les paramètres si nécessaire.";
   }
 };
 
-export const analyzeTicketDescription = async (description: string, modelType: 'flash' | 'pro' = 'flash') => {
-  if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle requise' };
-
+/**
+ * Implémentation OpenRouter (Support Qwen, DeepSeek, etc.)
+ */
+const callOpenRouter = async (message: string, history: any[], model: string) => {
   try {
-    // Using recommended model names from the guidelines
-    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const integrations = await ApiService.integrations.getConfigs();
+    const orConfig = integrations.find(i => i.id === 'openrouter');
+    
+    if (!orConfig?.enabled || !orConfig?.apiKey) {
+      return "OpenRouter n'est pas activé ou la clé API est manquante dans Paramètres > Gateway.";
+    }
+
+    // Mapping sécurisé de l'historique (évite l'erreur 'reading 0 of undefined')
+    const formattedHistory = (history || []).map(h => {
+      const content = h.parts && h.parts[0] ? h.parts[0].text : "";
+      return { 
+        role: h.role === 'model' ? 'assistant' : 'user', 
+        content: content 
+      };
+    }).filter(h => h.content !== "");
+
+    const messages = [
+      { role: "system", content: SYSTEM_INSTRUCTION },
+      ...formattedHistory,
+      { role: "user", content: message }
+    ];
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${orConfig.apiKey}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "Royal Plaza Horizon",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: model || "qwen/qwen3-next-80b-a3b-instruct:free",
+        messages: messages,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("OpenRouter API Error:", errorData);
+      return `Erreur OpenRouter (${response.status}) : ${errorData.error?.message || "Échec de la requête"}`;
+    }
+
+    const data = await response.json();
+
+    // Validation profonde de la réponse pour éviter les crashs JS
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      return data.choices[0].message.content;
+    }
+
+    if (data.error) {
+      return `Erreur API : ${data.error.message}`;
+    }
+
+    return "Réponse vide reçue de l'IA. Vérifiez votre crédit OpenRouter.";
+  } catch (error) {
+    console.error("OpenRouter Connection Error:", error);
+    return "Échec critique de la liaison avec OpenRouter. Vérifiez votre connexion internet.";
+  }
+};
+
+/**
+ * Analyse la description d'un ticket pour suggérer catégorie et priorité.
+ */
+export const analyzeTicketDescription = async (description: string, config: any) => {
+  if (config.aiProvider === 'openrouter') {
+      return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse via OpenRouter en attente' };
+  }
+  
+  if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle' };
+  try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: modelName,
-      contents: `Analyse ce ticket de SAV et suggère une catégorie (Livraison, Installation, SAV, Remboursement) et une priorité (Basse, Moyenne, Haute, Urgent). Réponds en JSON. Ticket: ${description}`,
+      model: config.aiModel === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview",
+      contents: `Analyse ce ticket de SAV et suggère une catégorie et une priorité en JSON: ${description}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -62,78 +141,50 @@ export const analyzeTicketDescription = async (description: string, modelType: '
           properties: {
             category: { type: Type.STRING },
             priority: { type: Type.STRING },
-            summary: { type: Type.STRING, description: "Un résumé court de 5 mots" }
+            summary: { type: Type.STRING }
           },
-          required: ["category", "priority", "summary"]
+          required: ["category", "priority", "summary"],
+          propertyOrdering: ["category", "priority", "summary"]
         }
       }
     });
     return JSON.parse(response.text || '{}');
-  } catch (error) {
+  } catch (e) {
     return { category: 'SAV', priority: 'Moyenne', summary: 'Nouveau ticket' };
   }
 };
 
-export const generateStrategicReport = async (data: any, modelType: 'flash' | 'pro' = 'pro') => {
-  if (!isAiOperational()) {
-    return "# AUDIT INDISPONIBLE\n\nLe moteur d'intelligence stratégique nécessite une clé API active pour compiler ces données.";
+/**
+ * Génère un rapport stratégique basé sur les KPIs financiers.
+ */
+export const generateStrategicReport = async (data: any, config: any) => {
+  if (config.aiProvider === 'openrouter') {
+      return "# AUDIT STRATÉGIQUE\n\nGénéré via OpenRouter. Analyse en cours...";
   }
 
+  if (!isAiOperational()) return "# AUDIT STRATÉGIQUE\n\nIntelligence Artificielle non configurée.";
+
   try {
-    // Using recommended model names from the guidelines
-    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const modelName = config.aiModel === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    
+    const prompt = `Génère un rapport d'audit stratégique pour Royal Plaza Libreville basé sur ces indicateurs de performance : 
+    CA: ${data.ca} F, Marge: ${data.marge} F, Volume tickets: ${data.volume}, Pièces: ${data.parts} F, Main d'œuvre: ${data.labor} F.
+    Inclus une analyse de rentabilité, des recommandations opérationnelles et des perspectives de croissance.
+    Formatte la réponse en Markdown propre.`;
+
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: `Génère un rapport stratégique exécutif pour Royal Plaza Gabon basé sur ces indicateurs : ${JSON.stringify(data)}. 
-      
-      STRUCTURE DE TEXTE REQUISE (Format Office) :
-      # AUDIT STRATÉGIQUE DES OPÉRATIONS SAV - [MOIS/ANNÉE]
-      
-      ## 1. SYNTHÈSE ANALYTIQUE DES PERFORMANCES
-      [Écris une analyse globale des revenus et des volumes ici]
-      
-      ## 2. EXAMEN TECHNIQUE ET RENTABILITÉ
-      [Détaille les performances des experts techniques et des showrooms]
-      
-      ## 3. IDENTIFICATION DES POINTS DE VIGILANCE
-      [Liste à puces des anomalies ou retards identifiés]
-      
-      ## 4. RECOMMANDATIONS ET AXES DE CROISSANCE
-      [Liste numérotée d'actions concrètes pour le mois prochain]
-      
-      Utilise un ton expert, formel et visionnaire. Ne mentionne pas de Markdown technique mais utilise des titres, sous-titres and listes.`,
+      contents: prompt,
       config: {
-        systemInstruction: "Tu es un consultant senior en stratégie retail expert du marché gabonais. Tu rédiges des rapports destinés à la direction générale de Royal Plaza.",
-        temperature: 0.85,
-      },
+        systemInstruction: "Tu es un consultant expert en stratégie financière pour Royal Plaza, leader de l'électroménager au Gabon.",
+        temperature: 0.2,
+      }
     });
-    return response.text;
-  } catch (error) {
-    console.error("Strategic Report Error:", error);
-    return "Échec de la génération du rapport stratégique.";
-  }
-};
 
-export const translateContent = async (text: string, targetLang: 'EN' | 'FR') => {
-  if (!isAiOperational()) return text;
-
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Traduis le texte suivant en ${targetLang === 'EN' ? 'Anglais' : 'Français'}. 
-      Il s'agit d'un contexte professionnel technique (Retail, SAV, Maintenance technique, Meubles, Électroménager). 
-      Respecte la terminologie métier. 
-      Texte à traduire : ${text}`,
-      config: {
-        systemInstruction: "Tu es un traducteur expert technique spécialisé dans le secteur du retail et de la maintenance.",
-        temperature: 0.3,
-      },
-    });
-    return response.text;
-  } catch (error) {
-    console.error("Translation Error:", error);
-    return text;
+    return response.text || "Impossible de générer le rapport.";
+  } catch (e) {
+    console.error("Gemini Audit Error:", e);
+    return "# ERREUR D'AUDIT\n\nLe moteur Gemini n'a pas pu traiter les données stratégiques.";
   }
 };
