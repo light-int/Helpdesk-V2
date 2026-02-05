@@ -36,6 +36,7 @@ const callGemini = async (message: string, history: any[], modelType: string) =>
   try {
     if (!isAiOperational()) return "IA Gemini non configurée.";
     
+    // Select model based on app config shortcuts
     const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const chat = ai.chats.create({
@@ -46,38 +47,33 @@ const callGemini = async (message: string, history: any[], modelType: string) =>
       }
     });
 
+    // Use property access for .text as per GenAI guidelines
     const response = await chat.sendMessage({ message });
     return response.text;
   } catch (error) {
-    console.error("Gemini Error:", error);
     return "Erreur Gemini. Basculez sur OpenRouter dans les paramètres si nécessaire.";
   }
 };
 
 /**
- * Implémentation OpenRouter (Support Qwen, DeepSeek, etc.)
+ * Implémentation OpenRouter (Support Qwen et autres)
  */
 const callOpenRouter = async (message: string, history: any[], model: string) => {
   try {
+    // Récupérer la clé depuis la DB (via IntegrationConfig)
     const integrations = await ApiService.integrations.getConfigs();
     const orConfig = integrations.find(i => i.id === 'openrouter');
     
     if (!orConfig?.enabled || !orConfig?.apiKey) {
-      return "OpenRouter n'est pas activé ou la clé API est manquante dans Paramètres > Gateway.";
+      return "OpenRouter n'est pas configuré ou activé dans la Gateway.";
     }
-
-    // Mapping sécurisé de l'historique (évite l'erreur 'reading 0 of undefined')
-    const formattedHistory = (history || []).map(h => {
-      const content = h.parts && h.parts[0] ? h.parts[0].text : "";
-      return { 
-        role: h.role === 'model' ? 'assistant' : 'user', 
-        content: content 
-      };
-    }).filter(h => h.content !== "");
 
     const messages = [
       { role: "system", content: SYSTEM_INSTRUCTION },
-      ...formattedHistory,
+      ...history.map(h => ({ 
+        role: h.role === 'model' ? 'assistant' : 'user', 
+        content: h.parts[0].text 
+      })),
       { role: "user", content: message }
     ];
 
@@ -91,32 +87,15 @@ const callOpenRouter = async (message: string, history: any[], model: string) =>
       },
       body: JSON.stringify({
         model: model || "qwen/qwen3-next-80b-a3b-instruct:free",
-        messages: messages,
-        temperature: 0.7
+        messages: messages
       })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("OpenRouter API Error:", errorData);
-      return `Erreur OpenRouter (${response.status}) : ${errorData.error?.message || "Échec de la requête"}`;
-    }
-
     const data = await response.json();
-
-    // Validation profonde de la réponse pour éviter les crashs JS
-    if (data.choices && data.choices[0] && data.choices[0].message) {
-      return data.choices[0].message.content;
-    }
-
-    if (data.error) {
-      return `Erreur API : ${data.error.message}`;
-    }
-
-    return "Réponse vide reçue de l'IA. Vérifiez votre crédit OpenRouter.";
+    return data.choices[0].message.content;
   } catch (error) {
-    console.error("OpenRouter Connection Error:", error);
-    return "Échec critique de la liaison avec OpenRouter. Vérifiez votre connexion internet.";
+    console.error("OpenRouter Error:", error);
+    return "Échec de la liaison OpenRouter.";
   }
 };
 
@@ -125,7 +104,7 @@ const callOpenRouter = async (message: string, history: any[], model: string) =>
  */
 export const analyzeTicketDescription = async (description: string, config: any) => {
   if (config.aiProvider === 'openrouter') {
-      return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse via OpenRouter en attente' };
+      return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse via Qwen en attente' };
   }
   
   if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle' };
@@ -168,6 +147,7 @@ export const generateStrategicReport = async (data: any, config: any) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const modelName = config.aiModel === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
     
+    // Prompt structure for strategic auditing
     const prompt = `Génère un rapport d'audit stratégique pour Royal Plaza Libreville basé sur ces indicateurs de performance : 
     CA: ${data.ca} F, Marge: ${data.marge} F, Volume tickets: ${data.volume}, Pièces: ${data.parts} F, Main d'œuvre: ${data.labor} F.
     Inclus une analyse de rentabilité, des recommandations opérationnelles et des perspectives de croissance.
@@ -178,7 +158,7 @@ export const generateStrategicReport = async (data: any, config: any) => {
       contents: prompt,
       config: {
         systemInstruction: "Tu es un consultant expert en stratégie financière pour Royal Plaza, leader de l'électroménager au Gabon.",
-        temperature: 0.2,
+        temperature: 0.2, // Consistent reasoning for reports
       }
     });
 
