@@ -6,16 +6,16 @@ import {
 import { 
   Activity, RefreshCw, Sparkles, TrendingUp, DollarSign,
   AlertTriangle, CheckCircle2, ShieldCheck, ArrowUpRight,
-  Database, Zap, Star
+  Database, Zap, Star, Terminal, History, Box, User, AlertCircle
 } from 'lucide-react';
 import { useData, useUser } from '../App';
 import { Link } from 'react-router-dom';
-import { Ticket, ShowroomConfig, Technician } from '../types';
+import { Ticket, ShowroomConfig, Technician, AuditLog } from '../types';
 
 const Dashboard: React.FC = () => {
   const { 
     tickets, isLoading, refreshAll, isSyncing, showrooms, 
-    syncMetrics, parts, customers, products, technicians
+    syncMetrics, parts, customers, products, technicians, auditLogs
   } = useData();
   const { currentUser } = useUser();
   
@@ -24,7 +24,6 @@ const Dashboard: React.FC = () => {
   const isTechnician = currentUser?.role === 'TECHNICIAN';
 
   const stats = useMemo(() => {
-    // --- LOGIQUE DE FILTRAGE PAR RÔLE ---
     let activeTickets = (tickets || []).filter((t: Ticket) => !t.isArchived);
     
     if (isTechnician) {
@@ -34,13 +33,11 @@ const Dashboard: React.FC = () => {
     const totalRevenue = activeTickets.reduce((acc: number, t: Ticket) => acc + (t.financials?.grandTotal || 0), 0);
     const criticalTickets = activeTickets.filter((t: Ticket) => t.priority === 'Urgent' && t.status !== 'Fermé').length;
     
-    // Pour le graphique par showroom - AJOUT DU TYPE SUR LE PARAMETRE 'd'
     const showroomData = (showrooms || []).map((s: ShowroomConfig) => ({
       name: s.id,
       value: activeTickets.filter((t: Ticket) => t.showroom === s.id).length
     })).filter((d: { name: string; value: number }) => d.value > 0 || !isTechnician);
 
-    // Trouver le profil tech correspondant pour les indicateurs de performance
     const techProfile = technicians.find((t: Technician) => t.id === currentUser?.id);
 
     return { 
@@ -52,6 +49,16 @@ const Dashboard: React.FC = () => {
       completed: techProfile?.completedTickets || 0
     };
   }, [tickets, showrooms, isTechnician, currentUser, technicians]);
+
+  const getLogIcon = (action: string) => {
+    switch (action) {
+      case 'MAJ_TICKET': return <History className="text-blue-500" size={14} />;
+      case 'MAJ_STOCK': return <Box className="text-[#3ecf8e]" size={14} />;
+      case 'MOUV_STOCK': return <RefreshCw className="text-purple-500" size={14} />;
+      case 'MAJ_CLIENT': return <User className="text-amber-500" size={14} />;
+      default: return <Terminal className="text-[#686868]" size={14} />;
+    }
+  };
 
   if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><RefreshCw className="text-[#3ecf8e] animate-spin" size={32} /></div>;
 
@@ -83,30 +90,10 @@ const Dashboard: React.FC = () => {
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { 
-            label: isTechnician ? 'Production C.A.' : 'Flux de Revenus', 
-            value: `${(stats.totalRevenue/1000).toFixed(0)}k F`, 
-            icon: <DollarSign size={16}/>, 
-            color: '#3ecf8e' 
-          },
-          { 
-            label: isTechnician ? 'Mes Dossiers' : 'Tickets en Cours', 
-            value: stats.totalCount, 
-            icon: <Activity size={16}/>, 
-            color: '#1c1c1c' 
-          },
-          { 
-            label: isTechnician ? 'Mes Urgences' : 'Urgences SLA', 
-            value: stats.criticalTickets, 
-            icon: <AlertTriangle size={16}/>, 
-            color: '#f87171' 
-          },
-          { 
-            label: isTechnician ? 'Note Qualité' : 'Santé Cluster', 
-            value: isTechnician ? `${stats.rating}/5` : '100%', 
-            icon: isTechnician ? <Star size={16}/> : <ShieldCheck size={16}/>, 
-            color: '#3ecf8e' 
-          }
+          { label: isTechnician ? 'Production C.A.' : 'Flux de Revenus', value: `${(stats.totalRevenue/1000).toFixed(0)}k F`, icon: <DollarSign size={16}/>, color: '#3ecf8e' },
+          { label: isTechnician ? 'Mes Dossiers' : 'Tickets en Cours', value: stats.totalCount, icon: <Activity size={16}/>, color: '#1c1c1c' },
+          { label: isTechnician ? 'Mes Urgences' : 'Urgences SLA', value: stats.criticalTickets, icon: <AlertTriangle size={16}/>, color: '#f87171' },
+          { label: isTechnician ? 'Note Qualité' : 'Santé Cluster', value: isTechnician ? `${stats.rating}/5` : '100%', icon: isTechnician ? <Star size={16}/> : <ShieldCheck size={16}/>, color: '#3ecf8e' }
         ].map((item, i) => (
           <div key={i} className="sb-card flex items-start justify-between shadow-sm border-[#ededed]">
             <div>
@@ -121,32 +108,44 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="lg:col-span-2 sb-card border-[#ededed] shadow-sm">
+         <div className="lg:col-span-2 sb-card border-[#ededed] shadow-sm flex flex-col bg-white">
             <div className="flex items-center justify-between mb-8">
-               <h2 className="text-[11px] font-black text-[#1c1c1c] uppercase tracking-widest">
-                 {isTechnician ? 'Répartition de mes interventions' : 'Activité Logistique par Site'}
+               <h2 className="text-[11px] font-black text-[#1c1c1c] uppercase tracking-widest flex items-center gap-2">
+                 <History size={16} className="text-[#3ecf8e]"/> Flux d'Activité Réseau
                </h2>
-               <div className="p-1.5 bg-[#f8f9fa] rounded text-[#686868] border border-[#f5f5f5]"><TrendingUp size={14}/></div>
+               <span className="text-[10px] font-black text-[#686868] uppercase tracking-tighter bg-[#f8f9fa] px-2 py-0.5 rounded border border-[#ededed]">Cluster LBV-Live</span>
             </div>
-            <div className="h-[300px]">
-               <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.showroomData}>
-                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#686868', fontSize: 10, fontWeight: 'bold'}} dy={10} />
-                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#686868', fontSize: 10}} />
-                     <Tooltip 
-                        cursor={{fill: '#fcfcfc'}} 
-                        contentStyle={{borderRadius: '8px', border: '1px solid #ededed', boxShadow: 'none', fontSize: '12px', fontWeight: 'bold'}} 
-                     />
-                     <Bar dataKey="value" fill="#3ecf8e" radius={[4, 4, 0, 0]} barSize={32} />
-                  </BarChart>
-               </ResponsiveContainer>
+            
+            <div className="space-y-4 flex-1 overflow-y-auto max-h-[350px] pr-2 custom-scrollbar">
+               {auditLogs && auditLogs.length > 0 ? auditLogs.map((log: AuditLog) => (
+                 <div key={log.id} className="flex items-start gap-4 p-3 hover:bg-[#fcfcfc] rounded-xl transition-all border border-transparent hover:border-[#f0f0f0] group">
+                    <div className="w-8 h-8 rounded-lg bg-[#f8f9fa] flex items-center justify-center shrink-0 border border-[#ededed] group-hover:scale-110 transition-transform">
+                       {getLogIcon(log.action)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                       <div className="flex justify-between items-baseline">
+                          <p className="text-[12px] font-black text-[#1c1c1c] truncate">
+                            <span className="text-[#3ecf8e] font-black">{log.userName}</span> {log.details}
+                          </p>
+                          <span className="text-[9px] font-bold text-[#9ca3af] uppercase tracking-tighter whitespace-nowrap ml-2">
+                            {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                       </div>
+                       <p className="text-[10px] text-[#686868] font-bold mt-0.5 opacity-60">ID: {log.target} • {log.action}</p>
+                    </div>
+                 </div>
+               )) : (
+                 <div className="h-full flex flex-col items-center justify-center opacity-30 py-20">
+                    <History size={40} className="mb-4" />
+                    <p className="text-[11px] font-black uppercase tracking-widest text-center">En attente de transactions...</p>
+                 </div>
+               )}
             </div>
          </div>
 
-         <div className="sb-card border-[#ededed] shadow-sm flex flex-col">
-            <h2 className="text-[11px] font-black text-[#1c1c1c] uppercase tracking-widest mb-6">
-              {isTechnician ? 'Mes Urgences Immédiates' : "File d'Urgences Critiques"}
+         <div className="sb-card border-[#ededed] shadow-sm flex flex-col bg-white">
+            <h2 className="text-[11px] font-black text-[#1c1c1c] uppercase tracking-widest mb-6 flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-500"/> File d'Urgences Critiques
             </h2>
             <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
                {(isTechnician 
@@ -155,7 +154,7 @@ const Dashboard: React.FC = () => {
                ).slice(0, 5).map((t: Ticket) => (
                   <Link to={`/tickets?id=${t.id}`} key={t.id} className="block p-4 border border-[#ededed] rounded-xl hover:border-[#3ecf8e] transition-all group bg-[#fcfcfc]">
                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[9px] font-black text-red-500 uppercase tracking-tighter bg-red-50 px-2 py-0.5 rounded">SLA ALERT</span>
+                        <span className="text-[9px] font-black text-red-500 uppercase tracking-tighter bg-red-50 px-2 py-0.5 rounded border border-red-100">SLA ALERT</span>
                         <ArrowUpRight size={14} className="text-[#686868] group-hover:text-[#3ecf8e]" />
                      </div>
                      <p className="text-sm font-black text-[#1c1c1c] truncate">{t.customerName}</p>
@@ -173,7 +172,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
-        <div className="sb-card flex items-center gap-6 border-[#ededed] shadow-sm hover:border-[#3ecf8e] transition-colors">
+        <div className="sb-card flex items-center gap-6 border-[#ededed] shadow-sm hover:border-[#3ecf8e] transition-colors bg-white p-8">
            <div className="w-14 h-14 rounded-2xl bg-[#f0fdf4] text-[#3ecf8e] flex items-center justify-center border border-[#dcfce7] shadow-sm">
               <Database size={28}/>
            </div>
@@ -182,7 +181,7 @@ const Dashboard: React.FC = () => {
               <p className="text-[11px] text-[#686868] font-bold mt-0.5">Cluster LBV-WEST • Ping: {syncMetrics.latency || 38}ms</p>
            </div>
         </div>
-        <div className="sb-card flex items-center gap-6 border-[#ededed] shadow-sm hover:border-[#1c1c1c] transition-colors">
+        <div className="sb-card flex items-center gap-6 border-[#ededed] shadow-sm hover:border-[#1c1c1c] transition-colors bg-white p-8">
            <div className="w-14 h-14 rounded-2xl bg-[#f8f9fa] text-[#1c1c1c] flex items-center justify-center border border-[#ededed] shadow-sm">
               <Zap size={28}/>
            </div>

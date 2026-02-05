@@ -25,7 +25,7 @@ import {
 import { 
   Notification, UserProfile, Ticket, Product, Technician, 
   Part, WarrantyRecord, Customer, ShowroomConfig, 
-  SystemConfig, SyncMetrics, StrategicReport, StockMovement 
+  SystemConfig, SyncMetrics, StrategicReport, StockMovement, AuditLog 
 } from './types';
 import { PlazaDB } from './services/db';
 import { ApiService } from './services/apiService';
@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const [brands, setBrands] = useState<string[]>([]);
   const [showrooms, setShowrooms] = useState<ShowroomConfig[]>([]);
   const [reports, setReports] = useState<StrategicReport[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [config, setConfig] = useState<SystemConfig>({
     aiEnabled: true, aiModel: 'flash', aiAutoCategorization: true, aiStrategicAudit: true, 
     aiChatbotEnabled: true, autoTranslate: false, sessionTimeout: 60, mfaRequired: false, 
@@ -70,23 +71,26 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const markNotificationAsRead = useCallback((id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }, []);
+
   const addNotification = useCallback((n: any) => {
     const id = Math.random().toString(36).substr(2, 9);
     setNotifications(prev => [{ ...n, id, timestamp: new Date().toISOString(), read: false }, ...prev]);
-    setTimeout(() => removeNotification(id), 4000);
-  }, [removeNotification]);
+  }, []);
 
   const refreshAll = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const [t, p, te, pa, w, c, b, s, r, cf, u] = await Promise.all([
+      const [t, p, te, pa, w, c, b, s, r, cf, u, logs] = await Promise.all([
         ApiService.tickets.getAll(), ApiService.products.getAll(), ApiService.technicians.getAll(),
         ApiService.parts.getAll(), ApiService.warranties.getAll(), ApiService.customers.getAll(),
         ApiService.brands.getAll(), ApiService.showrooms.getAll(), ApiService.reports.getAll(),
-        ApiService.config.get(), ApiService.users.getAll()
+        ApiService.config.get(), ApiService.users.getAll(), ApiService.audit.getLogs(20)
       ]);
       setTickets(t); setProducts(p); setTechnicians(te); setParts(pa); setWarranties(w);
-      setCustomers(c); setBrands(b); setShowrooms(s); setReports(r);
+      setCustomers(c); setBrands(b); setShowrooms(s); setReports(r); setAuditLogs(logs);
       if (cf) setConfig(cf); setUsers(u);
       setSyncMetrics({ lastSuccess: new Date().toISOString(), latency: 32, status: 'CONNECTED', errorCount: 0 });
     } catch (e) {
@@ -98,30 +102,128 @@ const App: React.FC = () => {
 
   const login = (user: UserProfile) => { setCurrentUser(user); PlazaDB.save('currentUser', user); };
   const logout = () => { setCurrentUser(null); localStorage.removeItem('currentUser'); };
-  const updateUser = async (updates: any) => {
+  
+  // Fix: Added updateUser to support ProfilePage.tsx
+  const updateUser = async (updates: Partial<UserProfile>) => {
     if (!currentUser) return;
     const updated = { ...currentUser, ...updates };
     await ApiService.users.save(updated);
-    setCurrentUser(updated); PlazaDB.save('currentUser', updated);
+    setCurrentUser(updated);
+    PlazaDB.save('currentUser', updated);
   };
 
-  const saveTicket = async (ticket: Ticket) => { await ApiService.tickets.saveAll([ticket]); await refreshAll(); };
-  const saveTechnician = async (tech: Technician) => { await ApiService.technicians.saveAll([tech]); await refreshAll(); };
-  const deleteTechnician = async (id: string) => { await ApiService.technicians.delete(id); await refreshAll(); };
-  const saveShowroom = async (s: ShowroomConfig) => { await ApiService.showrooms.save(s); await refreshAll(); };
-  const saveCustomer = async (c: Customer) => { await ApiService.customers.saveAll([c]); await refreshAll(); };
-  const saveProduct = async (p: Product) => { await ApiService.products.saveAll([p]); await refreshAll(); };
-  const deleteProduct = async (id: string) => { await ApiService.products.delete(id); await refreshAll(); };
-  const savePart = async (part: Part) => { await ApiService.parts.saveAll([part]); await refreshAll(); };
-  const deletePart = async (id: string) => { await ApiService.parts.delete(id); await refreshAll(); };
-  const saveWarranty = async (w: WarrantyRecord) => { await ApiService.warranties.saveAll([w]); await refreshAll(); };
-  const deleteWarranty = async (id: string) => { await ApiService.warranties.delete(id); await refreshAll(); };
-  const updateConfig = async (updates: any) => { await ApiService.config.update(updates); await refreshAll(); };
+  const logActivity = async (action: string, target: string, details: string) => {
+    if (!currentUser) return;
+    await ApiService.audit.log({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action,
+      target,
+      details
+    });
+  };
+
+  const saveTicket = async (ticket: Ticket) => { 
+    await ApiService.tickets.saveAll([ticket]); 
+    await logActivity('MAJ_TICKET', ticket.id, `Ticket ${ticket.id} synchronisé.`);
+    await refreshAll(); 
+  };
   
-  const saveUser = async (user: UserProfile) => { await ApiService.users.save(user); await refreshAll(); };
-  const deleteUser = async (id: string) => { await ApiService.users.delete(id); await refreshAll(); };
-  const addBrand = async (name: string) => { await ApiService.brands.add(name); await refreshAll(); };
-  const deleteBrand = async (name: string) => { await ApiService.brands.delete(name); await refreshAll(); };
+  const saveCustomer = async (c: Customer) => { 
+    await ApiService.customers.saveAll([c]); 
+    await logActivity('MAJ_CLIENT', c.name, `Fiche client ${c.name} mise à jour.`);
+    await refreshAll(); 
+  };
+
+  const savePart = async (part: Part) => { 
+    await ApiService.parts.saveAll([part]); 
+    await logActivity('MAJ_STOCK', part.name, `Article ${part.sku} modifié.`);
+    await refreshAll(); 
+  };
+
+  // Fix: Added deletePart to support PartsInventory.tsx
+  const deletePart = async (id: string) => {
+    await ApiService.parts.delete(id);
+    await logActivity('SUPPR_STOCK', id, `Article retiré de l'inventaire.`);
+    await refreshAll();
+  };
+
+  // Fix: Added saveProduct to support Products.tsx
+  const saveProduct = async (p: Product) => {
+    await ApiService.products.saveAll([p]);
+    await logActivity('MAJ_PRODUIT', p.name, `Produit ${p.name} mis à jour.`);
+    await refreshAll();
+  };
+
+  // Fix: Added deleteProduct to support Products.tsx
+  const deleteProduct = async (id: string) => {
+    await ApiService.products.delete(id);
+    await logActivity('SUPPR_PRODUIT', id, `Produit déréférencé.`);
+    await refreshAll();
+  };
+
+  // Fix: Added saveTechnician to support Technicians.tsx
+  const saveTechnician = async (t: Technician) => {
+    await ApiService.technicians.saveAll([t]);
+    await logActivity('MAJ_TECH', t.name, `Profil technique de ${t.name} synchronisé.`);
+    await refreshAll();
+  };
+
+  // Fix: Added deleteTechnician to support Technicians.tsx
+  const deleteTechnician = async (id: string) => {
+    await ApiService.technicians.delete(id);
+    await logActivity('SUPPR_TECH', id, `Expert retiré de l'infrastructure.`);
+    await refreshAll();
+  };
+
+  // Fix: Added saveWarranty to support WarrantyLog.tsx
+  const saveWarranty = async (w: WarrantyRecord) => {
+    await ApiService.warranties.saveAll([w]);
+    await logActivity('MAJ_GARANTIE', w.serialNumber, `Contrat de garantie ${w.id} mis à jour.`);
+    await refreshAll();
+  };
+
+  // Fix: Added deleteWarranty to support WarrantyLog.tsx
+  const deleteWarranty = async (id: string) => {
+    await ApiService.warranties.delete(id);
+    await logActivity('SUPPR_GARANTIE', id, `Certificat de garantie révoqué.`);
+    await refreshAll();
+  };
+
+  // Fix: Added updateConfig to support Settings.tsx
+  const updateConfig = async (updates: Partial<SystemConfig>) => {
+    await ApiService.config.update(updates);
+    await logActivity('MAJ_CONFIG', 'GLOBAL', `Configuration système modifiée.`);
+    await refreshAll();
+  };
+
+  // Fix: Added saveUser to support Settings.tsx
+  const saveUser = async (u: UserProfile) => {
+    await ApiService.users.save(u);
+    await logActivity('MAJ_USER', u.name, `Accès utilisateur ${u.name} synchronisé.`);
+    await refreshAll();
+  };
+
+  // Fix: Added deleteUser to support Settings.tsx
+  const deleteUser = async (id: string) => {
+    await ApiService.users.delete(id);
+    await logActivity('SUPPR_USER', id, `Accès collaborateur révoqué.`);
+    await refreshAll();
+  };
+
+  // Fix: Added addBrand to support Settings.tsx
+  const addBrand = async (name: string) => {
+    await ApiService.brands.add(name);
+    await logActivity('ADD_BRAND', name, `Nouvelle marque certifiée : ${name}.`);
+    await refreshAll();
+  };
+
+  // Fix: Added deleteBrand to support Settings.tsx
+  const deleteBrand = async (name: string) => {
+    await ApiService.brands.delete(name);
+    await logActivity('SUPPR_BRAND', name, `Marque ${name} retirée du référentiel.`);
+    await refreshAll();
+  };
 
   const addStockMovement = async (movement: any) => {
     const fullMov = { ...movement, id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString() };
@@ -131,6 +233,7 @@ const App: React.FC = () => {
       const newStock = movement.type === 'IN' ? part.currentStock + movement.quantity : part.currentStock - movement.quantity;
       await ApiService.parts.saveAll([{ ...part, currentStock: newStock }]);
     }
+    await logActivity('MOUV_STOCK', movement.partName, `${movement.type === 'IN' ? 'Entrée' : 'Sortie'} de ${movement.quantity} unités.`);
     await refreshAll();
   };
 
@@ -138,12 +241,12 @@ const App: React.FC = () => {
 
   return (
     <UserContext.Provider value={{ currentUser, login, logout, updateUser }}>
-      <NotificationContext.Provider value={{ notifications, addNotification, removeNotification }}>
+      <NotificationContext.Provider value={{ notifications, addNotification, removeNotification, markNotificationAsRead }}>
         <DataContext.Provider value={{
           tickets, products, technicians, parts, warranties, customers, users, brands, showrooms,
-          reports, config, syncMetrics, isSyncing, isLoading, refreshAll, saveTicket, 
-          saveTechnician, deleteTechnician, saveShowroom, saveCustomer, saveProduct, deleteProduct, 
-          savePart, deletePart, saveWarranty, deleteWarranty, updateConfig, addStockMovement,
+          reports, config, syncMetrics, isSyncing, isLoading, refreshAll, saveTicket, auditLogs,
+          saveCustomer, savePart, addStockMovement, deletePart, saveProduct, deleteProduct,
+          saveTechnician, deleteTechnician, saveWarranty, deleteWarranty, updateConfig,
           saveUser, deleteUser, addBrand, deleteBrand
         }}>
           <HashRouter>
@@ -154,18 +257,12 @@ const App: React.FC = () => {
                   <main className="flex-1 ml-64 p-8 min-h-screen relative overflow-x-hidden">
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
-                      
-                      {/* Routes interdites aux techniciens */}
                       <Route path="/inbox" element={!isTech ? <Inbox /> : <Navigate to="/maintenance" replace />} />
                       <Route path="/customers" element={!isTech ? <Customers /> : <Navigate to="/maintenance" replace />} />
                       <Route path="/products" element={!isTech ? <Products /> : <Navigate to="/maintenance" replace />} />
                       <Route path="/documentation" element={!isTech ? <Documentation /> : <Navigate to="/maintenance" replace />} />
-                      
                       <Route path="/tickets" element={<Tickets />} />
-                      <Route 
-                        path="/maintenance" 
-                        element={currentUser.role === 'TECHNICIAN' ? <MaintenanceLog /> : <Navigate to="/" replace />} 
-                      />
+                      <Route path="/maintenance" element={currentUser.role === 'TECHNICIAN' ? <MaintenanceLog /> : <Navigate to="/" replace />} />
                       <Route path="/warranties" element={<WarrantyLog />} />
                       <Route path="/parts" element={<PartsInventory />} />
                       <Route path="/finances" element={!isTech ? <Finances /> : <Navigate to="/maintenance" replace />} />
@@ -187,12 +284,12 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* SUPABASE STYLE TOASTS */}
-              <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 w-full max-sm pointer-events-none">
-                {notifications.map((n) => (
+              {/* Toast de notification instantané */}
+              <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+                {notifications.filter(n => !n.read).slice(0, 3).map((n) => (
                   <div 
                     key={n.id} 
-                    className="bg-white border border-[#ededed] shadow-lg p-4 rounded-lg flex items-start gap-3 animate-sb-entry pointer-events-auto"
+                    className="bg-white border border-[#ededed] shadow-2xl p-4 rounded-xl flex items-start gap-3 animate-sb-entry pointer-events-auto"
                   >
                     <div className="mt-0.5" style={{ color: n.type === 'success' ? '#3ecf8e' : n.type === 'error' ? '#f87171' : '#fbbf24' }}>
                       {n.type === 'success' && <CheckCircle2 size={18} />}
@@ -201,10 +298,10 @@ const App: React.FC = () => {
                       {n.type === 'info' && <BellRing size={18} />}
                     </div>
                     <div className="flex-1">
-                       <p className="text-[13px] font-bold text-[#1c1c1c]">{n.title}</p>
-                       <p className="text-[12px] text-[#686868] mt-0.5">{n.message}</p>
+                       <p className="text-[13px] font-black text-[#1c1c1c]">{n.title}</p>
+                       <p className="text-[11px] text-[#686868] mt-0.5 font-medium">{n.message}</p>
                     </div>
-                    <button onClick={() => removeNotification(n.id)} className="text-[#686868] hover:text-[#1c1c1c] transition-colors">
+                    <button onClick={() => markNotificationAsRead(n.id)} className="text-[#686868] hover:text-[#1c1c1c] transition-colors">
                       <X size={14} />
                     </button>
                   </div>

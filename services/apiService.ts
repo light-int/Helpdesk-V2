@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Ticket, Product, Customer, Part, UserProfile, Technician, WarrantyRecord, ShowroomConfig, SystemConfig, StrategicReport, StockMovement, Conversation, Message, IntegrationConfig } from '../types';
+import { Ticket, Product, Customer, Part, UserProfile, Technician, WarrantyRecord, ShowroomConfig, SystemConfig, StrategicReport, StockMovement, Conversation, Message, IntegrationConfig, AuditLog } from '../types';
 
 const SUPABASE_URL = 'https://vdovdwdgqfgxoothhnvo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_aDdviGljTQwmWPPTqKc5Og_BOdN-bvJ';
@@ -52,11 +52,25 @@ const TECHNICIAN_COLUMNS = [
 
 export const ApiService = {
   dangerouslyClearAll: async () => {
-    const tables = ['tickets', 'customers', 'parts', 'products', 'users', 'technicians', 'warranties', 'brands', 'showrooms', 'strategic_reports', 'stock_movements', 'user_connections', 'conversations', 'messages', 'integration_configs'];
+    const tables = ['tickets', 'customers', 'parts', 'products', 'users', 'technicians', 'warranties', 'brands', 'showrooms', 'strategic_reports', 'stock_movements', 'user_connections', 'conversations', 'messages', 'integration_configs', 'audit_logs'];
     for (const table of tables) {
       try {
         await supabase.from(table).delete().not('id', 'is', null);
       } catch (e) {}
+    }
+  },
+
+  audit: {
+    getLogs: async (limit = 50): Promise<AuditLog[]> => {
+      return await safeFetch(supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(limit), []);
+    },
+    log: async (log: Omit<AuditLog, 'id' | 'timestamp'>) => {
+      const { error } = await supabase.from('audit_logs').insert({
+        ...log,
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString()
+      });
+      if (error) console.error("Audit log error:", error);
     }
   },
 
@@ -85,29 +99,17 @@ export const ApiService = {
       };
       const { error } = await supabase.from('integration_configs').upsert(payload);
       if (error) throw error;
-    },
-    create: async (config: Omit<IntegrationConfig, 'lastSync'>) => {
-      const payload = {
-        id: config.id,
-        name: config.name,
-        enabled: config.enabled,
-        api_key: config.apiKey,
-        webhook_url: config.webhookUrl,
-        settings: config.settings,
-        updated_at: new Date().toISOString()
-      };
-      const { error } = await supabase.from('integration_configs').insert(payload);
-      if (error) throw error;
-    },
-    delete: async (id: string) => {
-      const { error } = await supabase.from('integration_configs').delete().eq('id', id);
-      if (error) throw error;
     }
   },
 
   inbox: {
     getConversations: async (): Promise<Conversation[]> => await safeFetch(supabase.from('conversations').select('*').order('last_activity', { ascending: false }), []),
     getMessages: async (conversationId: string): Promise<Message[]> => await safeFetch(supabase.from('messages').select('*').eq('conversation_id', conversationId).order('timestamp', { ascending: true }), []),
+    // Fix: Added missing markAsRead method to support Inbox.tsx
+    markAsRead: async (conversationId: string) => {
+      const { error } = await supabase.from('conversations').update({ unread_count: 0 }).eq('id', conversationId);
+      if (error) throw error;
+    },
     sendMessage: async (message: Omit<Message, 'id' | 'timestamp'>) => {
       const { data, error } = await supabase.from('messages').insert(message).select().single();
       if (error) throw error;
@@ -116,9 +118,6 @@ export const ApiService = {
         last_activity: new Date().toISOString() 
       }).eq('id', message.conversation_id);
       return data;
-    },
-    markAsRead: async (conversationId: string) => {
-      await supabase.from('conversations').update({ unread_count: 0 }).eq('id', conversationId);
     }
   },
 
@@ -133,8 +132,7 @@ export const ApiService = {
 
   reports: {
     getAll: async (): Promise<StrategicReport[]> => await safeFetch(supabase.from('strategic_reports').select('*').order('createdAt', { ascending: false }), []),
-    save: async (report: StrategicReport) => supabase.from('strategic_reports').upsert(report),
-    delete: async (id: string) => supabase.from('strategic_reports').delete().eq('id', id)
+    save: async (report: StrategicReport) => supabase.from('strategic_reports').upsert(report)
   },
 
   brands: {
@@ -146,14 +144,8 @@ export const ApiService = {
       const { error } = await supabase.from('brands').insert({ name });
       if (error) throw error;
     },
-    delete: async (name: string) => {
-      const { error } = await supabase.from('brands').delete().eq('name', name);
-      if (error) throw error;
-    },
-    saveAll: async (brands: string[]) => {
-      await supabase.from('brands').delete().not('name', 'is', null);
-      await supabase.from('brands').insert(brands.map(name => ({ name })));
-    }
+    // Fix: Added missing delete method for brands
+    delete: async (name: string) => await supabase.from('brands').delete().eq('name', name)
   },
 
   showrooms: {
@@ -176,8 +168,7 @@ export const ApiService = {
         is_active: config.isOpen 
       };
       return supabase.from('showrooms').upsert(payload);
-    },
-    delete: async (id: string) => supabase.from('showrooms').delete().eq('id', id)
+    }
   },
 
   tickets: {
@@ -219,19 +210,11 @@ export const ApiService = {
   parts: {
     getAll: async () => await safeFetch(supabase.from('parts').select('*').order('name'), []),
     saveAll: async (parts: Part[]) => { if (parts.length > 0) await supabase.from('parts').upsert(parts); },
-    delete: async (id: string) => {
-      const { error } = await supabase.from('parts').delete().eq('id', id);
-      if (error) {
-        console.error("API DELETE PART ERROR:", error);
-        throw error;
-      }
-    },
+    delete: async (id: string) => await supabase.from('parts').delete().eq('id', id),
+    // Fix: Added missing deleteBulk method to support PartsInventory.tsx
     deleteBulk: async (ids: string[]) => {
       const { error } = await supabase.from('parts').delete().in('id', ids);
-      if (error) {
-        console.error("API DELETE BULK PARTS ERROR:", error);
-        throw error;
-      }
+      if (error) throw error;
     }
   },
 
@@ -255,6 +238,7 @@ export const ApiService = {
         if (error) throw error;
       }
     },
+    // Fix: Added missing delete method for technicians
     delete: async (id: string) => await supabase.from('technicians').delete().eq('id', id)
   },
 
@@ -269,29 +253,19 @@ export const ApiService = {
     save: async (user: UserProfile) => {
       const cleaned = cleanObject(user, USER_COLUMNS);
       const { data, error } = await supabase.from('users').upsert(cleaned);
-      if (error) {
-        console.error("Database upsert error:", error);
-        throw error;
-      }
+      if (error) throw error;
       return data;
     },
+    // Fix: Added missing delete method for users
     delete: async (id: string) => await supabase.from('users').delete().eq('id', id),
     logConnection: async (userId: string) => {
       const now = new Date().toISOString();
-      // 1. Enregistrer dans le journal d'audit
       await supabase.from('user_connections').insert({
         user_id: userId,
         timestamp: now,
-        metadata: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform
-        }
+        metadata: { userAgent: navigator.userAgent, platform: navigator.platform }
       });
-      // 2. Mettre à jour lastLogin sur l'utilisateur pour le Dashboard
       await supabase.from('users').update({ lastLogin: now }).eq('id', userId);
-    },
-    getConnectionLogs: async (userId: string) => {
-      return await safeFetch(supabase.from('user_connections').select('*').eq('user_id', userId).order('timestamp', { ascending: false }).limit(20), []);
     }
   }
 };

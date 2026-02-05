@@ -7,22 +7,23 @@ import {
   HardDrive, Lock, Eye, EyeOff,
   Zap, Sparkles, Activity,
   ExternalLink, CheckCircle2, MessageSquare, Settings as SettingsIcon,
-  Key, Globe, Cpu, Server, Shield, Send
+  Key, Globe, Cpu, Server, Shield, Send, History, Search, Filter
 } from 'lucide-react';
 import { useData, useNotifications } from '../App';
-import { UserRole, UserProfile, IntegrationConfig } from '../types';
+import { UserRole, UserProfile, IntegrationConfig, AuditLog } from '../types';
 import Modal from '../components/Modal';
 import { ApiService } from '../services/apiService';
 
 const Settings: React.FC = () => {
   const { 
     users, refreshAll, isSyncing, config, 
-    updateConfig, syncMetrics, 
-    saveUser, deleteUser, brands, addBrand, deleteBrand, isLoading
+    updateConfig, syncMetrics, auditLogs,
+    saveUser, deleteUser, brands, addBrand, deleteBrand, isLoading,
+    parts, customers, products, tickets
   } = useData();
   const { addNotification } = useNotifications();
   
-  const [activeTab, setActiveTab] = useState<'governance' | 'integrations' | 'ai' | 'infrastructure' | 'security'>('governance');
+  const [activeTab, setActiveTab] = useState<'governance' | 'integrations' | 'ai' | 'infrastructure' | 'security' | 'audit'>('governance');
   
   // Modals States
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -33,6 +34,7 @@ const Settings: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editingIntegration, setEditingIntegration] = useState<IntegrationConfig | null>(null);
   const [newBrandName, setNewBrandName] = useState('');
+  const [logSearch, setLogSearch] = useState('');
   
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [loadingIntegrations, setLoadingIntegrations] = useState(false);
@@ -45,6 +47,7 @@ const Settings: React.FC = () => {
     { id: 'ai', label: 'Intelligence', icon: <BrainCircuit size={18} />, desc: 'Modèles Gemini' },
     { id: 'infrastructure', label: 'Vitalité', icon: <DatabaseZap size={18} />, desc: 'Santé Cluster' },
     { id: 'security', label: 'Identités', icon: <ShieldCheck size={18} />, desc: 'Accès IAM' },
+    { id: 'audit', label: 'Journaux', icon: <History size={18} />, desc: 'Audit des actions' },
   ] as const;
 
   useEffect(() => {
@@ -82,10 +85,7 @@ const Settings: React.FC = () => {
 
   const handleTestSmtp = async () => {
     setIsTestingSmtp(true);
-    // Simulation d'un handshake SMTP
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Simuler un test réussi pour la démo
     addNotification({ 
       title: 'SMTP Test', 
       message: 'Connexion établie avec succès avec le relais Royal Plaza.', 
@@ -108,7 +108,6 @@ const Settings: React.FC = () => {
         ...editingIntegration.settings,
         accountId: formData.get('accountId') as string,
         serverRegion: formData.get('serverRegion') as string,
-        // SMTP Specifics
         smtpHost: formData.get('smtpHost') as string,
         smtpPort: formData.get('smtpPort') as string,
         smtpUser: formData.get('smtpUser') as string,
@@ -133,7 +132,6 @@ const Settings: React.FC = () => {
     e.preventDefault();
     if (!newBrandName.trim()) return;
     
-    // AJOUT DU TYPE string SUR LE PARAMETRE 'b'
     if (brands.some((b: string) => b.toLowerCase() === newBrandName.trim().toLowerCase())) {
       addNotification({ title: 'Doublon', message: 'Cette marque existe déjà.', type: 'warning' });
       return;
@@ -181,11 +179,28 @@ const Settings: React.FC = () => {
   const handleToggleConfig = async (key: keyof typeof config) => {
     try {
       await updateConfig({ [key]: !config[key] });
-      addNotification({ title: 'Système', message: 'Configuration mise à jour.', type: 'info' });
+      addNotification({ title: 'Intelligence Horizon', message: 'Paramètre IA mis à jour.', type: 'info' });
     } catch (err) {
       addNotification({ title: 'Erreur', message: 'Impossible de modifier le Kernel.', type: 'error' });
     }
   };
+
+  const handleModelChange = async (model: 'flash' | 'pro') => {
+    try {
+      await updateConfig({ aiModel: model });
+      addNotification({ title: 'Kernel IA', message: `Moteur basculé sur Gemini 3 ${model === 'flash' ? 'Flash (Rapidité)' : 'Pro (Précision)'}.`, type: 'success' });
+    } catch (err) {
+      addNotification({ title: 'Erreur', message: 'Échec du basculement.', type: 'error' });
+    }
+  };
+
+  const filteredLogs = useMemo(() => {
+    return (auditLogs || []).filter((log: AuditLog) => 
+      log.userName.toLowerCase().includes(logSearch.toLowerCase()) ||
+      log.action.toLowerCase().includes(logSearch.toLowerCase()) ||
+      log.details.toLowerCase().includes(logSearch.toLowerCase())
+    );
+  }, [auditLogs, logSearch]);
 
   if (isLoading) return <div className="h-[80vh] flex items-center justify-center"><RefreshCw className="animate-spin text-[#3ecf8e]" size={32} /></div>;
 
@@ -274,100 +289,278 @@ const Settings: React.FC = () => {
 
            {activeTab === 'integrations' && (
              <div className="space-y-6 animate-sb-entry">
-                <div className="sb-card border-[#ededed] bg-white p-8">
-                   <div className="flex items-center justify-between mb-10">
-                      <div className="flex items-center gap-5">
-                         <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-blue-100"><Network size={32}/></div>
-                         <div>
-                            <h2 className="text-lg font-black text-[#1c1c1c] uppercase tracking-tight">Gateway Omnicanale</h2>
-                            <p className="text-[11px] text-[#686868] font-bold uppercase tracking-widest mt-1">Pilotage des flux d'interactions clients</p>
-                         </div>
+                <div className="sb-card border-[#ededed] bg-white">
+                   <div className="flex items-center gap-5 mb-10">
+                      <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-blue-100"><Network size={32}/></div>
+                      <div>
+                         <h2 className="text-lg font-black text-[#1c1c1c] uppercase tracking-tight">Connecteurs Gateway</h2>
+                         <p className="text-[11px] text-[#686868] font-bold uppercase tracking-widest mt-1">Liaisons omnicanales et services tiers</p>
                       </div>
-                      <button onClick={fetchIntegrations} className="p-2.5 hover:bg-[#f8f9fa] rounded-xl text-[#686868] border border-[#ededed] transition-all">
-                         <RefreshCw size={18} className={loadingIntegrations ? 'animate-spin' : ''} />
-                      </button>
                    </div>
 
-                   <div className="grid grid-cols-1 gap-6">
-                      {integrations.length > 0 ? integrations.map((int: IntegrationConfig) => (
-                        <div key={int.id} className={`p-6 border border-[#ededed] rounded-2xl transition-all hover:shadow-md bg-white flex flex-col ${!int.enabled ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                           <div className="flex flex-col md:flex-row md:items-center gap-6">
-                              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm border-2 ${
-                                int.id === 'whatsapp' ? 'bg-[#f0fdf4] text-green-600 border-green-50' : 
-                                int.id === 'messenger' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                                int.id === 'email' ? 'bg-amber-50 text-amber-600 border-amber-50' :
-                                'bg-purple-50 text-purple-600 border-purple-100'
-                              }`}>
-                                 {int.id === 'whatsapp' && <Smartphone size={32}/>}
-                                 {int.id === 'messenger' && <Facebook size={32}/>}
-                                 {int.id === 'email' && <Mail size={32}/>}
-                                 {int.id === 'smtp' && <Server size={32}/>}
-                              </div>
-                              <div className="flex-1">
-                                 <div className="flex items-center gap-3">
-                                    <h3 className="text-lg font-black text-[#1c1c1c]">{int.name}</h3>
-                                    {int.enabled ? (
-                                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-[#3ecf8e] bg-[#f0fdf4] px-2.5 py-1 rounded-full border border-[#dcfce7]">
-                                         <div className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] animate-pulse" /> Live
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-[#686868] bg-[#f5f5f5] px-2.5 py-1 rounded-full border border-[#ededed]">
-                                         Off
-                                      </span>
-                                    )}
-                                 </div>
-                                 <p className="text-[12px] text-[#686868] mt-1.5 font-medium leading-relaxed">
-                                   {int.id === 'smtp' ? 'Relais de messagerie pour les notifications système et rapports experts.' : `Connecteur pour le flux ${int.id === 'whatsapp' ? 'des messageries directes mobiles' : int.id === 'messenger' ? 'des interactions sociales Facebook' : 'du support mail centralisé'}.`}
-                                 </p>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                 <button 
-                                  onClick={() => { setEditingIntegration(int); setIsGatewayModalOpen(true); }}
-                                  className="btn-sb-outline h-10 px-5 text-[11px] font-black uppercase tracking-widest border-[#ededed]"
-                                 >
-                                   <SettingsIcon size={14} /> Paramètres
-                                 </button>
-                                 <button 
+                   {loadingIntegrations ? (
+                     <div className="py-20 text-center"><RefreshCw className="animate-spin text-[#3ecf8e] mx-auto" size={32}/></div>
+                   ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {integrations.map((int: IntegrationConfig) => (
+                          <div key={int.id} className="p-6 bg-[#f8f9fa] border border-[#ededed] rounded-2xl space-y-6 group hover:border-[#3ecf8e] transition-all">
+                             <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-4">
+                                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm border ${int.enabled ? 'bg-white text-[#3ecf8e] border-[#dcfce7]' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                                      {int.id === 'whatsapp' && <Smartphone size={24}/>}
+                                      {int.id === 'messenger' && <Facebook size={24}/>}
+                                      {int.id === 'email' || int.id === 'smtp' ? <Mail size={24}/> : null}
+                                      {!['whatsapp', 'messenger', 'email', 'smtp'].includes(int.id) && <Globe size={24}/>}
+                                   </div>
+                                   <div>
+                                      <h3 className="text-sm font-black text-[#1c1c1c] uppercase tracking-tight">{int.name}</h3>
+                                      <div className="flex items-center gap-2 mt-1">
+                                         <div className={`w-1.5 h-1.5 rounded-full ${int.enabled ? 'bg-[#3ecf8e] animate-pulse' : 'bg-gray-300'}`} />
+                                         <span className={`text-[9px] font-black uppercase ${int.enabled ? 'text-[#3ecf8e]' : 'text-gray-400'}`}>{int.enabled ? 'Connecté' : 'Hors ligne'}</span>
+                                      </div>
+                                   </div>
+                                </div>
+                                <button 
                                   onClick={() => handleToggleIntegration(int)}
-                                  className={`w-12 h-6 rounded-full relative transition-all duration-300 ${int.enabled ? 'bg-[#3ecf8e]' : 'bg-[#e5e7eb]'}`}
-                                 >
-                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${int.enabled ? 'right-1' : 'left-1'}`} />
-                                 </button>
-                              </div>
-                           </div>
-                           
-                           {int.enabled && (
-                             <div className="mt-8 pt-6 border-t border-[#f5f5f5] grid grid-cols-1 md:grid-cols-3 gap-6 animate-sb-entry">
-                                <div className="space-y-1.5">
-                                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">{int.id === 'smtp' ? 'Serveur Sortant' : 'Route API'}</label>
-                                   <div className="h-10 bg-[#f8f9fa] border border-[#ededed] rounded-lg px-3 flex items-center justify-between group cursor-pointer hover:border-[#3ecf8e] transition-colors">
-                                      <span className="text-[10px] font-mono text-[#1c1c1c] truncate font-bold">
-                                        {int.id === 'smtp' ? (int.settings?.smtpHost || 'smtp.royalplaza.ga') : (int.webhookUrl || `https://rp-gateway.ga/${int.id}`)}
-                                      </span>
-                                      <ExternalLink size={14} className="text-[#9ca3af] group-hover:text-[#3ecf8e]" />
-                                   </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Dernière Sync</label>
-                                   <p className="text-[11px] font-bold text-[#1c1c1c] h-10 flex items-center gap-2">
-                                     <Activity size={12} className="text-[#3ecf8e]"/>
-                                     {int.lastSync ? new Date(int.lastSync).toLocaleString() : 'En attente de flux...'}
-                                   </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                   <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest">Protection</label>
-                                   <div className="h-10 flex items-center gap-2">
-                                      <Shield size={14} className="text-[#3ecf8e]"/>
-                                      <span className="text-[11px] font-bold text-[#1c1c1c]">{int.id === 'smtp' ? (int.settings?.smtpEncryption || 'STARTTLS') : 'SSL Certifié v3'}</span>
-                                   </div>
-                                </div>
+                                  className={`p-2 rounded-lg transition-all ${int.enabled ? 'text-red-500 hover:bg-red-50' : 'text-[#3ecf8e] hover:bg-[#f0fdf4]'}`}
+                                >
+                                   <Power size={18}/>
+                                </button>
                              </div>
-                           )}
-                        </div>
-                      )) : (
-                        <div className="p-24 text-center border-2 border-dashed border-[#ededed] rounded-2xl opacity-40">
-                           <Network size={48} className="mx-auto mb-4 text-[#686868]" />
-                           <p className="text-[13px] font-black text-[#1c1c1c] uppercase tracking-widest">Initialisation de la Gateway...</p>
+
+                             <div className="pt-4 border-t border-[#ededed] flex items-center justify-between">
+                                <div className="text-[10px] text-[#686868] font-medium">
+                                   Dernière synchro : <span className="font-bold">{int.lastSync ? new Date(int.lastSync).toLocaleDateString() : 'Jamais'}</span>
+                                </div>
+                                <button 
+                                  onClick={() => { setEditingIntegration(int); setIsGatewayModalOpen(true); }}
+                                  className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest flex items-center gap-2 hover:text-[#3ecf8e] transition-colors"
+                                >
+                                   Paramètres <Edit3 size={12}/>
+                                </button>
+                             </div>
+                          </div>
+                        ))}
+                     </div>
+                   )}
+                </div>
+             </div>
+           )}
+
+           {activeTab === 'ai' && (
+             <div className="space-y-6 animate-sb-entry">
+                <div className="sb-card border-[#ededed] bg-white">
+                   <div className="flex items-center gap-5 mb-10">
+                      <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 shadow-sm border border-purple-100"><BrainCircuit size={32}/></div>
+                      <div>
+                         <h2 className="text-lg font-black text-[#1c1c1c] uppercase tracking-tight">Intelligence Artificielle</h2>
+                         <p className="text-[11px] text-[#686868] font-bold uppercase tracking-widest mt-1">Pilotage du moteur Horizon AI (Gemini)</p>
+                      </div>
+                   </div>
+
+                   <div className="space-y-8">
+                      {/* Modèle de base */}
+                      <div className="p-6 bg-[#f8f9fa] border border-[#ededed] rounded-2xl">
+                         <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xs font-black text-[#1c1c1c] uppercase tracking-widest">Moteur d'inférence principal</h3>
+                            <span className="px-2 py-0.5 bg-[#f0fdf4] text-[#3ecf8e] text-[9px] font-black uppercase rounded border border-[#dcfce7]">Live Production</span>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button 
+                              onClick={() => handleModelChange('flash')}
+                              className={`p-4 rounded-xl border-2 text-left transition-all ${config.aiModel === 'flash' ? 'border-[#3ecf8e] bg-white shadow-md' : 'border-transparent bg-white/50 hover:bg-white'}`}
+                            >
+                               <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[13px] font-black text-[#1c1c1c]">Gemini 3 Flash</span>
+                                  {config.aiModel === 'flash' && <CheckCircle2 size={16} className="text-[#3ecf8e]"/>}
+                               </div>
+                               <p className="text-[11px] text-[#686868] font-medium leading-relaxed">Rapidité optimisée. Idéal pour le chat client et la catégorisation instantanée.</p>
+                            </button>
+                            <button 
+                              onClick={() => handleModelChange('pro')}
+                              className={`p-4 rounded-xl border-2 text-left transition-all ${config.aiModel === 'pro' ? 'border-[#3ecf8e] bg-white shadow-md' : 'border-transparent bg-white/50 hover:bg-white'}`}
+                            >
+                               <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[13px] font-black text-[#1c1c1c]">Gemini 3 Pro</span>
+                                  {config.aiModel === 'pro' && <CheckCircle2 size={16} className="text-[#3ecf8e]"/>}
+                               </div>
+                               <p className="text-[11px] text-[#686868] font-medium leading-relaxed">Puissance maximale. Idéal pour les audits stratégiques et les diagnostics complexes.</p>
+                            </button>
+                         </div>
+                      </div>
+
+                      {/* Toggles de fonctionnalités */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-2">
+                         {[
+                           { key: 'aiEnabled', label: 'Activation Globale IA', desc: 'Active tous les services intelligents du cluster.' },
+                           { key: 'aiAutoCategorization', label: 'Triage Automatique', desc: 'L\'IA analyse la description pour définir catégorie et priorité.' },
+                           { key: 'aiStrategicAudit', label: 'Rapports Visionnaires', desc: 'Permet la génération d\'audits financiers mensuels par IA.' },
+                           { key: 'aiChatbotEnabled', label: 'Horizon Assistant Chat', desc: 'Affiche le widget de chat IA pour les collaborateurs.' }
+                         ].map((item) => (
+                           <div key={item.key} className="flex items-start justify-between gap-6 group">
+                              <div className="flex-1">
+                                 <h4 className="text-[13px] font-bold text-[#1c1c1c] mb-1">{item.label}</h4>
+                                 <p className="text-[11px] text-[#686868] leading-relaxed">{item.desc}</p>
+                              </div>
+                              <button 
+                                onClick={() => handleToggleConfig(item.key as any)}
+                                className={`w-12 h-6 rounded-full shrink-0 relative transition-all duration-300 ${config[item.key as keyof typeof config] ? 'bg-[#3ecf8e]' : 'bg-[#e5e7eb]'}`}
+                              >
+                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${config[item.key as keyof typeof config] ? 'right-1' : 'left-1'}`} />
+                              </button>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="bg-[#1c1c1c] text-white p-8 rounded-2xl relative overflow-hidden shadow-xl">
+                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#3ecf8e]/10 rounded-full blur-[100px] -mr-32 -mt-32" />
+                   <div className="relative z-10 flex items-center gap-6">
+                      <div className="w-14 h-14 bg-[#3ecf8e]/20 text-[#3ecf8e] rounded-2xl flex items-center justify-center border border-[#3ecf8e]/30"><Sparkles size={28}/></div>
+                      <div>
+                         <h3 className="text-base font-black uppercase tracking-tight">Certification IA Horizon</h3>
+                         <p className="text-[#9ca3af] text-[12px] mt-1 font-medium leading-relaxed">Les modèles utilisés sont conformes aux protocoles de sécurité Royal Plaza 2026. Aucune donnée client n'est utilisée pour l'entraînement public des modèles.</p>
+                      </div>
+                   </div>
+                </div>
+             </div>
+           )}
+
+           {activeTab === 'infrastructure' && (
+             <div className="space-y-6 animate-sb-entry">
+                <div className="sb-card border-[#ededed] bg-white">
+                   <div className="flex items-center gap-5 mb-10">
+                      <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-blue-100"><DatabaseZap size={32}/></div>
+                      <div>
+                         <h2 className="text-lg font-black text-[#1c1c1c] uppercase tracking-tight">Santé de l'Infrastructure</h2>
+                         <p className="text-[11px] text-[#686868] font-bold uppercase tracking-widest mt-1">Surveillance des services Cloud Horizon</p>
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Ping & Connectivité */}
+                      <div className="space-y-6">
+                         <h3 className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-[0.2em] border-l-2 border-[#3ecf8e] pl-3">Temps de réponse Réseau</h3>
+                         <div className="p-6 bg-[#f8f9fa] border border-[#ededed] rounded-2xl text-center space-y-4">
+                            <div className="flex justify-center gap-1.5 items-end h-16">
+                               {[40, 32, 28, 45, 38, 32, 35].map((h, i) => (
+                                 <div key={i} className={`w-2.5 rounded-full transition-all duration-1000 ${i === 6 ? 'bg-[#3ecf8e] animate-pulse' : 'bg-gray-300'}`} style={{ height: `${h}%` }} />
+                               ))}
+                            </div>
+                            <div>
+                               <p className="text-3xl font-black text-[#1c1c1c]">{syncMetrics.latency || 32}<span className="text-sm font-bold text-[#686868] ml-1">ms</span></p>
+                               <p className="text-[10px] text-[#3ecf8e] font-black uppercase mt-1">Cluster GAB-WEST-1 Répondant</p>
+                            </div>
+                         </div>
+                      </div>
+
+                      {/* Statut Services */}
+                      <div className="space-y-6">
+                         <h3 className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-[0.2em] border-l-2 border-[#3ecf8e] pl-3">État des micro-services</h3>
+                         <div className="space-y-4">
+                            {[
+                              { label: 'Cloud Database', status: 'Operational', color: 'text-[#3ecf8e]' },
+                              { label: 'Gemini AI Gateway', status: 'Operational', color: 'text-[#3ecf8e]' },
+                              { label: 'Storage Cluster', status: 'Operational', color: 'text-[#3ecf8e]' },
+                              { label: 'WhatsApp Relay', status: config.aiEnabled ? 'Operational' : 'Paused', color: config.aiEnabled ? 'text-[#3ecf8e]' : 'text-amber-500' }
+                            ].map((s, i) => (
+                              <div key={i} className="flex justify-between items-center p-3 bg-[#fcfcfc] border border-[#f0f0f0] rounded-xl">
+                                 <span className="text-[12px] font-bold text-[#4b5563]">{s.label}</span>
+                                 <span className={`text-[10px] font-black uppercase tracking-tighter ${s.color}`}>{s.status}</span>
+                              </div>
+                            ))}
+                         </div>
+                      </div>
+                   </div>
+
+                   <div className="mt-10 pt-10 border-t border-[#f5f5f5]">
+                      <h3 className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-[0.2em] mb-6">Empreinte de Données (Objets synchronisés)</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                         {[
+                           { label: 'Tickets', value: tickets.length },
+                           { label: 'Clients', value: customers.length },
+                           { label: 'Catalogue', value: products.length },
+                           { label: 'Rechanges', value: parts.length }
+                         ].map((obj, i) => (
+                           <div key={i} className="p-4 bg-white border border-[#ededed] rounded-xl shadow-sm">
+                              <p className="text-[9px] font-black text-[#686868] uppercase tracking-widest mb-1">{obj.label}</p>
+                              <p className="text-xl font-black text-[#1c1c1c]">{obj.value}</p>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+             </div>
+           )}
+
+           {activeTab === 'audit' && (
+             <div className="space-y-6 animate-sb-entry">
+                <div className="sb-card border-[#ededed] bg-white">
+                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                      <div className="flex items-center gap-5">
+                         <div className="w-14 h-14 bg-[#f8f9fa] rounded-2xl flex items-center justify-center text-[#1c1c1c] shadow-sm border border-[#ededed]"><History size={32}/></div>
+                         <div>
+                            <h2 className="text-lg font-black text-[#1c1c1c] uppercase tracking-tight">Journaux d'Audit Système</h2>
+                            <p className="text-[11px] text-[#686868] font-bold uppercase tracking-widest mt-1">Tracé complet des transactions réseau</p>
+                         </div>
+                      </div>
+                      <div className="relative w-full md:w-64">
+                         <Search className="absolute left-3 top-2.5 text-[#686868]" size={16}/>
+                         <input 
+                          type="text" 
+                          placeholder="Filtrer les journaux..." 
+                          className="w-full pl-10 h-10 text-xs font-bold bg-[#fcfcfc]" 
+                          value={logSearch}
+                          onChange={e => setLogSearch(e.target.value)}
+                         />
+                      </div>
+                   </div>
+
+                   <div className="sb-table-container">
+                      <table className="w-full text-left sb-table">
+                         <thead>
+                            <tr>
+                               <th className="px-6">Timestamp</th>
+                               <th>Expert</th>
+                               <th>Action</th>
+                               <th>Détails de transaction</th>
+                               <th className="text-right px-6">Impact</th>
+                            </tr>
+                         </thead>
+                         <tbody>
+                            {filteredLogs.map((log: AuditLog) => (
+                              <tr key={log.id} className="hover:bg-[#fafafa]">
+                                 <td className="px-6 py-4">
+                                    <p className="text-[10px] font-black text-[#1c1c1c]">{new Date(log.timestamp).toLocaleDateString()}</p>
+                                    <p className="text-[10px] font-bold text-[#9ca3af]">{new Date(log.timestamp).toLocaleTimeString()}</p>
+                                 </td>
+                                 <td>
+                                    <div className="flex items-center gap-2">
+                                       <div className="w-6 h-6 rounded bg-[#f0fdf4] text-[#3ecf8e] flex items-center justify-center text-[10px] font-black">{log.userName[0]}</div>
+                                       <span className="text-[11px] font-bold text-[#1c1c1c]">{log.userName}</span>
+                                    </div>
+                                 </td>
+                                 <td>
+                                    <span className="text-[9px] font-black uppercase tracking-tighter bg-[#f1f3f4] px-2 py-0.5 rounded border border-[#ededed] text-[#4b5563]">
+                                       {log.action}
+                                    </span>
+                                 </td>
+                                 <td>
+                                    <p className="text-[11px] font-medium text-[#4b5563] truncate max-w-[200px]">{log.details}</p>
+                                    <p className="text-[9px] font-mono text-[#9ca3af]">ID: {log.target}</p>
+                                 </td>
+                                 <td className="text-right px-6">
+                                    <span className={`w-2 h-2 rounded-full inline-block ${log.action.includes('SUPPR') ? 'bg-red-500' : log.action.includes('MOUV') ? 'bg-purple-500' : 'bg-[#3ecf8e]'}`} />
+                                 </td>
+                              </tr>
+                            ))}
+                         </tbody>
+                      </table>
+                      {filteredLogs.length === 0 && (
+                        <div className="py-20 text-center opacity-30">
+                           <History size={40} className="mx-auto mb-3"/>
+                           <p className="text-[11px] font-black uppercase tracking-widest">Aucun log correspondant</p>
                         </div>
                       )}
                    </div>
@@ -451,7 +644,7 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      {/* GATEWAY MODAL (AVEC SUPPORT SMTP & TEST) */}
+      {/* GATEWAY MODAL */}
       <Modal 
         isOpen={isGatewayModalOpen} 
         onClose={() => setIsGatewayModalOpen(false)} 
