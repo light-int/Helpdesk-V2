@@ -13,7 +13,8 @@ export interface StrategicReport {
 
 export interface SystemConfig {
   aiEnabled: boolean;
-  aiModel: 'flash' | 'pro';
+  aiProvider: 'google' | 'openrouter';
+  aiModel: string; // 'flash' | 'pro' | 'openai/gpt-4o' | etc.
   aiAutoCategorization: boolean;
   aiStrategicAudit: boolean;
   aiChatbotEnabled: boolean;

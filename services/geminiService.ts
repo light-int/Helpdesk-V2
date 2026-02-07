@@ -1,26 +1,80 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { OpenRouterService } from "./openRouterService";
+import { SystemConfig } from "../types";
+import { ApiService } from "./apiService";
+
+// Cache basique pour la config
+let cachedConfig: SystemConfig | null = null;
+let cachedOpenRouterKey: string | null = null;
+
+const refreshConfig = async () => {
+  try {
+    cachedConfig = await ApiService.config.get();
+    const integrations = await ApiService.integrations.getConfigs();
+    const openRouterConfig = integrations.find(i => i.id === 'openrouter');
+    if (openRouterConfig && openRouterConfig.enabled) {
+      cachedOpenRouterKey = openRouterConfig.apiKey || null;
+    }
+    console.log("AI Config Refreshed:", {
+      provider: cachedConfig?.aiProvider,
+      model: cachedConfig?.aiModel,
+      hasOpenRouterKey: !!cachedOpenRouterKey
+    });
+  } catch (e) {
+    console.warn("AI Service: Failed to refresh config", e);
+  }
+};
 
 /**
  * Vérifie si le moteur IA est prêt à l'emploi.
- * L'application ne doit pas planter si cette fonction retourne false.
  */
-export const isAiOperational = () => {
+export const isAiOperational = async () => {
+  if (!cachedConfig) await refreshConfig();
+
   const key = process.env.API_KEY;
-  return !!key && key !== 'undefined' && key !== 'votre_cle_gemini_ici' && key.length > 10;
+  const hasGemini = !!key && key !== 'undefined' && key.length > 10;
+  const hasOpenRouter = !!cachedOpenRouterKey && cachedOpenRouterKey.length > 10;
+
+  return hasGemini || hasOpenRouter;
+};
+
+const getProvider = async () => {
+  if (!cachedConfig) await refreshConfig();
+
+  // Fallback sur Gemini si pas de config
+  const provider = cachedConfig?.aiProvider || 'google';
+  const model = cachedConfig?.aiModel || (provider === 'google' ? 'flash' : 'z-ai/glm-4.5-air:free');
+
+  // Si OpenRouter demandé mais pas de clé, fallback sur Gemini si dispo
+  if (provider === 'openrouter' && !cachedOpenRouterKey) {
+    console.warn("OpenRouter selected but no key found. Falling back to Gemini.");
+    return { provider: 'google', model: 'flash' };
+  }
+
+  return { provider, model, openRouterKey: cachedOpenRouterKey };
 };
 
 export const chatWithAI = async (message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], modelType: 'flash' | 'pro' = 'flash') => {
   try {
-    if (!isAiOperational()) {
-      return "L'IA Horizon est actuellement en mode repos (Clé API non configurée). Vous pouvez toujours utiliser toutes les fonctions de gestion SAV manuellement.";
+    if (!(await isAiOperational())) {
+      return "L'IA Horizon est actuellement en mode repos. Veuillez vérifier la configuration.";
     }
-    
-    // Using recommended model names from the guidelines
-    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+
+    const { provider, model, openRouterKey } = await getProvider();
+
+    if (provider === 'openrouter' && openRouterKey) {
+      return await OpenRouterService.chat(message, history, openRouterKey, model);
+    }
+
+    // Google Gemini Implementation
+    // Override modelType if specifically requested (legacy compatibility)
+    // But ideally we should respect the system config model unless it's a specific overrides
+    const actualModel = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const chat = ai.chats.create({
-      model: modelName,
+      model: actualModel,
       config: {
         systemInstruction: `Tu es l'assistant IA 2026 de Royal Plaza à Libreville, Gabon. 
         Tu aides les clients et le personnel avec :
@@ -41,16 +95,22 @@ export const chatWithAI = async (message: string, history: { role: 'user' | 'mod
     return response.text;
   } catch (error) {
     console.error("AI Chat Error:", error);
-    return "Connexion interrompue avec le moteur IA. Veuillez vérifier votre connexion internet.";
+    return "Connexion interrompue avec le moteur IA.";
   }
 };
 
-export const analyzeTicketDescription = async (description: string, modelType: 'flash' | 'pro' = 'flash') => {
-  if (!isAiOperational()) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle requise' };
+export const analyzeTicketDescription = async (description: string) => {
+  if (!(await isAiOperational())) return { category: 'SAV', priority: 'Moyenne', summary: 'Analyse manuelle requise' };
 
   try {
-    // Using recommended model names from the guidelines
-    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const { provider, model, openRouterKey } = await getProvider();
+
+    if (provider === 'openrouter' && openRouterKey) {
+      return await OpenRouterService.analyzeTicket(description, openRouterKey, model);
+    }
+
+    // Google Gemini Implementation
+    const modelName = "gemini-3-flash-preview"; // Always fast for tickets
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: modelName,
@@ -74,14 +134,20 @@ export const analyzeTicketDescription = async (description: string, modelType: '
   }
 };
 
-export const generateStrategicReport = async (data: any, modelType: 'flash' | 'pro' = 'pro') => {
-  if (!isAiOperational()) {
-    return "# AUDIT INDISPONIBLE\n\nLe moteur d'intelligence stratégique nécessite une clé API active pour compiler ces données.";
+export const generateStrategicReport = async (data: any) => {
+  if (!(await isAiOperational())) {
+    return "# AUDIT INDISPONIBLE\n\nLe moteur d'intelligence nécessite une configuration active.";
   }
 
   try {
-    // Using recommended model names from the guidelines
-    const modelName = modelType === 'pro' ? "gemini-3-pro-preview" : "gemini-3-flash-preview";
+    const { provider, model, openRouterKey } = await getProvider();
+
+    if (provider === 'openrouter' && openRouterKey) {
+      return await OpenRouterService.generateReport(data, openRouterKey, model);
+    }
+
+    // Google Gemini Implementation
+    const modelName = "gemini-3-flash-preview"; // Switch to Flash for speed
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: modelName,
@@ -116,9 +182,16 @@ export const generateStrategicReport = async (data: any, modelType: 'flash' | 'p
 };
 
 export const translateContent = async (text: string, targetLang: 'EN' | 'FR') => {
-  if (!isAiOperational()) return text;
+  if (!(await isAiOperational())) return text;
 
   try {
+    const { provider, model, openRouterKey } = await getProvider();
+
+    if (provider === 'openrouter' && openRouterKey) {
+      return await OpenRouterService.translate(text, targetLang, openRouterKey, model);
+    }
+
+    // Google Gemini Implementation
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
