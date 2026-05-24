@@ -1,0 +1,9 @@
+[functions]
+  [functions.send-push]
+  # URL de l'Edge Function (définie après déploiement)
+  # À déployer avec: supabase functions deploy send-push
+  # Variables d'environnement à configurer dans Supabase Dashboard:
+  # - VAPID_PRIVATE_KEY: clé privée VAPID
+  # - VAPID_PUBLIC_KEY: clé publique VAPID
+  # - VAPID_SUBJECT: mailto:admin@example.com
+  verify_jwt = false

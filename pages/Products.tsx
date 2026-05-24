@@ -1,73 +1,52 @@
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Plus, Search, RefreshCw, ShoppingBag, Edit3, Trash2, 
-  ChevronLeft, ChevronRight, Tag,
-  ShieldCheck, ArrowRight, Upload, Filter, CheckCircle2, Package
-} from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Search, Package, RefreshCw, Filter, X, BadgeCheck, Clock, AlertTriangle, Upload, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useData, useNotifications } from '../App';
 import { Product } from '../types';
-import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
+import Modal from '../components/Modal';
+import { SkeletonCard } from '../components/Skeleton';
+import { ApiService } from '../services/apiService';
 import * as XLSX from 'xlsx';
 
-const ITEMS_PER_PAGE = 15;
-
 const Products: React.FC = () => {
-  const { products, refreshAll, isLoading, isSyncing, brands, saveProduct, deleteProduct } = useData();
-  const { addNotification } = useNotifications();
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  
-  const [brandFilter, setBrandFilter] = useState('Tous');
-  const [categoryFilter, setCategoryFilter] = useState('Tous');
+  const { products, brands, isLoading, refreshAll, isSyncing } = (() => { try { return useData(); } catch { return { products: [], brands: [], isLoading: false, refreshAll: () => { }, isSyncing: false }; } })();
 
-  // Import State
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importData, setImportData] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [brandFilter, setBrandFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Mapping Import State
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [rawImportData, setRawImportData] = useState<any[]>([]);
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({
-    name: '', reference: '', brand: '', category: '', price: '', warranty: ''
+    name: '', reference: '', brand: '', category: '',
+    price: '', purchasePrice: '', warrantyMonths: '', supplier: '',
+    stockStatus: '', subcategory: '', description: ''
   });
-
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { refreshAll(); }, [refreshAll]);
+  const { addNotification } = (() => { try { return useNotifications(); } catch { return { addNotification: () => {} }; } })();
 
   const categories = useMemo(() => {
-    const cats = new Set((products || []).map((p: Product) => p.category));
-    return Array.from(cats).filter((c): c is string => !!c);
+    const cats = new Set((products || []).map((p: Product) => p.category).filter(Boolean));
+    return Array.from(cats).sort();
   }, [products]);
 
-  const filtered = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     return (products || []).filter((p: Product) => {
-      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (p.reference || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesBrand = brandFilter === 'Tous' || p.brand === brandFilter;
-      const matchesCategory = categoryFilter === 'Tous' || p.category === categoryFilter;
-      
-      return matchesSearch && matchesBrand && matchesCategory;
+      const q = searchTerm.toLowerCase();
+      if (q && !p.name.toLowerCase().includes(q) && !p.brand.toLowerCase().includes(q) && !p.reference.toLowerCase().includes(q)) return false;
+      if (brandFilter && p.brand !== brandFilter) return false;
+      if (categoryFilter && p.category !== categoryFilter) return false;
+      return true;
     });
   }, [products, searchTerm, brandFilter, categoryFilter]);
-
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filtered.slice(start, start + ITEMS_PER_PAGE);
-  }, [filtered, currentPage]);
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -76,30 +55,30 @@ const Products: React.FC = () => {
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
-        
         if (data.length > 0) {
-          const headers = (data[0] as any[]).map(h => String(h || ''));
+          const headers = (data[0] as string[]).map(h => String(h || ''));
           setFileHeaders(headers);
-          
-          // Auto-mapping intelligent
           const newMapping = { ...mapping };
           headers.forEach(h => {
             const low = h.toLowerCase();
-            if (low.includes('nom') || low.includes('name') || low.includes('produit') || low.includes('désignation')) newMapping.name = h;
-            if (low.includes('ref') || low.includes('sku') || low.includes('code') || low.includes('identifiant')) newMapping.reference = h;
+            if (low.includes('nom') || low.includes('name') || low.includes('désignation')) newMapping.name = h;
+            if (low.includes('réf') || low.includes('ref') || low.includes('reference') || low.includes('sku')) newMapping.reference = h;
             if (low.includes('marque') || low.includes('brand')) newMapping.brand = h;
             if (low.includes('cat')) newMapping.category = h;
-            if (low.includes('prix') || low.includes('price') || low.includes('ttc')) newMapping.price = h;
-            if (low.includes('garantie') || low.includes('warranty')) newMapping.warranty = h;
+            if (low.includes('prix') || low.includes('price')) { if (!newMapping.purchasePrice && low.includes('achat') || low.includes('cost') || low.includes('coût')) newMapping.purchasePrice = h; else newMapping.price = h; }
+            if (low.includes('garantie') || low.includes('warranty')) newMapping.warrantyMonths = h;
+            if (low.includes('fournisseur') || low.includes('supplier')) newMapping.supplier = h;
+            if (low.includes('stock')) { if (low.includes('status') || low.includes('état')) newMapping.stockStatus = h; }
+            if (low.includes('sous-cat') || low.includes('subcat')) newMapping.subcategory = h;
+            if (low.includes('description') || low.includes('desc')) newMapping.description = h;
           });
           setMapping(newMapping);
-          
           const rows = XLSX.utils.sheet_to_json(ws);
-          setImportData(rows);
-          setIsImportModalOpen(true);
+          setRawImportData(rows);
+          setIsMappingModalOpen(true);
         }
       } catch (err) {
-        addNotification({ title: 'Erreur Fichier', message: 'Format Excel non supporté.', type: 'error' });
+        addNotification({ title: 'Erreur Fichier', message: 'Format invalide ou corrompu.', type: 'error' });
       }
     };
     reader.readAsBinaryString(file);
@@ -107,308 +86,276 @@ const Products: React.FC = () => {
   };
 
   const processImport = async () => {
-    if (!mapping.name || !mapping.reference) {
-      addNotification({ title: 'Mapping incomplet', message: 'Le Nom et la Référence sont obligatoires.', type: 'warning' });
+    if (!mapping.name && !mapping.reference) {
+      addNotification({ title: 'Mapping requis', message: 'Nom ou Référence sont obligatoires.', type: 'warning' });
       return;
     }
-
-    setIsSaving(true);
+    setIsImporting(true);
     try {
-      let count = 0;
-      for (const row of importData) {
-        const product: Product = {
-          id: `PR-IMP-${Date.now()}-${count}`,
-          name: String(row[mapping.name] || 'Sans nom'),
-          reference: String(row[mapping.reference] || `REF-${Date.now()}-${count}`),
-          brand: String(row[mapping.brand] || 'Royal Plaza'),
-          category: String(row[mapping.category] || 'Général'),
+      const finalProducts: Product[] = [];
+      rawImportData.forEach((row: any, i: number) => {
+        const ref = String(row[mapping.reference] || `REF-${Date.now()}-${i}`);
+        const existing = products.find((p: Product) => p.reference === ref || p.name === row[mapping.name]);
+        const product: Product = existing || {
+          id: `PR-IMP-${Date.now()}-${i}`,
+          name: String(row[mapping.name] || 'Produit sans nom'),
+          reference: ref,
+          brand: String(row[mapping.brand] || 'Générique'),
+          category: String(row[mapping.category] || 'General'),
           price: Number(row[mapping.price] || 0),
-          warrantyMonths: Number(row[mapping.warranty] || 12),
+          purchasePrice: row[mapping.purchasePrice] ? Number(row[mapping.purchasePrice]) : undefined,
+          warrantyMonths: Number(row[mapping.warrantyMonths] || 0),
+          supplier: row[mapping.supplier] ? String(row[mapping.supplier]) : undefined,
+          stockStatus: row[mapping.stockStatus] as any || undefined,
+          subcategory: row[mapping.subcategory] ? String(row[mapping.subcategory]) : undefined,
+          description: row[mapping.description] ? String(row[mapping.description]) : undefined,
         };
-        await saveProduct(product);
-        count++;
-      }
-      addNotification({ title: 'Catalogue synchronisé', message: `${count} produits importés.`, type: 'success' });
-      setIsImportModalOpen(false);
+        if (existing) Object.assign(product, { ...existing, ...product });
+        finalProducts.push(product);
+      });
+      if (finalProducts.length > 0) await ApiService.products.saveAll(finalProducts);
+      addNotification({ title: 'Import Produits', message: `${finalProducts.length} produits synchronisés.`, type: 'success' });
+      setIsMappingModalOpen(false);
       refreshAll();
     } catch (err) {
-      addNotification({ title: 'Erreur Import', message: 'Une erreur est survenue lors de l\'intégration.', type: 'error' });
+      addNotification({ title: 'Erreur Import', message: 'Échec de l\'opération massive.', type: 'error' });
     } finally {
-      setIsSaving(false);
+      setIsImporting(false);
     }
   };
 
-  const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSaving(true);
-    const formData = new FormData(e.currentTarget);
-    const data: Product = {
-      id: editingProduct?.id || `PR-${Date.now()}`,
-      name: formData.get('name') as string,
-      reference: formData.get('reference') as string,
-      brand: formData.get('brand') as string,
-      category: formData.get('category') as string,
-      price: Number(formData.get('price')),
-      warrantyMonths: Number(formData.get('warrantyMonths')),
-    };
-    
-    try {
-      await saveProduct(data);
-      addNotification({ title: 'Catalogue', message: 'Produit enregistré.', type: 'success' });
-      setIsModalOpen(false);
-    } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec sauvegarde.', type: 'error' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Retirer ce produit définitivement ?')) return;
-    try {
-      await deleteProduct(id);
-      addNotification({ title: 'Catalogue', message: 'Produit retiré.', type: 'info' });
-      setSelectedProduct(null);
-    } catch (err) {
-      addNotification({ title: 'Erreur', message: 'Échec suppression.', type: 'error' });
+  const getStockBadge = (status?: string) => {
+    switch (status) {
+      case 'En stock': return { label: 'En stock', class: 'bg-[#f0fdf4] text-[#16a34a]' };
+      case 'Rupture': return { label: 'Rupture', class: 'bg-red-50 text-red-500' };
+      case 'Sur commande': return { label: 'Sur commande', class: 'bg-amber-50 text-amber-600' };
+      default: return { label: 'N/A', class: 'bg-[#f8f9fa] text-[#686868]' };
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-sb-entry pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1c1c1c] tracking-tight">Catalogue Matériel</h1>
-          <p className="text-xs text-[#686868] mt-1 font-medium">Référentiel produits et marques Royal Plaza.</p>
+    <div className="max-w-7xl mx-auto space-y-5 animate-sb-entry pb-20">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#3ecf8e]/10 rounded-xl flex items-center justify-center text-[#3ecf8e]">
+            <Package size={18} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Catalogue Produits</h1>
+            <p className="text-xs text-[#686868] font-semibold uppercase tracking-wider mt-0.5">
+              {(products || []).length} produits référencés
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xlsx, .xls, .csv" />
           <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-10 px-4">
-            <Upload size={14} /> <span>Import Excel</span>
+            <Upload size={16} /> Import XLS
           </button>
-          <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="btn-sb-primary h-10 px-4">
-            <Plus size={16} /> <span>Nouveau Produit</span>
+          <input type="file" ref={fileInputRef} accept=".xlsx,.xls" hidden onChange={handleFileSelect} />
+          <button onClick={refreshAll} className="btn-sb-outline h-10 px-4">
+            <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} /> Actualiser
           </button>
         </div>
       </header>
 
-      <div className="space-y-4">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 text-[#686868]" size={16} />
-            <input 
-              type="text" 
-              placeholder="Rechercher par modèle ou référence..." 
-              className="w-full pl-10 h-11"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={`btn-sb-outline h-11 px-4 ${showFilters ? 'border-[#3ecf8e] text-[#3ecf8e]' : ''}`}
-          >
-            <Filter size={16} /> <span className="text-xs">Filtres</span>
-          </button>
-          <button onClick={refreshAll} className="btn-sb-outline h-11 px-3">
-             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-          </button>
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#686868]" />
+          <input
+            type="text"
+            placeholder="Rechercher par nom, marque, référence..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full h-11 pl-10 pr-4"
+          />
         </div>
-
-        {showFilters && (
-          <div className="sb-card p-4 flex flex-wrap gap-6 animate-sb-entry bg-[#fcfcfc]">
-            <div className="space-y-1.5 min-w-[180px]">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
-              <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} className="w-full h-9 text-xs">
-                <option value="Tous">Toutes</option>
-                {brands.map((b: string) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5 min-w-[180px]">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
-              <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full h-9 text-xs">
-                <option value="Tous">Toutes</option>
-                {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-        )}
+        <select
+          value={brandFilter}
+          onChange={e => setBrandFilter(e.target.value)}
+          className="w-full md:w-48 h-11"
+        >
+          <option value="">Toutes les marques</option>
+          {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
+          className="w-full md:w-48 h-11"
+        >
+          <option value="">Toutes les catégories</option>
+          {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {paginated.map((p: Product) => (
-          <div 
-            key={p.id} 
-            onClick={() => setSelectedProduct(p)}
-            className="sb-card group cursor-pointer flex flex-col p-5 border border-[#ededed] hover:border-[#3ecf8e] transition-all duration-300 bg-white shadow-sm"
-          >
-            <div className="flex justify-between items-start mb-3">
-               <span className="px-2 py-0.5 bg-[#f8f9fa] border border-[#ededed] text-[#1c1c1c] text-[9px] font-black uppercase rounded shadow-xs">
-                  {p.brand}
-               </span>
-               <div className="w-8 h-8 rounded bg-[#f8f9fa] border border-[#ededed] flex items-center justify-center text-[#686868] group-hover:bg-[#3ecf8e] group-hover:text-white transition-all">
-                  <ArrowRight size={14} />
-               </div>
-            </div>
-            
-            <div className="space-y-1">
-              <p className="text-[9px] font-bold text-[#3ecf8e] uppercase tracking-widest leading-none">{p.category}</p>
-              <h3 className="text-[14px] font-bold text-[#1c1c1c] leading-snug line-clamp-2">{p.name}</h3>
-              <p className="text-[10px] font-mono text-[#686868] font-semibold">{p.reference}</p>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-[#f5f5f5] flex items-center justify-between">
-              <span className="text-[15px] font-black text-[#1c1c1c]">{p.price?.toLocaleString()} F</span>
-              <div className="flex items-center gap-1 text-[10px] font-bold text-[#686868]">
-                 <ShieldCheck size={12} className="text-[#3ecf8e]" />
-                 {p.warrantyMonths} m
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filtered.length === 0 && !isLoading && (
-        <div className="py-20 text-center space-y-4">
-           <Package size={48} className="mx-auto text-[#686868] opacity-20" />
-           <p className="text-sm font-bold text-[#686868] uppercase tracking-widest">Aucun produit au catalogue</p>
+      {(searchTerm || brandFilter || categoryFilter) && (
+        <div className="flex items-center gap-2 text-xs text-[#686868] font-semibold">
+          <Filter size={12} /> Filtres actifs
+          {searchTerm && <span className="px-2 py-1 bg-[#f8f9fa] rounded">"{searchTerm}"</span>}
+          {brandFilter && (
+            <button onClick={() => setBrandFilter('')} className="px-2 py-1 bg-[#f8f9fa] rounded flex items-center gap-1 hover:bg-red-50">
+              {brandFilter} <X size={12} />
+            </button>
+          )}
+          {categoryFilter && (
+            <button onClick={() => setCategoryFilter('')} className="px-2 py-1 bg-[#f8f9fa] rounded flex items-center gap-1 hover:bg-red-50">
+              {categoryFilter} <X size={12} />
+            </button>
+          )}
         </div>
       )}
 
-      <div className="flex justify-center items-center gap-4 pt-10">
-        <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
-          <ChevronLeft size={16}/>
-        </button>
-        <span className="text-[11px] font-bold text-[#686868] uppercase tracking-widest">Page {currentPage} / {totalPages || 1}</span>
-        <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="btn-sb-outline h-9 px-3 disabled:opacity-30">
-          <ChevronRight size={16}/>
-        </button>
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[1,2,3,4,5,6,7,8].map(i => <SkeletonCard key={i} />)}
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="text-center py-20">
+          <Package size={48} className="mx-auto text-[#d1d1d1] mb-4" />
+          <p className="text-sm font-semibold text-[#686868]">Aucun produit trouvé</p>
+          <p className="text-xs text-[#686868] mt-1">Essayez de modifier vos filtres de recherche.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredProducts.map((p: Product) => {
+            const stock = getStockBadge(p.stockStatus);
+            return (
+              <div
+                key={p.id}
+                onClick={() => setSelectedProduct(p)}
+                className="bg-white border border-[#e5e5e5] rounded-xl p-5 hover:border-[#3ecf8e]/30 hover:shadow-md transition-all cursor-pointer card-interactive"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2.5 bg-[#f0fdf4] rounded-lg">
+                    <Package size={20} className="text-[#3ecf8e]" />
+                  </div>
+                  <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${stock.class}`}>
+                    {stock.label}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-sm text-[#1c1c1c] leading-tight">{p.name}</h3>
+                <p className="text-[11px] text-[#686868] font-semibold mt-1">{p.brand} • {p.reference}</p>
+                <div className="flex items-center gap-3 mt-3 text-[11px] text-[#686868] font-semibold">
+                  <span className="flex items-center gap-1">
+                    <BadgeCheck size={11} className="text-[#3ecf8e]" />
+                    {p.category}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={11} />
+                    {p.warrantyMonths} mois
+                  </span>
+                </div>
+                <div className="mt-4 pt-3 border-t border-[#f5f5f5] flex items-center justify-between">
+                  <span className="text-base font-bold text-[#1c1c1c]">
+                    {new Intl.NumberFormat('fr-FR').format(p.price)} FCFA
+                  </span>
+                  {p.isDiscontinued && (
+                    <span className="flex items-center gap-1 text-[10px] text-red-500 font-semibold">
+                      <AlertTriangle size={10} /> Abandonné
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Modifier Produit" : "Nouvel Article Catalogue"}>
-        <form onSubmit={handleSaveProduct} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Désignation commerciale</label>
-              <input name="name" type="text" defaultValue={editingProduct?.name} placeholder="ex: TV LG 55 OLED" required className="w-full" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Référence facturation / SKU</label>
-              <input name="reference" type="text" defaultValue={editingProduct?.reference} placeholder="ex: REF-10293" required className="w-full" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Marque</label>
-              <select name="brand" defaultValue={editingProduct?.brand || 'LG'} className="w-full">
-                {brands.map((b: string) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Catégorie</label>
-              <input name="category" list="cats" defaultValue={editingProduct?.category} placeholder="ex: Électroménager" required className="w-full" />
-              <datalist id="cats">
-                {categories.map((c: string) => <option key={c} value={c} />)}
-              </datalist>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Prix TTC</label>
-              <input name="price" type="number" defaultValue={editingProduct?.price} placeholder="0" required className="w-full" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#686868] uppercase">Garantie (Mois)</label>
-              <input name="warrantyMonths" type="number" defaultValue={editingProduct?.warrantyMonths || 12} placeholder="12" required className="w-full" />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-sb-outline">Annuler</button>
-            <button type="submit" disabled={isSaving} className="btn-sb-primary">
-              {isSaving ? <RefreshCw className="animate-spin" size={14}/> : 'Valider Article'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL MAPPING IMPORT */}
-      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Intelligence d'Importation Catalogue" size="lg">
-         <div className="space-y-8">
-            <div className="flex items-start gap-4 p-4 bg-[#f0f9f4] border border-[#dcfce7] rounded-xl">
-               <CheckCircle2 className="text-[#3ecf8e] shrink-0" size={20} />
-               <div>
-                  <p className="text-sm font-bold text-[#1c1c1c]">Source détectée : {importData.length} lignes de données</p>
-                  <p className="text-xs text-[#686868] mt-0.5">Associez les colonnes Excel aux champs du système Horizon.</p>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-               {[
-                 { key: 'name', label: 'Désignation', req: true },
-                 { key: 'reference', label: 'Référence / SKU', req: true },
-                 { key: 'brand', label: 'Marque', req: false },
-                 { key: 'category', label: 'Catégorie', req: false },
-                 { key: 'price', label: 'Prix de vente TTC', req: false },
-                 { key: 'warranty', label: 'Durée Garantie (Mois)', req: false },
-               ].map((field) => (
-                 <div key={field.key} className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[#686868] uppercase tracking-widest flex items-center justify-between">
-                       <span>{field.label} {field.req && <span className="text-red-500">*</span>}</span>
-                    </label>
-                    <select 
-                      className={`w-full h-11 transition-all ${mapping[field.key] ? 'border-[#3ecf8e] bg-[#f0fdf4]/50' : 'border-[#ededed]'}`}
-                      value={mapping[field.key]}
-                      onChange={e => setMapping({...mapping, [field.key]: e.target.value})}
-                    >
-                       <option value="">-- Ignorer ce champ --</option>
-                       {fileHeaders.map((h: string) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                 </div>
-               ))}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
-               <button onClick={() => setIsImportModalOpen(false)} className="btn-sb-outline h-12 px-8 text-[11px] font-black uppercase">Annuler</button>
-               <button 
-                onClick={processImport} 
-                disabled={isSaving || !mapping.name || !mapping.reference} 
-                className="btn-sb-primary h-12 px-12 text-[11px] font-black uppercase shadow-lg shadow-[#3ecf8e]/20"
-               >
-                {isSaving ? <RefreshCw className="animate-spin" size={16}/> : `Synchroniser le catalogue`}
-               </button>
-            </div>
-         </div>
-      </Modal>
-
-      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Contrôle de Référence" icon={<ShoppingBag size={16}/>}>
+      <Drawer isOpen={!!selectedProduct} onClose={() => setSelectedProduct(null)} title="Détails Produit" icon={<Package size={16} />}>
         {selectedProduct && (
-          <div className="space-y-8 animate-sb-entry pb-10">
-            <div className="p-8 bg-[#f8f9fa] border border-[#ededed] rounded-xl flex flex-col items-center text-center shadow-sm">
-               <div className="w-16 h-16 bg-white border border-[#ededed] rounded-2xl flex items-center justify-center text-[#3ecf8e] mb-4 shadow-sm">
-                  <Package size={32} />
-               </div>
-               <h3 className="text-xl font-bold text-[#1c1c1c] tracking-tight leading-tight">{selectedProduct.name}</h3>
-               <p className="text-xs text-[#686868] font-mono mt-1 uppercase font-semibold">SKU: {selectedProduct.reference}</p>
-               <div className="mt-4 flex gap-2">
-                 <span className="px-2.5 py-1 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded shadow-xs">{selectedProduct.brand}</span>
-                 <span className="px-2.5 py-1 bg-white border border-[#ededed] text-[10px] font-black uppercase rounded shadow-xs">{selectedProduct.category}</span>
-               </div>
+          <div className="space-y-6 animate-sb-entry">
+            <div className="p-5 bg-[#f0fdf4] rounded-xl text-center border border-[#dcfce7]">
+              <Package size={48} className="mx-auto text-[#3ecf8e] mb-3" />
+              <h3 className="text-base font-semibold text-[#1c1c1c]">{selectedProduct.name}</h3>
+              <p className="text-xs text-[#686868] font-semibold mt-1">{selectedProduct.brand} • {selectedProduct.reference}</p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-6 bg-white border border-[#ededed] rounded-xl shadow-sm">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><Tag size={14}/><p className="text-[10px] font-black uppercase tracking-widest">Valeur Marchande</p></div>
-                <p className="text-xl font-black text-[#1c1c1c]">{selectedProduct.price?.toLocaleString()} F</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Catégorie</p>
+                <p className="text-sm font-semibold text-[#1c1c1c]">{selectedProduct.category}</p>
               </div>
-              <div className="p-6 bg-white border border-[#ededed] rounded-xl shadow-sm">
-                <div className="flex items-center gap-2 text-[#3ecf8e] mb-2"><ShieldCheck size={14}/><p className="text-[10px] font-black uppercase tracking-widest">Couverture Care</p></div>
-                <p className="text-xl font-black text-[#1c1c1c]">{selectedProduct.warrantyMonths} Mois</p>
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Sous-catégorie</p>
+                <p className="text-sm font-semibold text-[#1c1c1c]">{selectedProduct.subcategory || '—'}</p>
+              </div>
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Prix</p>
+                <p className="text-sm font-bold text-[#1c1c1c]">{new Intl.NumberFormat('fr-FR').format(selectedProduct.price)} FCFA</p>
+              </div>
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Garantie</p>
+                <p className="text-sm font-semibold text-[#1c1c1c]">{selectedProduct.warrantyMonths} mois</p>
+              </div>
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Stock</p>
+                <p className={`text-sm font-semibold ${getStockBadge(selectedProduct.stockStatus).class}`}>
+                  {selectedProduct.stockStatus || 'N/A'}
+                </p>
+              </div>
+              <div className="p-4 border border-[#e5e5e5] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Fournisseur</p>
+                <p className="text-sm font-semibold text-[#1c1c1c]">{selectedProduct.supplier || '—'}</p>
               </div>
             </div>
-
-            <div className="pt-10 flex gap-3">
-              <button onClick={() => { setEditingProduct(selectedProduct); setIsModalOpen(true); }} className="btn-sb-outline flex-1 justify-center h-14 font-black uppercase tracking-widest text-[11px]"><Edit3 size={16} /> <span>Mettre à jour</span></button>
-              <button onClick={() => handleDelete(selectedProduct.id)} className="btn-sb-outline flex-1 justify-center h-14 font-black uppercase tracking-widest text-[11px] text-red-500 border-red-100 hover:bg-red-50"><Trash2 size={16} /> <span>Déréférencer</span></button>
-            </div>
+            {selectedProduct.description && (
+              <div className="p-4 bg-[#f8f9fa] rounded-lg">
+                <p className="text-[10px] font-semibold text-[#686868] uppercase mb-1">Description</p>
+                <p className="text-xs text-[#1c1c1c] leading-relaxed">{selectedProduct.description}</p>
+              </div>
+            )}
           </div>
         )}
       </Drawer>
+
+      <Modal isOpen={isMappingModalOpen} onClose={() => setIsMappingModalOpen(false)} title="Mapping d'Import Produits" size="lg">
+        <div className="space-y-8">
+          <div className="flex items-start gap-5 p-3 bg-[#f0f9f4] border border-[#dcfce7] rounded-xl shadow-sm">
+            <CheckCircle2 className="text-[#3ecf8e] mt-1 shrink-0" size={14} />
+            <div>
+              <p className="text-sm font-semibold text-[#1c1c1c] uppercase tracking-tight">Fichier Analyse</p>
+              <p className="text-xs text-[#686868] font-semibold mt-1">{rawImportData.length} lignes détectées. Mappez les colonnes Excel vers les champs du catalogue.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+            {[
+              { key: 'name', label: 'Nom/Désignation', req: true },
+              { key: 'reference', label: 'Référence/SKU', req: true },
+              { key: 'brand', label: 'Marque', req: false },
+              { key: 'category', label: 'Catégorie', req: false },
+              { key: 'price', label: 'Prix Vente', req: false },
+              { key: 'purchasePrice', label: 'Prix Achat', req: false },
+              { key: 'warrantyMonths', label: 'Garantie (mois)', req: false },
+              { key: 'supplier', label: 'Fournisseur', req: false },
+              { key: 'stockStatus', label: 'État Stock', req: false },
+              { key: 'subcategory', label: 'Sous-catégorie', req: false },
+              { key: 'description', label: 'Description', req: false },
+            ].map((field: any) => (
+              <div key={field.key} className="space-y-1.5">
+                <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide flex items-center justify-between">
+                  <span>{field.label} {field.req && <span className="text-red-500">*</span>}</span>
+                </label>
+                <select
+                  className={`w-full h-11 px-4 rounded-lg font-semibold border-[#e5e5e5] ${mapping[field.key] ? 'border-[#3ecf8e] bg-[#f0fdf4]/50' : ''}`}
+                  value={mapping[field.key]}
+                  onChange={e => setMapping({ ...mapping, [field.key]: e.target.value })}
+                >
+                  <option value="">-- Ignorer --</option>
+                  {fileHeaders.map((h: string) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3 pt-8 border-t border-[#f5f5f5]">
+            <button onClick={() => setIsMappingModalOpen(false)} className="btn-sb-outline h-10 px-8 rounded-lg text-[12px] font-semibold uppercase tracking-widest">Annuler</button>
+            <button
+              onClick={processImport}
+              disabled={isImporting || (!mapping.name && !mapping.reference)}
+              className="btn-sb-primary h-10 px-12 rounded-lg shadow-lg shadow-[#3ecf8e]/20 text-[12px] font-semibold uppercase tracking-widest"
+            >
+              {isImporting ? <RefreshCw className="animate-spin" size={16} /> : <><span>Importer {rawImportData.length} produits</span> <ArrowRight size={16} className="ml-2" /></>}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

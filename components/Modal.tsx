@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
@@ -29,41 +29,51 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   if (!isOpen) return null;
 
   const sizeClasses = {
-    sm: 'max-w-md',
-    md: 'max-w-2xl',
-    lg: 'max-w-4xl',
-    xl: 'max-w-6xl',
-    full: 'max-w-[95vw]'
+    sm: 'max-w-sm rounded-lg',
+    md: 'max-w-xl rounded-lg',
+    lg: 'max-w-3xl rounded-lg',
+    xl: 'max-w-5xl rounded-lg',
+    full: 'max-w-[98vw] h-[98vh] rounded-xl'
+  };
+
+  const getPortalRoot = () => {
+    let portalRoot = document.getElementById('modal-root');
+    if (!portalRoot) {
+      portalRoot = document.createElement('div');
+      portalRoot.id = 'modal-root';
+      document.body.appendChild(portalRoot);
+    }
+    return portalRoot;
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-[#1c273c]/60 backdrop-blur-[2px] transition-opacity duration-300 animate-in fade-in" 
+      <div
+        className="fixed inset-0 bg-[#1c273c]/80 backdrop-blur-[4px] transition-opacity duration-300 animate-in fade-in"
         onClick={onClose}
       />
-      
-      {/* Modal Content - Rounded Edges */}
-      <div className={`relative bg-white w-full ${sizeClasses[size]} max-h-[90vh] shadow-2xl animate-modal-entry overflow-hidden flex flex-col border border-[#e2e8f0] rounded-lg`}>
+
+      {/* Modal Content */}
+      <div className={`relative bg-white w-full ${sizeClasses[size]} shrink-0 shadow-2xl animate-modal-entry overflow-hidden flex flex-col border border-[#e5e5e5] max-h-[90vh]`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e2e8f0] bg-[#f8f9fa] shrink-0">
-          <h3 className="text-xs font-bold text-[#1c273c] uppercase tracking-wider">{title}</h3>
-          <button 
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e5e5] bg-[#f8f9fa] shrink-0">
+          <h3 className="text-[11px] font-semibold text-[#1c1c1c] uppercase tracking-wider">{title}</h3>
+          <button
             onClick={onClose}
-            className="p-1 hover:bg-[#e8eaed] text-[#5f6368] hover:text-[#1c273c] transition-all rounded-full"
+            className="p-1 hover:bg-[#e8eaed] text-[#5f6368] hover:text-[#1c1c1c] transition-all rounded-full"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
           {children}
         </div>
       </div>
     </div>,
-    document.getElementById('modal-root')!
+    getPortalRoot()
   );
 };
 

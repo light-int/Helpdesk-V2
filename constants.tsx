@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { 
-  LayoutDashboard, Inbox, Ticket as TicketIcon, BookOpen, 
-  Settings, Users, ClipboardCheck, ShieldCheck, Package, 
-  Wallet, ShoppingBag, BookText, UserCircle
+import {
+  LayoutDashboard, Inbox, Ticket as TicketIcon, BookOpen,
+  Settings, Users, ClipboardCheck, ShieldCheck, Package,
+  Wallet, ShoppingBag, BookText, UserCircle, Truck, CircleDollarSign, Calculator
 } from 'lucide-react';
-import { Product, UserProfile, ShowroomConfig, Part, Ticket, Technician, Intervention, WarrantyRecord, Customer } from './types';
+import { Product, UserProfile, ShowroomConfig, Part, Ticket, Technician, Intervention, WarrantyRecord, Customer, Vehicle, TransportMission, WorkshopExpense, FundTransfer } from './types';
 
 export const COLORS = {
   royal: '#1e3a8a',
@@ -21,17 +21,15 @@ export const DEFAULT_BRANDS = ['LG', 'Beko', 'Samsung', 'Hisense', 'Royal Plaza'
 
 export const NAVIGATION = [
   { name: 'Tableau de bord', path: '/', icon: <LayoutDashboard size={20} /> },
-  { name: 'Clients Plaza', path: '/customers', icon: <Users size={20} /> },
-  { name: 'Catalogue Produits', path: '/products', icon: <ShoppingBag size={20} /> },
-  { name: 'Boîte de réception', path: '/inbox', icon: <Inbox size={20} /> },
-  { name: 'Tickets & SAV', path: '/tickets', icon: <TicketIcon size={20} /> },
-  { name: 'Maintenance', path: '/maintenance', icon: <ClipboardCheck size={20} /> },
+  { name: 'Clients', path: '/customers', icon: <Users size={20} /> },
+  { name: 'Tickets SAV', path: '/tickets', icon: <TicketIcon size={20} /> },
+  { name: 'Historique', path: '/historique', icon: <ClipboardCheck size={20} /> },
   { name: 'Finances', path: '/finances', icon: <Wallet size={20} /> },
-  { name: 'Pièces Détachées', path: '/parts', icon: <Package size={20} /> },
+  { name: 'Caisse', path: '/caisse', icon: <Calculator size={20} /> },
+  { name: 'Produits', path: '/products', icon: <Package size={20} /> },
+  { name: 'Pièces', path: '/parts', icon: <Package size={20} /> },
   { name: 'Garanties', path: '/warranties', icon: <ShieldCheck size={20} /> },
-  { name: 'Équipe Technique', path: '/technicians', icon: <Users size={20} /> },
-  { name: 'Documentation', path: '/documentation', icon: <BookText size={20} /> },
-  { name: 'Mon Profil', path: '/profile', icon: <UserCircle size={20} /> },
+  { name: 'Techniciens', path: '/technicians', icon: <UserCircle size={20} /> },
   { name: 'Paramètres', path: '/settings', icon: <Settings size={20} /> },
 ];
 
@@ -63,7 +61,7 @@ export const MOCK_TICKETS: Ticket[] = [
     source: 'WhatsApp',
     showroom: 'Glass',
     category: 'SAV',
-    status: 'Résolu',
+    status: 'Payé - Clôturé',
     priority: 'Urgent',
     productReference: 'LG-INV-450',
     productName: 'Réfrigérateur LG InstaView 450L',
@@ -71,9 +69,9 @@ export const MOCK_TICKETS: Ticket[] = [
     brand: 'LG',
     assignedTechnicianId: 'TECH-01',
     description: 'Le congélateur ne produit plus de froid.',
-    financials: { 
-      partsTotal: 45000, partsCost: 32000, laborTotal: 25000, laborCost: 12000, logisticsCost: 5000, travelFee: 5000, discount: 0, 
-      grandTotal: 75000, netMargin: 26000, isPaid: true 
+    financials: {
+      partsTotal: 45000, partsCost: 32000, laborTotal: 25000, laborCost: 12000, logisticsCost: 5000, travelFee: 5000, discount: 0,
+      grandTotal: 75000, netMargin: 26000, isPaid: true
     },
     createdAt: '2024-05-15T10:30:00Z',
     lastUpdate: '2024-05-20T10:30:00Z'
@@ -84,15 +82,15 @@ export const MOCK_TICKETS: Ticket[] = [
     source: 'Phone',
     showroom: 'Oloumi',
     category: 'Installation',
-    status: 'Résolu',
+    status: 'Payé - Clôturé',
     priority: 'Moyenne',
     productName: 'Split Beko 1.5 CV',
     brand: 'Beko',
     assignedTechnicianId: 'TECH-02',
     description: 'Installation pack complet dans villa Akanda.',
-    financials: { 
-      partsTotal: 15000, partsCost: 8000, laborTotal: 45000, laborCost: 15000, logisticsCost: 8000, travelFee: 10000, discount: 0, 
-      grandTotal: 70000, netMargin: 39000, isPaid: true 
+    financials: {
+      partsTotal: 15000, partsCost: 8000, laborTotal: 45000, laborCost: 15000, logisticsCost: 8000, travelFee: 10000, discount: 0,
+      grandTotal: 70000, netMargin: 39000, isPaid: true
     },
     createdAt: '2024-05-18T09:00:00Z',
     lastUpdate: '2024-05-19T14:00:00Z'
@@ -103,15 +101,15 @@ export const MOCK_TICKETS: Ticket[] = [
     source: 'Email',
     showroom: 'Bord de mer',
     category: 'Maintenance',
-    status: 'Résolu',
+    status: 'Payé - Clôturé',
     priority: 'Basse',
     productName: 'Parc Climatisation BuroPlus',
     brand: 'BuroPlus',
     assignedTechnicianId: 'TECH-01',
     description: 'Maintenance préventive trimestrielle.',
-    financials: { 
-      partsTotal: 5000, partsCost: 2000, laborTotal: 120000, laborCost: 30000, logisticsCost: 10000, travelFee: 15000, discount: 10000, 
-      grandTotal: 130000, netMargin: 88000, isPaid: false 
+    financials: {
+      partsTotal: 5000, partsCost: 2000, laborTotal: 120000, laborCost: 30000, logisticsCost: 10000, travelFee: 15000, discount: 10000,
+      grandTotal: 130000, netMargin: 88000, isPaid: false
     },
     createdAt: '2024-05-10T08:00:00Z',
     lastUpdate: '2024-05-12T16:00:00Z'
@@ -119,19 +117,19 @@ export const MOCK_TICKETS: Ticket[] = [
 ];
 
 export const MOCK_TECHNICIANS: Technician[] = [
-  { 
+  {
     id: 'TECH-01', name: 'Moussa Diallo', specialty: ['Installation', 'SAV'], avatar: 'https://i.pravatar.cc/150?u=moussa', phone: '+241 77 12 34 56', email: 'moussa@royalplaza.ga', activeTickets: 1, completedTickets: 124, avgResolutionTime: '3.2h', rating: 4.8, status: 'Disponible', nps: 78, firstFixRate: 92,
     performanceHistory: [{ day: 'Lun', resolved: 4 }, { day: 'Mar', resolved: 6 }, { day: 'Mer', resolved: 3 }, { day: 'Jeu', resolved: 5 }, { day: 'Ven', resolved: 7 }]
   },
-  { 
+  {
     id: 'TECH-02', name: 'Kevin Nguema', specialty: ['Climatisation', 'Électronique'], avatar: 'https://i.pravatar.cc/150?u=kevin', phone: '+241 66 98 76 54', email: 'kevin@royalplaza.ga', activeTickets: 2, completedTickets: 89, avgResolutionTime: '4.5h', rating: 4.6, status: 'En intervention', nps: 72, firstFixRate: 85,
     performanceHistory: [{ day: 'Lun', resolved: 2 }, { day: 'Mar', resolved: 3 }, { day: 'Mer', resolved: 5 }, { day: 'Jeu', resolved: 2 }, { day: 'Ven', resolved: 4 }]
   }
 ];
 
 export const MOCK_PARTS: Part[] = [
-  { id: 'PT-001', name: 'Compresseur LG 12k BTU', sku: 'LG-COMP-12', category: 'Électronique', brand: 'LG', currentStock: 5, minStock: 2, unitPrice: 85000, location: 'Libreville - Glass A1' },
-  { id: 'PT-002', name: 'Filtre à air Standard', sku: 'FLT-STD-AC', category: 'Consommable', brand: 'Beko', currentStock: 1, minStock: 10, unitPrice: 5000, location: 'Libreville - Oloumi B4' },
+  { id: 'PT-001', name: 'Compresseur LG 12k BTU', sku: 'LG-COMP-12', category: 'Électronique', brand: 'LG', currentStock: 5, minStock: 2, unitPrice: 85000, purchasePrice: 45000, condition: 'Neuf', location: 'Libreville - Glass A1' },
+  { id: 'PT-002', name: 'Filtre à air Standard', sku: 'FLT-STD-AC', category: 'Consommable', brand: 'Beko', currentStock: 1, minStock: 10, unitPrice: 5000, purchasePrice: 2500, condition: 'Neuf', location: 'Libreville - Oloumi B4' },
 ];
 
 export const MOCK_WARRANTIES: WarrantyRecord[] = [
@@ -149,4 +147,22 @@ export const MOCK_SHOWROOMS: ShowroomConfig[] = [
 
 export const FAQ_DATA = [
   { id: '1', category: 'Entretien', title: 'Nettoyage des filtres de climatisation', content: 'Il est recommandé de nettoyer les filtres de vos splits tous les mois.' },
+];
+
+export const MOCK_VEHICLES: Vehicle[] = [
+  { id: 'VH-001', plateNumber: 'AA-123-BB', model: 'Toyota Hilux', status: 'Disponible', driver: 'Ali' },
+  { id: 'VH-002', plateNumber: 'CC-456-DD', model: 'Mitsubishi L200', status: 'En maintenance', driver: 'Marc' }
+];
+
+export const MOCK_TRANSPORT_MISSIONS: TransportMission[] = [
+  { id: 'TM-1001', ticketId: 'T-1001', vehicleId: 'VH-002', driver: 'Marc', destination: 'Glass, Libreville', status: 'En cours', departureTime: '2024-05-20T09:00:00Z', notes: 'Récupération compresseur' }
+];
+
+export const MOCK_WORKSHOP_EXPENSES: WorkshopExpense[] = [
+  { id: 'WE-1001', type: 'Salaire', amount: 450000, date: '2024-04-30', description: 'Salaire équipe technique (Avril)', recordedBy: 'Manager Oloumi' },
+  { id: 'WE-1002', type: 'Maintenance', amount: 25000, date: '2024-05-10', description: 'Réparation perceuse atelier', recordedBy: 'Tech Principal' }
+];
+
+export const MOCK_FUND_TRANSFERS: FundTransfer[] = [
+  { id: 'FT-1001', amount: 150000, date: '2024-05-18T17:00:00Z', status: 'Validé', fromAgent: 'Agent SAV', toManager: 'Manager Oloumi', notes: 'Clôture de caisse vendredi' }
 ];
