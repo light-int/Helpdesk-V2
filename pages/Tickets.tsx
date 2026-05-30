@@ -93,7 +93,7 @@ const TicketHistory = ({ history }: { history: TicketHistoryEntry[] }) => (
  * Permet le suivi des dossiers techniques et l'affectation des techniciens.
  */
 const Tickets: React.FC = () => {
-  const _u = (() => { try { return useData(); } catch { return { tickets: [], products: [], brands: [], technicians: [], users: [], refreshAll: () => { }, isSyncing: false, saveTicket: () => { }, isLoading: false, showrooms: [], warranties: [], customers: [], parts: [], prestations: [], templates: [] }; } })();
+  const _u = (() => { try { return useData(); } catch { return { tickets: [], products: [], brands: [], technicians: [], users: [], refreshAll: () => { }, isSyncing: false, saveTicket: () => { }, isLoading: false, showrooms: [], warranties: [], customers: [], parts: [], prestations: [], templates: [], cashRegisterSessions: [] }; } })();
   const {
     tickets = _u.tickets, products = _u.products, brands = _u.brands, technicians: rawTechnicians = _u.technicians, users: allUsers = _u.users, refreshAll = _u.refreshAll, isSyncing = _u.isSyncing, saveTicket = _u.saveTicket, isLoading = _u.isLoading,
     showrooms = _u.showrooms, warranties = _u.warranties, customers = _u.customers, parts = _u.parts, prestations = _u.prestations, templates = _u.templates,
@@ -574,7 +574,7 @@ const Tickets: React.FC = () => {
         ]);
         setVehiclesList(vehicles || []);
         setMissionsList(missions || []);
-        const existing = (missions || []).find((m: TransportMission) => m.ticketId === selectedTicket.id);
+        const existing = (missions as TransportMission[] || []).find((m: TransportMission) => m.ticketId === selectedTicket.id);
         if (existing) {
           setActiveMission(existing);
           setSelectedVehicleId(existing.vehicleId || '');

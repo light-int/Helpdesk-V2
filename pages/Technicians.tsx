@@ -14,7 +14,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
 import { useNotifications, useData, useUser } from '../App';
-import { Technician, Team, TechnicianSchedule, TechnicianMetrics, Ticket } from '../types';
+import { Technician, Team, TechnicianSchedule, TechnicianMetrics, Ticket, TicketCategory } from '../types';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 import { SkeletonHeader, SkeletonCard } from '../components/Skeleton';
@@ -28,6 +28,7 @@ const Technicians: React.FC = () => {
     technicians: rawTechnicians = _u.technicians, users: allUsers = _u.users, isLoading = _u.isLoading, refreshAll = _u.refreshAll, isSyncing = _u.isSyncing,
     saveTechnician = _u.saveTechnician, deleteTechnician = _u.deleteTechnician, saveUser = _u.saveUser,
     teams: apiTeams = _u.teams, saveTeam = _u.saveTeam, deleteTeam = _u.deleteTeam, tickets = _u.tickets,
+    techSchedules = _u.techSchedules, techMetrics = _u.techMetrics, saveTechSchedule = _u.saveTechSchedule, deleteTechSchedule = _u.deleteTechSchedule,
   } = _u;
   const { currentUser } = (() => { try { return useUser(); } catch { return { currentUser: null }; } })();
   const { addNotification, showModalNotification } = (() => { try { return useNotifications(); } catch { return { addNotification: () => { }, showModalNotification: () => { } }; } })();
