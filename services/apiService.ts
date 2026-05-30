@@ -5,7 +5,6 @@ import { Ticket, Product, Customer, Part, UserProfile, Technician, WarrantyRecor
 import { supabase } from './supabaseClient';
 const supabaseAuthClient = supabase;
 
-console.log('[apiService] Using supabase client from supabaseClient.ts');
 
 const safeFetch = async <T>(promise: any, fallback: T): Promise<T> => {
   try {
@@ -526,7 +525,6 @@ export const ApiService = {
       if (session.operatorId) {
         const { data: existingUser } = await supabase.from('users').select('id').eq('id', session.operatorId).maybeSingle();
         if (!existingUser) {
-          console.log(`[openSession] Operator ${session.operatorId} not found in public.users. Creating JIT profile...`);
           await supabase.from('users').insert({
             id: session.operatorId,
             name: session.operatorName || 'Opérateur Système',

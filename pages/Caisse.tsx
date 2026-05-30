@@ -570,7 +570,6 @@ const Caisse: React.FC = () => {
                 <div className="space-y-4">
                   <button
                     onClick={() => {
-                      console.log('Opening Open Modal...');
                       setOperatorId(currentUser?.id || '');
                       setShowOpenModal(true);
                     }}

@@ -54,5 +54,4 @@ export const generateStrategicReport = async (data: {
 export const configureGeminiApiKey = (apiKey: string): void => {
   // Stocker la clé API de manière sécurisée
   // localStorage.setItem('gemini_api_key', apiKey);
-  console.log('Configuration Gemini API - à implémenter');
 };

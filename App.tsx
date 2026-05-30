@@ -103,8 +103,7 @@ const App: React.FC = () => {
   }, []);
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('[SW] Registered:', reg.scope);
+      navigator.serviceWorker.register('/sw.js').then(() => {
       }).catch((err) => {
         console.warn('[SW] Registration failed:', err);
       });
@@ -222,23 +221,7 @@ const App: React.FC = () => {
 
   const refreshAll = useCallback(async () => {
     setIsSyncing(true);
-    console.log('[refreshAll] Starting...');
     try {
-      console.log('[Supabase] Testing connection to supabase...');
-
-      // Simple test with timeout
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout après 10s')), 10000)
-      );
-
-      const testPromise = supabase.from('cash_register_sessions').select('*').limit(1);
-      const { data: cashData, error: cashError } = await Promise.race([testPromise, timeoutPromise]) as { data: any; error: any };
-
-      console.log('[Supabase] Result:', cashError ? 'ERROR: ' + cashError.message : 'OK, rows: ' + (cashData?.length || 0));
-      if (cashError) {
-        console.log('[Supabase] Error details:', cashError);
-      }
-
       const [t, p, te, pa, w, c, b, s, cf, u, pr, templatesData, cashSessions, cashEntries] = await Promise.all([
         ApiService.tickets.getAll(),
         ApiService.products.getAll(),
@@ -262,9 +245,6 @@ const App: React.FC = () => {
         pNotifs = await ApiService.notifications.getByUser(currentUser.id);
       }
 
-      console.log('[App] Tickets loaded:', t?.length || 0, t?.slice(0, 2));
-      console.log('[App] Products loaded:', p?.length || 0);
-      console.log('[App] Customers loaded:', c?.length || 0);
       setTickets(t);
       setProducts(p);
       setTechnicians(te);
@@ -278,7 +258,6 @@ const App: React.FC = () => {
       setTemplates(templatesData);
       setCashRegisterSessions(cashSessions);
       setCashRegisterEntries(cashEntries);
-      console.log('[App] cashRegisterSessions loaded:', cashSessions?.length || 0, cashSessions);
       setPersistentNotifications(pNotifs);
       if (cf) setConfig(prev => ({ ...prev, ...cf }));
       setUsers(u);
@@ -286,7 +265,7 @@ const App: React.FC = () => {
     } catch (e) {
       setSyncMetrics(prev => ({ ...prev, status: 'ERROR', errorCount: prev.errorCount + 1 }));
     } finally { setIsSyncing(false); setIsLoading(false); }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 

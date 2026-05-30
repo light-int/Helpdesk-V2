@@ -68,7 +68,6 @@ const LoginPage: React.FC = () => {
         addNotification({ title: 'Authentification', message: `Technicien ${user.name} connecté au cluster.`, type: 'success' });
       } else {
         // Just-In-Time Provisioning: Create profile if missing
-        console.log('[Login] Profile missing, creating JIT profile...');
         const newUser: UserProfile = {
           id: data.user.id,
           email: data.user.email!,

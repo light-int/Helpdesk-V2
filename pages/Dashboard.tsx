@@ -46,7 +46,6 @@ const Dashboard: React.FC = () => {
 
   // DEBUG: Log tickets received
   useEffect(() => {
-    console.log('[Dashboard] Tickets received:', tickets?.length || 0, tickets?.slice(0, 2));
   }, [tickets]);
 
   const isTechnician = currentUser?.role === 'TECHNICIAN';

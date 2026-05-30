@@ -221,7 +221,6 @@ const Tickets: React.FC = () => {
 
   const mergeTickets = (ticketId: string, targetId: string) => {
     // Logic for merging tickets
-    console.log(`Merging ticket ${ticketId} into ${targetId}`);
   };
 
   const activeTemplate = useMemo(() => {
@@ -821,10 +820,6 @@ const Tickets: React.FC = () => {
 
         assignedTech = scoredTechs[0]?.tech?.id || availableTechs[0].id;
 
-        // Log assignment reason for debugging
-        if (scoredTechs[0]?.score > 0) {
-          console.log(`Auto-assigned to ${scoredTechs[0].tech.name} (score: ${scoredTechs[0].score}, workload: ${scoredTechs[0].workload})`);
-        }
       }
     }
 
