@@ -13,7 +13,7 @@ import {
   User as UserIcon, Calendar, Filter, Download, Printer,
   TrendingUp, TrendingDown, Wallet, CreditCard, Banknote,
   PiggyBank, Shield, Edit, Trash2, Eye, Save, XCircle, Search,
-  LogOut, ChevronDown, Edit2, ArrowLeft, Loader2, ArrowUpRight, Lock, Unlock
+  LogOut, ChevronDown, Edit2, ArrowLeft, Loader2, ArrowUpRight, Lock, Unlock, Archive
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -71,7 +71,7 @@ const Caisse: React.FC = () => {
   const [showJournalDetail, setShowJournalDetail] = useState(false);
   const [selectedJournalEntry, setSelectedJournalEntry] = useState<CashRegisterEntry | null>(null);
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string; message: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string; message: string; mode: 'delete' | 'archive' } | null>(null);
 
   // Filters
   const [journalStartDate, setJournalStartDate] = useState<string>('');
@@ -374,23 +374,36 @@ const Caisse: React.FC = () => {
 
   const handleDeleteRegister = (id: string) => {
     const register = cashRegisters.find(r => r.id === id);
-    setDeleteConfirm({
-      id,
-      label: register?.name || 'cette caisse',
-      message: `Voulez-vous vraiment désactiver la caisse "${register?.name || 'cette caisse'}" ? Elle ne sera plus disponible pour de nouvelles sessions.`
-    });
+    const isAgent = currentUser?.role === 'AGENT';
+    if (isAgent) {
+      setDeleteConfirm({
+        id,
+        label: register?.name || 'cette caisse',
+        mode: 'archive',
+        message: `Voulez-vous vraiment archiver la caisse "${register?.name || 'cette caisse'}" ? Elle ne sera plus disponible pour de nouvelles sessions.`
+      });
+    } else {
+      setDeleteConfirm({
+        id,
+        label: register?.name || 'cette caisse',
+        mode: 'delete',
+        message: `Voulez-vous vraiment désactiver la caisse "${register?.name || 'cette caisse'}" ? Elle ne sera plus disponible pour de nouvelles sessions.`
+      });
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteConfirm) return;
+    const { mode } = deleteConfirm;
+    const isArchive = mode === 'archive';
     setDeleteConfirm(null);
-    setLoadingMessage('Désactivation de la caisse...');
+    setLoadingMessage(isArchive ? 'Archivage de la caisse...' : 'Désactivation de la caisse...');
     setLoading(true);
     try {
       await ApiService.caisse.updateCashRegister(deleteConfirm.id, { isActive: false });
       await loadCashRegisters();
       setLoading(false);
-      showModalNotification({ title: 'Succès', message: 'Élément supprimé avec succès', type: 'success' });
+      showModalNotification({ title: 'Succès', message: isArchive ? 'Caisse archivée avec succès' : 'Caisse désactivée avec succès', type: 'success' });
     } catch (err: any) {
       setLoading(false);
       showModalNotification({ title: 'Erreur', message: err.message, type: 'error' });
@@ -1017,7 +1030,7 @@ const Caisse: React.FC = () => {
               <button onClick={() => {
                 setEditingRegister(r); setNewRegisterName(r.name); setNewRegisterLocation(r.location); setNewRegisterShowroom(r.showroom || ''); setOperatorId(r.defaultOperatorId || ''); setShowEditRegisterModal(true);
               }} className="flex-1 px-3 py-1.5 bg-[#f8f9fa] rounded-lg text-xs font-semibold hover:bg-[#e5e5e5] flex items-center justify-center gap-1"><Edit size={12} /> Modifier</button>
-              <button onClick={() => handleDeleteRegister(r.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+              <button onClick={() => handleDeleteRegister(r.id)} className={`p-1.5 rounded-lg ${currentUser?.role === 'AGENT' ? 'text-amber-600 hover:bg-amber-50' : 'text-red-600 hover:bg-red-50'}`}>{currentUser?.role === 'AGENT' ? <Archive size={14} /> : <Trash2 size={14} />}</button>
             </div>
           </div>
         ))}
@@ -1484,7 +1497,9 @@ const Caisse: React.FC = () => {
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={handleConfirmDelete}
+        title={deleteConfirm?.mode === 'archive' ? "Archiver la caisse" : "Désactiver la caisse"}
         message={deleteConfirm?.message || ''}
+        confirmText={deleteConfirm?.mode === 'archive' ? "Archiver" : "Désactiver"}
       />
     </div>
   );

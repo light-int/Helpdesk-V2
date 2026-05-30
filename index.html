@@ -6,20 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Royal Plaza - Horizon Pro</title>
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#3ecf8e" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.1.1/files/geist-sans-latin-400-normal.woff2" as="font" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.1.1/files/geist-sans-latin-500-normal.woff2" as="font" crossorigin />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.1.1/files/geist-sans-latin-600-normal.woff2" as="font" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.1.1/index.css" />
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
       :root {
-        --sb-primary: #3ecf8e;
-        --sb-primary-hover: #34b27b;
-        --sb-bg: #f8f9fa;
+        --sb-primary: #000000;
+        --sb-primary-hover: #333333;
+        --sb-bg: #fafafa;
         --sb-card-bg: #ffffff;
-        --sb-border: #e5e5e5;
-        --sb-text-main: #1c1c1c;
-        --sb-text-muted: #686868;
+        --sb-border: #eaeaea;
+        --sb-text-main: #111111;
+        --sb-text-muted: #888888;
         --radius-sm: 6px;
         --radius-md: 8px;
         --radius-lg: 12px;
@@ -28,12 +33,15 @@
       }
       
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Geist Sans', 'Inter', -apple-system, sans-serif;
         background-color: var(--sb-bg);
         color: var(--sb-text-main);
-        letter-spacing: -0.011em;
-        font-size: 13px;
+        letter-spacing: -0.02em;
+        font-size: 15px;
         font-weight: 450;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       
       /* CARD */
@@ -53,14 +61,14 @@
         border: 1px solid var(--sb-border) !important;
         border-radius: var(--radius-sm) !important;
         padding: 6px 10px !important;
-        font-size: 13px !important;
+        font-size: 14px !important;
         color: var(--sb-text-main) !important;
         outline: none !important;
         font-weight: 450 !important;
       }
       input:focus {
         border-color: var(--sb-primary) !important;
-        box-shadow: 0 0 0 2px rgba(62, 207, 142, 0.1) !important;
+        box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06) !important;
       }
 
       /* BUTTONS */
@@ -68,14 +76,14 @@
         background-color: var(--sb-primary);
         color: white !important;
         border-radius: var(--radius-sm) !important;
-        padding: 6px 14px;
+        padding: 7px 16px;
         font-weight: 500;
-        font-size: 12px;
+        font-size: 13px;
         display: inline-flex;
         align-items: center;
         gap: 6px;
         transition: background 0.2s;
-        border: 1px solid #2da471;
+        border: 1px solid #000000;
       }
       .btn-sb-primary:hover {
         background-color: var(--sb-primary-hover);
@@ -86,9 +94,9 @@
         color: var(--sb-text-main) !important;
         border: 1px solid var(--sb-border);
         border-radius: var(--radius-sm) !important;
-        padding: 6px 14px;
+        padding: 7px 16px;
         font-weight: 500;
-        font-size: 12px;
+        font-size: 13px;
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -107,8 +115,8 @@
       }
       .sb-table th {
         background: #fcfcfc;
-        padding: 8px 16px;
-        font-size: 10px;
+        padding: 10px 16px;
+        font-size: 11px;
         font-weight: 600;
         color: var(--sb-text-muted);
         text-transform: uppercase;
@@ -116,9 +124,9 @@
         border-bottom: 1px solid var(--sb-border);
       }
       .sb-table td {
-        padding: 10px 16px;
+        padding: 12px 16px;
         border-bottom: 1px solid var(--sb-border);
-        font-size: 13px;
+        font-size: 14px;
       }
       .sb-table tr:last-child td { border-bottom: none; }
       .sb-table tr:hover td { background: #fafafa; }
@@ -151,7 +159,7 @@
         100% { background-position: 1000px 0; }
       }
       .animate-shimmer {
-        background: linear-gradient(90deg, transparent, rgba(62, 207, 142, 0.1), transparent);
+        background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.04), transparent);
         background-size: 1000px 100%;
         animation: shimmer 2s infinite;
       }
@@ -200,7 +208,7 @@
         transition: box-shadow 0.3s ease;
       }
       .hover-glow:hover {
-        box-shadow: 0 0 20px rgba(62, 207, 142, 0.3);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
       }
 
       .hover-scale {
@@ -225,7 +233,7 @@
       .card-interactive:hover {
         transform: translateY(-4px);
         box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
-        border-color: #3ecf8e;
+        border-color: #000;
       }
 
       /* BUTTON INTERACTIONS */
@@ -252,7 +260,7 @@
       /* FOCUS STATES */
       .focus-ring:focus {
         outline: none;
-        box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.5);
+        box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.15);
       }
 
       /* SCROLLBAR STYLING */
@@ -268,17 +276,19 @@
 
       /* SELECTION COLOR */
       ::selection {
-        background: rgba(62, 207, 142, 0.3);
-        color: #1c1c1c;
+        background: rgba(0, 0, 0, 0.1);
+        color: #111111;
       }
 
       /* DARK THEME OVERRIDES — applied via .theme-dark class on <html> */
       .theme-dark {
-        --sb-bg: #121212 !important;
-        --sb-card-bg: #1c1c1c !important;
-        --sb-text-main: #f5f5f5 !important;
-        --sb-text-muted: #a0a0a0 !important;
-        --sb-border: #2e2e2e !important;
+        --sb-bg: #000000 !important;
+        --sb-card-bg: #111111 !important;
+        --sb-text-main: #ededed !important;
+        --sb-text-muted: #888888 !important;
+        --sb-border: #222222 !important;
+        --sb-primary: #ffffff !important;
+        --sb-primary-hover: #cccccc !important;
       }
       .theme-dark .bg-white,
       .theme-dark [class*="bg-white"],
@@ -295,14 +305,122 @@
       .theme-dark .border-\[\#e5e5e5\],
       .theme-dark .border-gray-200 { border-color: var(--sb-border) !important; }
       .theme-dark .border-gray-100 { border-color: #2a2a2a !important; }
-      .theme-dark .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
-      .theme-dark .shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.5) !important; }
-      .theme-dark .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,0.5) !important; }
+      .theme-dark .shadow-sm { box-shadow: 0 1px 2px rgba(255,255,255,0.05) !important; }
+      .theme-dark .shadow-md { box-shadow: 0 4px 6px rgba(255,255,255,0.08) !important; }
+      .theme-dark .shadow-lg { box-shadow: 0 10px 15px rgba(255,255,255,0.1) !important; }
       .theme-dark .hover\:bg-gray-50:hover { background-color: #2a2a2a !important; }
       .theme-dark .hover\:bg-gray-100:hover { background-color: #333 !important; }
       .theme-dark .hover\:text-gray-700:hover { color: #ddd !important; }
       .theme-dark th { background: #252525 !important; }
       .theme-dark td { border-bottom-color: var(--sb-border) !important; }
+
+      /* VERCEL MODE */
+      .vercel-mode .sb-card,
+      .vercel-mode .sb-table-container {
+        border: none !important;
+        box-shadow: none !important;
+        background: var(--sb-card-bg);
+      }
+      .vercel-mode .sb-card:hover { border: none !important; }
+
+      /* Toute carte bg-white + border + rounded-lg/rounded-xl */
+      .vercel-mode [class*="bg-white"][class*="rounded-lg"][class*="border"]:not(.btn-sb-primary):not(.btn-sb-outline):not([class*="side"]):not([class*="badge"]),
+      .vercel-mode [class*="bg-white"][class*="rounded-xl"][class*="border"]:not(.btn-sb-primary):not(.btn-sb-outline):not([class*="side"]):not([class*="badge"]) {
+        border: none !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+      }
+      .vercel-mode [class*="bg-white"][class*="rounded-lg"][class*="shadow-sm"]:hover:not(.btn-sb-primary):not(.btn-sb-outline) {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07) !important;
+      }
+
+      /* Filtres — fond gris transparent */
+      .vercel-mode [class*="bg-\\[#f8f9fa\\]"] {
+        border: none !important;
+        background: transparent !important;
+      }
+
+      /* Hover effects sur cartes interactives */
+      .vercel-mode .card-interactive:hover { border-color: transparent !important; }
+
+      /* Cartes vertes info → fond neutre */
+      .vercel-mode [class*="bg-\\[#f0fdf4\\]"] {
+        background: var(--sb-card-bg) !important;
+      }
+      .vercel-mode [class*="bg-\\[#fcfcfc\\]"] {
+        background: var(--sb-card-bg) !important;
+      }
+
+      /* En-têtes de tableaux épurés */
+      .vercel-mode th { background: transparent !important; }
+      .vercel-mode .sb-table th {
+        border-bottom: 1px solid var(--sb-border);
+        padding: 10px 16px;
+      }
+      .vercel-mode .sb-table tr:hover td { background: transparent !important; }
+
+      /* COULEUR D'ACCENT — remplace #3ecf8e → var(--sb-primary) via CSS global */
+      .vercel-mode [class*="text-\\[#3ecf8e\\]"],
+      .vercel-mode [style*="color: '#3ecf8e'"],
+      .vercel-mode [style*="color: #3ecf8e"] {
+        color: var(--sb-primary) !important;
+      }
+      .vercel-mode [class*="bg-\\[#3ecf8e\\]"],
+      .vercel-mode [style*="background-color: #3ecf8e"],
+      .vercel-mode [style*="background: #3ecf8e"] {
+        background-color: var(--sb-primary) !important;
+      }
+      .vercel-mode [class*="hover\\:bg-\\[#34b27b\\]"]:hover {
+        background-color: var(--sb-primary-hover) !important;
+      }
+      .vercel-mode [class*="border-\\[#3ecf8e\\]"] {
+        border-color: var(--sb-primary) !important;
+      }
+      .vercel-mode [class*="ring-\\[#3ecf8e\\]"] {
+        --tw-ring-color: var(--sb-primary) !important;
+      }
+      .vercel-mode [class*="shadow-\\[#3ecf8e\\]"] {
+        --tw-shadow-color: var(--sb-primary) !important;
+      }
+      /* Garde le vert dans la sidebar (fond sombre #1a1a2e) */
+      .vercel-mode .bg-\\[#1a1a2e\\] [class*="text-\\[#3ecf8e\\]"],
+      .vercel-mode [class*="bg-\\[#1a1a2e\\]"] [class*="text-\\[#3ecf8e\\]"] {
+        color: #3ecf8e !important;
+      }
+      .vercel-mode .bg-\\[#1a1a2e\\] [class*="bg-\\[#3ecf8e\\]"],
+      .vercel-mode [class*="bg-\\[#1a1a2e\\]"] [class*="bg-\\[#3ecf8e\\]"] {
+        background-color: #3ecf8e !important;
+      }
+      .vercel-mode .bg-\\[#1a1a2e\\] [class*="border-\\[#3ecf8e\\]"],
+      .vercel-mode [class*="bg-\\[#1a1a2e\\]"] [class*="border-\\[#3ecf8e\\]"] {
+        border-color: #3ecf8e !important;
+      }
+      /* Garde les status badges fonctionnels (green-100/red-100 etc.) */
+      .vercel-mode [class*="text-green"],
+      .vercel-mode [class*="text-red"],
+      .vercel-mode [class*="text-yellow"],
+      .vercel-mode [class*="text-blue"],
+      .vercel-mode [class*="text-rose"],
+      .vercel-mode [class*="text-amber"] {
+        /* keep original */
+      }
+
+      /* PADDING VERCEL */
+      .vercel-mode .sb-card.p-4,
+      .vercel-mode [class*="bg-white"][class*="p-4"]:not(.btn-sb-primary):not(.btn-sb-outline) {
+        padding: 20px !important;
+      }
+      .vercel-mode [class*="bg-white"][class*="p-3"]:not(.btn-sb-primary):not(.btn-sb-outline) {
+        padding: 18px !important;
+      }
+
+      /* POLICES +1PX — override des classes Tailwind les plus courantes */
+      .vercel-mode .text-\[10px\] { font-size: 11px !important; }
+      .vercel-mode .text-\[11px\] { font-size: 12px !important; }
+      .vercel-mode .text-\[12px\] { font-size: 13px !important; }
+      .vercel-mode .text-\[13px\] { font-size: 14px !important; }
+      .vercel-mode .text-\[9px\] { font-size: 10px !important; }
+      .vercel-mode .text-xs { font-size: 12px !important; }
+      .vercel-mode .text-sm { font-size: 14px !important; }
     </style>
   <script type="importmap">
 {

@@ -144,6 +144,7 @@ export interface Part {
   id: string;
   name: string;
   sku: string;
+  reference?: string;
   category: 'Électronique' | 'Mécanique' | 'Consommable' | 'Accessoire';
   brand: string;
   currentStock: number;
@@ -593,8 +594,18 @@ export interface Vehicle {
   id: string;
   plateNumber: string;
   model: string;
-  status: 'Disponible' | 'En course' | 'En maintenance';
+  status: 'Disponible' | 'En course' | 'En maintenance' | 'En panne';
   driver?: string;
+}
+
+export interface Driver {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  licenseNumber?: string;
+  status: 'Disponible' | 'En mission' | 'Absent';
+  vehicleId?: string;
 }
 
 export interface TransportMission {
@@ -794,6 +805,8 @@ export interface DataContextValue {
   deleteBrand: (name: string) => Promise<void>;
   savePrestation: (p: Prestation) => Promise<void>;
   deletePrestation: (id: string) => Promise<void>;
+  saveShowroom: (s: ShowroomConfig) => Promise<void>;
+  deleteShowroom: (id: string) => Promise<void>;
   saveTemplate: (t: DocumentTemplate) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
   // Missing properties added

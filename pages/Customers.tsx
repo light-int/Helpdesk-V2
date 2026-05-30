@@ -152,38 +152,52 @@ const Customers: React.FC = () => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result as string;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        let wb;
+        if (isCSV) {
+          const text = evt.target?.result as string;
+          wb = XLSX.read(text, { type: 'string', raw: true });
+        } else {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          wb = XLSX.read(data, { type: 'array', raw: true });
+        }
+        if (!wb.SheetNames || wb.SheetNames.length === 0) throw new Error('Aucune feuille trouvée');
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
-        if (data.length > 0) {
-          const headers = (data[0] as string[]).map(h => String(h || ''));
-          setFileHeaders(headers);
-          const newMapping = { ...mapping };
-          headers.forEach(h => {
-            const low = h.toLowerCase();
-            if (low.includes('nom') || low.includes('name') || low.includes('identité') || low.includes('client')) newMapping.name = h;
-            if (low.includes('tél') || low.includes('phone') || low.includes('mobile') || low.includes('tel')) newMapping.phone = h;
-            if (low.includes('email') || low.includes('courriel') || low.includes('mail')) newMapping.email = h;
-            if (low.includes('société') || low.includes('company') || low.includes('entreprise') || low.includes('raison')) newMapping.companyName = h;
-            if (low.includes('type') || low.includes('catégorie') || low.includes('categorie')) newMapping.type = h;
-            if (low.includes('adresse') || low.includes('address') || low.includes('localisation')) newMapping.address = h;
-            if (low.includes('statut') || low.includes('status') || low.includes('segment')) newMapping.status = h;
-          });
-          setMapping(newMapping);
-          const rows = XLSX.utils.sheet_to_json(ws);
-          setRawImportData(rows);
-          setIsMappingModalOpen(true);
-        }
-      } catch (err) {
-        addNotification({ title: 'Erreur Fichier', message: 'Format invalide ou corrompu.', type: 'error' });
+        if (!ws) throw new Error('Feuille vide');
+        const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        if (rawData.length < 2) throw new Error('Fichier sans données');
+        const headers = (rawData[0] as string[]).map(h => String(h || '').trim());
+        const dataRows = rawData.slice(1).filter((r: any[]) => r.some((c: any) => String(c || '').trim()));
+        if (dataRows.length === 0) throw new Error('Aucune ligne de données valide');
+        setFileHeaders(headers);
+        const newMapping = { ...mapping };
+        headers.forEach(h => {
+          const low = h.toLowerCase();
+          if (low.includes('nom') || low.includes('name') || low.includes('identité') || low.includes('client')) newMapping.name = h;
+          if (low.includes('tél') || low.includes('phone') || low.includes('mobile') || low.includes('tel')) newMapping.phone = h;
+          if (low.includes('email') || low.includes('courriel') || low.includes('mail')) newMapping.email = h;
+          if (low.includes('société') || low.includes('company') || low.includes('entreprise') || low.includes('raison')) newMapping.companyName = h;
+          if (low.includes('type') || low.includes('catégorie') || low.includes('categorie')) newMapping.type = h;
+          if (low.includes('adresse') || low.includes('address') || low.includes('localisation')) newMapping.address = h;
+          if (low.includes('statut') || low.includes('status') || low.includes('segment')) newMapping.status = h;
+        });
+        setMapping(newMapping);
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        setRawImportData(dataRows.length > 0 && headers.length > 0
+          ? dataRows.map((r: any[]) => headers.reduce((obj: any, h, i) => { obj[h] = r[i]; return obj; }, {}))
+          : rows);
+        setIsMappingModalOpen(true);
+      } catch (err: any) {
+        console.error('Import error:', err);
+        addNotification({ title: 'Erreur Fichier', message: err?.message || 'Format invalide ou corrompu.', type: 'error' });
       }
     };
-    reader.readAsBinaryString(file);
+    if (isCSV) reader.readAsText(file);
+    else reader.readAsArrayBuffer(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -224,8 +238,9 @@ const Customers: React.FC = () => {
       addNotification({ title: 'Import Clients', message: `${finalCustomers.length} clients synchronisés.`, type: 'success' });
       setIsMappingModalOpen(false);
       refreshAll();
-    } catch (err) {
-      addNotification({ title: 'Erreur Import', message: 'Échec de l\'opération massive.', type: 'error' });
+    } catch (err: any) {
+      console.error('Import process error:', err);
+      addNotification({ title: 'Erreur Import', message: err?.details || err?.message || 'Échec de l\'opération massive.', type: 'error' });
     } finally {
       setIsImporting(false);
     }
@@ -287,7 +302,7 @@ const Customers: React.FC = () => {
             <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-8 px-3 text-xs">
               <Upload size={14} /> Import
             </button>
-            <input type="file" ref={fileInputRef} accept=".xlsx,.xls" hidden onChange={handleFileSelect} />
+            <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" hidden onChange={handleFileSelect} />
             <button onClick={handleExportXLS} className="btn-sb-outline h-8 px-3 text-xs">
               <Download size={14} /> XLS
             </button>

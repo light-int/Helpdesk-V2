@@ -19,6 +19,7 @@ import Settings from './pages/Settings';
 import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
 import Caisse from './pages/Caisse';
+import Logistics from './pages/Logistics';
 import {
   X, AlertCircle, CheckCircle2, AlertTriangle, BellRing, Wrench, ArrowRight
 } from 'lucide-react';
@@ -135,7 +136,7 @@ const App: React.FC = () => {
     aiEnabled: true, aiProvider: 'google', aiModel: 'flash', aiAutoCategorization: true, aiStrategicAudit: true,
     aiChatbotEnabled: true, autoTranslate: false, sessionTimeout: 60, mfaRequired: false,
     syncFrequency: 'realtime', maintenanceMode: false, passwordComplexity: 'medium',
-    theme: 'light', accentColor: '#3ecf8e',
+    theme: 'light', accentColor: '#000000',
     emailNotifications: true, desktopNotifications: true, soundNotifications: true, pushNotifications: false
   });
   const [syncMetrics, setSyncMetrics] = useState<SyncMetrics>({ lastSuccess: null, latency: 0, status: 'CONNECTED', errorCount: 0 });
@@ -302,19 +303,29 @@ const App: React.FC = () => {
     if (config.theme === 'dark') {
       root.classList.add('theme-dark');
       root.classList.remove('theme-light');
-      root.style.setProperty('--sb-bg', '#121212');
-      root.style.setProperty('--sb-card-bg', '#1c1c1c');
-      root.style.setProperty('--sb-text-main', '#f5f5f5');
-      root.style.setProperty('--sb-text-muted', '#a0a0a0');
-      root.style.setProperty('--sb-border', '#2e2e2e');
+      root.classList.add('vercel-mode');
+      root.style.setProperty('--sb-bg', '#000000');
+      root.style.setProperty('--sb-card-bg', '#111111');
+      root.style.setProperty('--sb-text-main', '#ededed');
+      root.style.setProperty('--sb-text-muted', '#888888');
+      root.style.setProperty('--sb-border', '#222222');
+      if (!config.accentColor) {
+        root.style.setProperty('--sb-primary', '#ffffff');
+        root.style.setProperty('--sb-primary-hover', '#cccccc');
+      }
     } else {
       root.classList.add('theme-light');
       root.classList.remove('theme-dark');
-      root.style.setProperty('--sb-bg', '#f8f9fa');
+      root.classList.add('vercel-mode');
+      root.style.setProperty('--sb-bg', '#fafafa');
       root.style.setProperty('--sb-card-bg', '#ffffff');
-      root.style.setProperty('--sb-text-main', '#1c1c1c');
-      root.style.setProperty('--sb-text-muted', '#686868');
-      root.style.setProperty('--sb-border', '#e5e5e5');
+      root.style.setProperty('--sb-text-main', '#111111');
+      root.style.setProperty('--sb-text-muted', '#888888');
+      root.style.setProperty('--sb-border', '#eaeaea');
+      if (!config.accentColor) {
+        root.style.setProperty('--sb-primary', '#000000');
+        root.style.setProperty('--sb-primary-hover', '#333333');
+      }
     }
   }, [config]);
 
@@ -596,6 +607,18 @@ const App: React.FC = () => {
     await refreshAll();
   };
 
+  const saveShowroom = async (s: ShowroomConfig) => {
+    await ApiService.showrooms.save(s);
+    await logActivity('MAJ_SHOWROOM', s.id, `Showroom ${s.id} mis à jour.`);
+    await refreshAll();
+  };
+
+  const deleteShowroom = async (id: string) => {
+    await ApiService.showrooms.delete(id);
+    await logActivity('SUPPR_SHOWROOM', id, `Showroom supprimé.`);
+    await refreshAll();
+  };
+
   const saveTemplate = async (t: DocumentTemplate) => {
     await ApiService.templates.save(t);
     await refreshAll();
@@ -654,6 +677,7 @@ const App: React.FC = () => {
           refreshAll, saveTicket, saveCustomer, savePart, deletePart, saveProduct, deleteProduct,
           saveTechnician, deleteTechnician, saveWarranty, deleteWarranty, updateConfig,
           saveUser, deleteUser, addBrand, deleteBrand, prestations, savePrestation, deletePrestation,
+          saveShowroom, deleteShowroom,
           saveTemplate, deleteTemplate,
           stockMovements, addStockMovement, teams, saveTeam, deleteTeam,
           techSchedules, techMetrics, saveTechSchedule, deleteTechSchedule,
@@ -677,7 +701,8 @@ const App: React.FC = () => {
                       <Route path="/historique" element={currentUser?.role === 'TECHNICIAN' ? <InterventionHistory /> : <Navigate to="/" replace />} />
                        <Route path="/products" element={!isTech ? <Products /> : <Navigate to="/historique" replace />} />
                        <Route path="/warranties" element={<WarrantyLog />} />
-                      <Route path="/parts" element={<PartsInventory />} />
+                       <Route path="/parts" element={<PartsInventory />} />
+                       <Route path="/logistics" element={<Logistics />} />
                       <Route path="/finances" element={currentUser?.role === 'MANAGER' ? <Finances /> : <Navigate to="/historique" replace />} />
                       <Route path="/technicians" element={!isTech ? <Technicians /> : <Navigate to="/historique" replace />} />
                       <Route path="/profile" element={<ProfilePage />} />

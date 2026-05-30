@@ -7,11 +7,11 @@ import {
   Clock, FileCheck, Package, ClipboardList, X, Trash2,
   Wrench, AlertTriangle, FileText, Lock, ListChecks, ShieldAlert, BadgeCheck,
   Printer, Wallet, Copy, MessageSquare, Send, Activity, AlertCircle,
-  LayoutGrid, Tags, GitMerge, Timer, Tag, GripVertical
+  LayoutGrid, Tags, GitMerge, Timer, Tag, GripVertical, Truck
 } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
 import { useSearchParams } from 'react-router-dom';
-import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart, WarrantyRecord, Prestation, Customer, Part, TicketHistoryEntry, TicketComment, ClientCommunication, TicketAttachment, TicketTag, DocumentTemplate, CashRegisterSession } from '../types';
+import { Ticket, TicketCategory, Product, Technician, ShowroomConfig, UsedPart, WarrantyRecord, Prestation, Customer, Part, TicketHistoryEntry, TicketComment, ClientCommunication, TicketAttachment, TicketTag, DocumentTemplate, CashRegisterSession, Vehicle, TransportMission } from '../types';
 import { ApiService } from '../services/apiService';
 import {
   DndContext,
@@ -200,6 +200,17 @@ const Tickets: React.FC = () => {
   const [selectedTicketForTag, setSelectedTicketForTag] = useState<string | null>(null);
   const [ticketAttachments, setTicketAttachments] = useState<TicketAttachment[]>([]);
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+
+  // --- TRANSPORT / LOGISTICS PLANNING STATES ---
+  const [vehiclesList, setVehiclesList] = useState<Vehicle[]>([]);
+  const [missionsList, setMissionsList] = useState<TransportMission[]>([]);
+  const [activeMission, setActiveMission] = useState<TransportMission | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [destinationAddress, setDestinationAddress] = useState('');
+  const [missionNotes, setMissionNotes] = useState('');
+  const [missionStatus, setMissionStatus] = useState<'Planifié' | 'En cours' | 'Terminé'>('Planifié');
+  const [isSavingMission, setIsSavingMission] = useState(false);
 
   // --- KANBAN DRAG & DROP STATES ---
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -538,6 +549,105 @@ const Tickets: React.FC = () => {
       setTicketAttachments([]);
     }
   }, [selectedTicket?.id]);
+
+  // --- TRANSPORT LOGISTICS: Load vehicles & missions when ticket selected ---
+  useEffect(() => {
+    if (!selectedTicket?.id) {
+      setVehiclesList([]);
+      setMissionsList([]);
+      setActiveMission(null);
+      setSelectedVehicleId('');
+      setDriverName('');
+      setDestinationAddress('');
+      setMissionNotes('');
+      setMissionStatus('Planifié');
+      return;
+    }
+    if (selectedTicket.interventionLocation !== 'chez le client') {
+      setActiveMission(null);
+      return;
+    }
+    const fetchTransportData = async () => {
+      try {
+        const [vehicles, missions] = await Promise.all([
+          ApiService.vehicles.getAll(),
+          ApiService.transportMissions.getAll()
+        ]);
+        setVehiclesList(vehicles || []);
+        setMissionsList(missions || []);
+        const existing = (missions || []).find((m: TransportMission) => m.ticketId === selectedTicket.id);
+        if (existing) {
+          setActiveMission(existing);
+          setSelectedVehicleId(existing.vehicleId || '');
+          setDriverName(existing.driver || '');
+          setDestinationAddress(existing.destination || '');
+          setMissionNotes(existing.notes || '');
+          setMissionStatus(existing.status || 'Planifié');
+        } else {
+          setActiveMission(null);
+          setSelectedVehicleId('');
+          // Pre-fill driver with assigned technician name
+          const assignedTech = technicians.find((t: Technician) => t.id === selectedTicket.assignedTechnicianId);
+          setDriverName(assignedTech?.name || '');
+          // Pre-fill destination with client location
+          setDestinationAddress(selectedTicket.location || '');
+          setMissionNotes('');
+          setMissionStatus('Planifié');
+        }
+      } catch (e) {
+        console.error('Error fetching transport data:', e);
+      }
+    };
+    fetchTransportData();
+  }, [selectedTicket?.id, selectedTicket?.interventionLocation]);
+
+  // --- TRANSPORT: Save or update transport mission ---
+  const handleSaveTransportMission = async () => {
+    if (!selectedTicket || !selectedVehicleId || !driverName.trim()) {
+      addNotification({ title: 'Champs requis', message: 'Veuillez sélectionner un véhicule et saisir le nom du chauffeur.', type: 'warning' });
+      return;
+    }
+    setIsSavingMission(true);
+    try {
+      const missionId = activeMission?.id || Math.random().toString(36).substr(2, 9);
+      const mission: TransportMission = {
+        id: missionId,
+        ticketId: selectedTicket.id,
+        vehicleId: selectedVehicleId,
+        driver: driverName.trim(),
+        destination: destinationAddress.trim(),
+        status: missionStatus,
+        departureTime: activeMission?.departureTime || new Date().toISOString(),
+        arrivalTime: missionStatus === 'Terminé' ? new Date().toISOString() : undefined,
+        notes: missionNotes.trim() || undefined
+      };
+      await ApiService.transportMissions.saveAll([mission]);
+
+      // Update vehicle status accordingly
+      const vehicle = vehiclesList.find((v: Vehicle) => v.id === selectedVehicleId);
+      if (vehicle) {
+        const updatedVehicle: Vehicle = {
+          ...vehicle,
+          status: missionStatus === 'Terminé' ? 'Disponible' : 'En course',
+          driver: missionStatus === 'Terminé' ? undefined : driverName.trim()
+        };
+        await ApiService.vehicles.saveAll([updatedVehicle]);
+        setVehiclesList(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
+      }
+
+      setActiveMission(mission);
+      addNotification({
+        title: activeMission ? 'Mission mise à jour' : 'Mission créée',
+        message: `Mission logistique ${activeMission ? 'mise à jour' : 'enregistrée'} pour ${selectedTicket.customerName}.`,
+        type: 'success'
+      });
+    } catch (e) {
+      console.error('Error saving transport mission:', e);
+      addNotification({ title: 'Erreur', message: 'Impossible d\'enregistrer la mission logistique.', type: 'error' });
+    } finally {
+      setIsSavingMission(false);
+    }
+  };
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedTicket || !currentUser) return;
@@ -1985,6 +2095,73 @@ const Tickets: React.FC = () => {
                   </div>
                 )}
 
+                {selectedTicket.interventionLocation === 'chez le client' && (
+                  <div className="bg-white rounded-lg border border-[#e5e5e5] p-3 shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-semibold text-[#686868] uppercase tracking-widest flex items-center gap-2">
+                      <Truck size={12} className="text-[#3ecf8e]" /> Planification Logistique
+                    </h4>
+                    <div className="space-y-2">
+                      <select
+                        value={selectedVehicleId}
+                        onChange={(e) => setSelectedVehicleId(e.target.value)}
+                        className="w-full h-9 text-[11px] font-semibold rounded-lg border-[#e5e5e5] bg-[#fcfcfc] focus:bg-white transition-all shadow-sm"
+                      >
+                        <option value="">-- Véhicule --</option>
+                        {vehiclesList.filter((v: Vehicle) => v.status !== 'En maintenance').map((v: Vehicle) => (
+                          <option key={v.id} value={v.id}>{v.model} ({v.plateNumber}) — {v.status}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Chauffeur"
+                        value={driverName}
+                        onChange={(e) => setDriverName(e.target.value)}
+                        className="w-full h-9 text-[11px] font-semibold rounded-lg border-[#e5e5e5] bg-[#fcfcfc] focus:bg-white transition-all shadow-sm px-3"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Adresse de destination"
+                        value={destinationAddress}
+                        onChange={(e) => setDestinationAddress(e.target.value)}
+                        className="w-full h-9 text-[11px] font-semibold rounded-lg border-[#e5e5e5] bg-[#fcfcfc] focus:bg-white transition-all shadow-sm px-3"
+                      />
+                      <div className="flex gap-2">
+                        {(['Planifié', 'En cours', 'Terminé'] as const).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setMissionStatus(s)}
+                            className={`flex-1 h-7 text-[10px] font-semibold uppercase tracking-wider rounded-lg transition-all ${
+                              missionStatus === s
+                                ? s === 'Planifié' ? 'bg-[#f0fdf4] text-[#16a34a] border border-[#dcfce7]'
+                                  : s === 'En cours' ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                                  : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                : 'bg-[#fcfcfc] text-[#9ca3af] border border-[#e5e5e5] hover:border-[#d1d1d1]'
+                            }`}
+                          >
+                            {s === 'Planifié' ? 'Planifié' : s === 'En cours' ? 'En cours' : 'Terminé'}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        placeholder="Notes d'itinéraire (optionnel)"
+                        value={missionNotes}
+                        onChange={(e) => setMissionNotes(e.target.value)}
+                        rows={2}
+                        className="w-full text-[11px] font-semibold rounded-lg border-[#e5e5e5] bg-[#fcfcfc] focus:bg-white transition-all shadow-sm px-3 py-2 resize-none"
+                      />
+                      <button
+                        onClick={handleSaveTransportMission}
+                        disabled={isSavingMission || !selectedVehicleId || !driverName.trim()}
+                        className="w-full h-9 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-wider rounded-lg bg-[#1c1c1c] text-white hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                      >
+                        {isSavingMission ? <RefreshCw size={12} className="animate-spin" /> : <Truck size={12} />}
+                        {activeMission ? 'Mettre à jour' : 'Planifier la mission'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
               </div>
 
               {/* ========== COLONNE DROITE : Détails ========== */}
@@ -2385,7 +2562,7 @@ const Tickets: React.FC = () => {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-semibold text-[#686868] uppercase tracking-widest">Plaza Showroom de rattachement</label>
-                    <select name="showroom" defaultValue={editingTicket?.showroom || 'Glass'} className="w-full text-xs h-10 rounded-lg bg-[#fcfcfc] border-[#e5e5e5]" disabled={editingTicket?.status === 'Fermé'}>
+                    <select name="showroom" defaultValue={editingTicket?.showroom || currentUser?.showroom || 'Glass'} className="w-full text-xs h-10 rounded-lg bg-[#fcfcfc] border-[#e5e5e5]" disabled={editingTicket?.status === 'Fermé'}>
                       {(showrooms || []).map((s: ShowroomConfig) => <option key={s.id} value={s.id}>{s.id}</option>)}
                     </select>
                   </div>

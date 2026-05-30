@@ -39,11 +39,16 @@ const TICKET_COLUMNS = [
 
 const CUSTOMER_COLUMNS = [
   'id', 'name', 'phone', 'email', 'type', 'address', 'status', 'totalSpent',
-  'ticketsCount', 'lastVisit', 'companyName', 'isArchived', 'createdBy'
+  'ticketsCount', 'lastVisit', 'companyName', 'isArchived'
 ];
 
 const USER_COLUMNS = [
   'id', 'name', 'email', 'password', 'role', 'showroom', 'avatar', 'status', 'preferences', 'lastLogin', 'mfaEnabled'
+];
+
+const PRODUCT_COLUMNS = [
+  'id', 'reference', 'name', 'brand', 'category', 'price',
+  'warrantyMonths', 'image', 'downtimeCostPerHour'
 ];
 
 const TECHNICIAN_COLUMNS = [
@@ -168,7 +173,8 @@ export const ApiService = {
         is_active: config.isOpen
       };
       return supabase.from('showrooms').upsert(payload);
-    }
+    },
+    delete: async (id: string) => await supabase.from('showrooms').delete().eq('id', id)
   },
 
   tickets: {
@@ -211,8 +217,18 @@ export const ApiService = {
         image: p.image || p.image_url || null
       }));
     },
-    saveAll: async (products: Product[]) => { if (products.length > 0) await supabase.from('products').upsert(products); },
-    delete: async (id: string) => await supabase.from('products').delete().eq('id', id)
+    saveAll: async (products: Product[]) => {
+      if (products.length > 0) {
+        const cleaned = products.map(p => cleanObject(p, PRODUCT_COLUMNS));
+        const { error } = await supabase.from('products').upsert(cleaned);
+        if (error) throw error;
+      }
+    },
+    delete: async (id: string) => await supabase.from('products').delete().eq('id', id),
+    deleteBulk: async (ids: string[]) => {
+      const { error } = await supabase.from('products').delete().in('id', ids);
+      if (error) throw error;
+    }
   },
 
   productPriceHistory: {
@@ -393,6 +409,20 @@ export const ApiService = {
     getAll: async () => await safeFetch(supabase.from('vehicles').select('*').order('created_at', { ascending: false }), []),
     saveAll: async (vehicles: any[]) => { if (vehicles.length > 0) await supabase.from('vehicles').upsert(vehicles); },
     delete: async (id: string) => await supabase.from('vehicles').delete().eq('id', id)
+  },
+
+  drivers: {
+    getAll: async () => await safeFetch(supabase.from('drivers').select('*').order('created_at', { ascending: false }), []),
+    saveAll: async (drivers: any[]) => {
+      if (drivers.length > 0) {
+        const { error } = await supabase.from('drivers').upsert(drivers);
+        if (error) throw new Error(error.message);
+      }
+    },
+    delete: async (id: string) => {
+      const { error } = await supabase.from('drivers').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    }
   },
 
   transportMissions: {

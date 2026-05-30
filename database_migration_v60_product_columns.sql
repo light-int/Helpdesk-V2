@@ -1,0 +1,10 @@
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "subcategory" TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "purchasePrice" NUMERIC DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "stockStatus" TEXT DEFAULT 'En stock';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "supplier" TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "isDiscontinued" BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "isFavorite" BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "minStock" INTEGER DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS "internalNotes" TEXT;

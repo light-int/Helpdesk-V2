@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { RefreshCw, Plus, Trash2, Edit3, UserPlus, User, Wrench, Zap, Lock, Shield, Save, Webhook, Globe, Palette, Type, Bell, Moon, Sun, FileText, Image, Layout, Activity, CheckCircle2, AlertTriangle, Settings2, AlertCircle } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, Edit3, UserPlus, User, Wrench, Zap, Lock, Shield, Save, Webhook, Globe, Palette, Type, Bell, Moon, Sun, FileText, Image, Layout, Activity, CheckCircle2, AlertTriangle, Settings2, AlertCircle, Store } from 'lucide-react';
 import { useData, useNotifications, useUser } from '../App';
-import { UserProfile, Prestation, UserRole, DocumentTemplate, VAPID_PUBLIC_KEY } from '../types';
+import { UserProfile, Prestation, UserRole, DocumentTemplate, VAPID_PUBLIC_KEY, ShowroomConfig, Technician } from '../types';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { supabase } from '../services/supabaseClient';
@@ -20,21 +20,23 @@ const AVAILABLE_VARIABLES = [
 ];
 
 const Settings: React.FC = () => {
-   const _u = (() => { try { return useData(); } catch { return { users: [], saveUser: () => { }, deleteUser: () => { }, brands: [], addBrand: () => { }, deleteBrand: () => { }, prestations: [], savePrestation: () => { }, deletePrestation: () => { }, isLoading: false, config: { theme: 'light', accentColor: '#3ecf8e', webhooks: [] } as any, updateConfig: () => { }, templates: [], saveTemplate: () => { }, deleteTemplate: () => { }, hardReset: () => { }, saveTechnician: () => { } }; } })();
+   const _u = (() => { try { return useData(); } catch { return { users: [], saveUser: () => { }, deleteUser: () => { }, brands: [], addBrand: () => { }, deleteBrand: () => { }, prestations: [], savePrestation: () => { }, deletePrestation: () => { }, showrooms: [], saveShowroom: () => { }, deleteShowroom: () => { }, technicians: [], saveTechnician: () => { }, isLoading: false, config: { theme: 'light', accentColor: '#3ecf8e', webhooks: [] } as any, updateConfig: () => { }, templates: [], saveTemplate: () => { }, deleteTemplate: () => { }, hardReset: () => { } }; } })();
    const {
       users = _u.users, saveUser = _u.saveUser, deleteUser = _u.deleteUser,
       brands = _u.brands, addBrand = _u.addBrand, deleteBrand = _u.deleteBrand,
       prestations = _u.prestations, savePrestation = _u.savePrestation, deletePrestation = _u.deletePrestation,
+      showrooms = _u.showrooms, saveShowroom = _u.saveShowroom, deleteShowroom = _u.deleteShowroom,
+      technicians = _u.technicians, saveTechnician = _u.saveTechnician,
       isLoading = _u.isLoading, config = _u.config, updateConfig = _u.updateConfig,
       templates = _u.templates, saveTemplate = _u.saveTemplate, deleteTemplate = _u.deleteTemplate,
-      hardReset = _u.hardReset, saveTechnician = _u.saveTechnician
+      hardReset = _u.hardReset
    } = _u;
 
    const { addNotification, showModalNotification } = (() => { try { return useNotifications(); } catch { return { addNotification: () => { }, showModalNotification: () => { } }; } })();
    const { currentUser } = (() => { try { return useUser(); } catch { return { currentUser: null }; } })();
 
 
-   const [activeTab, setActiveTab] = useState<'users' | 'brands' | 'pricing' | 'integrations' | 'appearance' | 'templates' | 'system'>('users');
+   const [activeTab, setActiveTab] = useState<'users' | 'brands' | 'pricing' | 'showrooms' | 'integrations' | 'appearance' | 'templates' | 'system'>('users');
    const [isUserModalOpen, setIsUserModalOpen] = useState(false);
    const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
    const [isSaving, setIsSaving] = useState(false);
@@ -53,6 +55,15 @@ const Settings: React.FC = () => {
    const [editingPrestation, setEditingPrestation] = useState<Prestation | null>(null);
    const [prestationForm, setPrestationForm] = useState({ name: '', fixedCost: '' });
 
+   // Showroom modal state
+   const [isShowroomModalOpen, setIsShowroomModalOpen] = useState(false);
+   const [editingShowroom, setEditingShowroom] = useState<ShowroomConfig | null>(null);
+   const [showroomForm, setShowroomForm] = useState({ address: '', phone: '', hours: '', isOpen: true });
+
+   // Technician assignment state
+   const [assigningShowroom, setAssigningShowroom] = useState<ShowroomConfig | null>(null);
+   const [assignedTechIds, setAssignedTechIds] = useState<string[]>([]);
+
    // Template modal state
    const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
    const [editingTemplate, setEditingTemplate] = useState<any | null>(null);
@@ -60,7 +71,7 @@ const Settings: React.FC = () => {
 
    // Deletion confirmation state
    const [deleteConfirm, setDeleteConfirm] = useState<{
-      type: 'user' | 'brand' | 'prestation' | 'template' | 'webhook';
+      type: 'user' | 'brand' | 'prestation' | 'showroom' | 'template' | 'webhook';
       id: string;
       label: string;
       message: string;
@@ -79,6 +90,7 @@ const Settings: React.FC = () => {
    const tabs = [
       { id: 'users', label: 'Utilisateurs', icon: <UserPlus size={18} /> },
       { id: 'brands', label: 'Marques', icon: <Shield size={18} /> },
+      { id: 'showrooms', label: 'Showrooms', icon: <Store size={18} /> },
       { id: 'pricing', label: 'Prestations', icon: <Zap size={18} /> },
       { id: 'integrations', label: 'Intégrations', icon: <Webhook size={18} /> },
       { id: 'appearance', label: 'Personnalisation', icon: <Palette size={18} /> },
@@ -193,6 +205,7 @@ const Settings: React.FC = () => {
             case 'user': await deleteUser(deleteConfirm.id); break;
             case 'brand': await deleteBrand(deleteConfirm.id); break;
             case 'prestation': await deletePrestation(deleteConfirm.id); break;
+            case 'showroom': await deleteShowroom(deleteConfirm.id); break;
             case 'template': await deleteTemplate(deleteConfirm.id); break;
             case 'webhook':
                const updated = webhooks.filter((w: any) => w.id !== deleteConfirm.id);
@@ -342,6 +355,95 @@ const Settings: React.FC = () => {
                            <p className="text-sm text-[#686868]">Aucune marque enregistrée</p>
                         )}
                      </div>
+                  </div>
+               </div>
+            )}
+            
+            {activeTab === 'showrooms' && (
+               <div className="space-y-4">
+                  <div className="flex justify-end">
+                     <button
+                        onClick={() => {
+                           setEditingShowroom(null);
+                           setShowroomForm({ address: '', phone: '', hours: '', isOpen: true });
+                           setIsShowroomModalOpen(true);
+                        }}
+                        className="btn-sb-primary flex items-center gap-2"
+                     >
+                        <Plus size={16} /> Nouveau Showroom
+                     </button>
+                  </div>
+                  <div className="bg-white rounded-lg border border-[#e5e5e5] overflow-hidden">
+                     <table className="w-full">
+                        <thead className="bg-[#f8f9fa]">
+                           <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-[#686868]">Showroom</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-[#686868]">Adresse</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-[#686868]">Téléphone</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-[#686868]">Horaires</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-[#686868]">Techniciens</th>
+                              <th className="px-4 py-3 text-center text-xs font-semibold text-[#686868]">Statut</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-[#686868]">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {showrooms?.map((s: ShowroomConfig) => {
+                              const techs = (technicians || []).filter((t: Technician) => t.showroom === s.id);
+                              return (
+                              <tr key={s.id} className="border-t border-[#f0f0f0]">
+                                 <td className="px-4 py-3 font-semibold">{s.id}</td>
+                                 <td className="px-4 py-3 text-[#686868] text-sm">{s.address || '—'}</td>
+                                 <td className="px-4 py-3 text-[#686868]">{s.phone || '—'}</td>
+                                 <td className="px-4 py-3 text-[#686868] text-sm">{s.hours || '—'}</td>
+                                 <td className="px-4 py-3">
+                                    <button
+                                       onClick={() => {
+                                          setAssigningShowroom(s);
+                                          setAssignedTechIds(techs.map(t => t.id));
+                                       }}
+                                       className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-[#3ecf8e] hover:bg-[#f0fdf4] rounded-lg transition-all"
+                                    >
+                                       <Wrench size={12} />
+                                       {techs.length > 0 ? `${techs.length} technicien(s)` : 'Aucun'}
+                                    </button>
+                                 </td>
+                                 <td className="px-4 py-3 text-center">
+                                    <span className={`px-2 py-1 text-xs rounded-full font-semibold ${s.isOpen ? 'bg-[#f0fdf4] text-[#16a34a]' : 'bg-red-50 text-red-500'}`}>
+                                       {s.isOpen ? 'Ouvert' : 'Fermé'}
+                                    </span>
+                                 </td>
+                                 <td className="px-4 py-3 text-right">
+                                    <button
+                                       onClick={() => {
+                                          setEditingShowroom(s);
+                                          setShowroomForm({ address: s.address, phone: s.phone, hours: s.hours, isOpen: s.isOpen });
+                                          setIsShowroomModalOpen(true);
+                                       }}
+                                       className="text-[#686868] hover:text-[#3ecf8e] mr-3"
+                                    >
+                                       <Edit3 size={16} />
+                                    </button>
+                                    <button
+                                       onClick={() => setDeleteConfirm({
+                                          type: 'showroom',
+                                          id: s.id,
+                                          label: 'Showroom',
+                                          message: `Voulez-vous vraiment supprimer le showroom ${s.id} ?`
+                                       })}
+                                       className="text-[#686868] hover:text-red-500"
+                                    >
+                                       <Trash2 size={16} />
+                                    </button>
+                                 </td>
+                              </tr>
+                           )})}
+                           {showrooms?.length === 0 && (
+                              <tr>
+                                 <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#686868]">Aucun showroom configuré</td>
+                              </tr>
+                           )}
+                        </tbody>
+                     </table>
                   </div>
                </div>
             )}
@@ -917,6 +1019,149 @@ const Settings: React.FC = () => {
                <div className="flex justify-end gap-3 pt-4">
                   <button type="button" onClick={() => setIsBrandModalOpen(false)} className="btn-sb-outline">ANNULER</button>
                   <button type="submit" className="btn-sb-primary">AJOUTER</button>
+               </div>
+            </form>
+         </Modal>
+
+         {/* Showroom Modal */}
+         <Modal
+            isOpen={isShowroomModalOpen}
+            onClose={() => setIsShowroomModalOpen(false)}
+            title={editingShowroom ? 'Modifier le Showroom' : 'Nouveau Showroom'}
+            size="sm"
+         >
+            <form
+               onSubmit={async (e) => {
+                  e.preventDefault();
+                  const showroomData: ShowroomConfig = {
+                     id: editingShowroom?.id || showroomForm.address.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `SR-${Date.now()}`,
+                     address: showroomForm.address,
+                     phone: showroomForm.phone,
+                     hours: showroomForm.hours,
+                     isOpen: showroomForm.isOpen,
+                  };
+                  await saveShowroom(showroomData);
+                  addNotification({ title: 'Succès', message: 'Showroom enregistré', type: 'success' });
+                  setIsShowroomModalOpen(false);
+                  setShowroomForm({ address: '', phone: '', hours: '', isOpen: true });
+               }}
+               className="space-y-5"
+            >
+               <div>
+                  <label className="block text-[12px] font-semibold text-[#686868] uppercase mb-1.5 px-1">Adresse</label>
+                  <input
+                     type="text"
+                     value={showroomForm.address}
+                     onChange={(e) => setShowroomForm({ ...showroomForm, address: e.target.value })}
+                     className="sb-input w-full font-semibold"
+                     placeholder="Ex: Point E, Dakar"
+                     required
+                  />
+               </div>
+               <div>
+                  <label className="block text-[12px] font-semibold text-[#686868] uppercase mb-1.5 px-1">Téléphone</label>
+                  <input
+                     type="text"
+                     value={showroomForm.phone}
+                     onChange={(e) => setShowroomForm({ ...showroomForm, phone: e.target.value })}
+                     className="sb-input w-full font-semibold"
+                     placeholder="Ex: +221 33 000 00 00"
+                  />
+               </div>
+               <div>
+                  <label className="block text-[12px] font-semibold text-[#686868] uppercase mb-1.5 px-1">Horaires d'ouverture</label>
+                  <input
+                     type="text"
+                     value={showroomForm.hours}
+                     onChange={(e) => setShowroomForm({ ...showroomForm, hours: e.target.value })}
+                     className="sb-input w-full font-semibold"
+                     placeholder="Ex: Lun-Ven 9h-18h, Sam 9h-13h"
+                  />
+               </div>
+               <div className="flex items-center gap-3">
+                  <input
+                     type="checkbox"
+                     id="showroom-open"
+                     checked={showroomForm.isOpen}
+                     onChange={(e) => setShowroomForm({ ...showroomForm, isOpen: e.target.checked })}
+                     className="w-4 h-4 text-[#3ecf8e] rounded border-[#e5e5e5] focus:ring-0"
+                  />
+                  <label htmlFor="showroom-open" className="text-[12px] font-semibold text-[#1c1c1c] uppercase tracking-tight cursor-pointer">
+                     Showroom ouvert
+                  </label>
+               </div>
+               <div className="flex justify-end gap-3 pt-6 border-t border-[#f5f5f5] mt-4">
+                  <button type="button" onClick={() => setIsShowroomModalOpen(false)} className="btn-sb-outline">ANNULER</button>
+                  <button type="submit" className="btn-sb-primary flex items-center gap-2">
+                     <Save size={16} /> VALIDER
+                  </button>
+               </div>
+            </form>
+         </Modal>
+
+         {/* Technician Assignment Modal */}
+         <Modal
+            isOpen={!!assigningShowroom}
+            onClose={() => setAssigningShowroom(null)}
+            title={`Techniciens — ${assigningShowroom?.id || ''}`}
+            size="md"
+         >
+            <form
+               onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!assigningShowroom) return;
+                  const currentTechs = (technicians || []).filter((t: Technician) => t.showroom === assigningShowroom.id);
+                  const toRemove = currentTechs.filter(t => !assignedTechIds.includes(t.id));
+                  const toAdd = (technicians || []).filter((t: Technician) => assignedTechIds.includes(t.id) && t.showroom !== assigningShowroom.id);
+                  for (const t of toRemove) {
+                     await saveTechnician({ ...t, showroom: '' });
+                  }
+                  for (const t of toAdd) {
+                     await saveTechnician({ ...t, showroom: assigningShowroom.id });
+                  }
+                  addNotification({ title: 'Succès', message: 'Affectations mises à jour.', type: 'success' });
+                  setAssigningShowroom(null);
+               }}
+               className="space-y-5"
+            >
+               <div className="bg-[#f8f9fa] rounded-lg p-4 space-y-2 max-h-80 overflow-y-auto">
+                  {(technicians || []).length === 0 ? (
+                     <p className="text-sm text-[#686868] text-center py-4">Aucun technicien enregistré</p>
+                  ) : (technicians || []).map((t: Technician) => (
+                     <label key={t.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-[#e5e5e5] cursor-pointer hover:border-[#3ecf8e]/30 transition-all">
+                        <input
+                           type="checkbox"
+                           checked={assignedTechIds.includes(t.id)}
+                           onChange={(e) => {
+                              if (e.target.checked) setAssignedTechIds(prev => [...prev, t.id]);
+                              else setAssignedTechIds(prev => prev.filter(id => id !== t.id));
+                           }}
+                           className="w-4 h-4 text-[#3ecf8e] rounded border-[#e5e5e5] focus:ring-0"
+                        />
+                        <div className="flex items-center gap-3 flex-1">
+                           <div className="w-8 h-8 rounded-lg bg-[#f0fdf4] flex items-center justify-center text-[#3ecf8e] font-bold text-xs">
+                              {t.name.charAt(0).toUpperCase()}
+                           </div>
+                           <div>
+                              <p className="text-sm font-semibold text-[#1c1c1c]">{t.name}</p>
+                              <p className="text-[11px] text-[#686868] font-semibold">{t.specialty?.join(', ') || 'Aucune spécialité'}</p>
+                           </div>
+                        </div>
+                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                           t.status === 'Disponible' ? 'bg-[#f0fdf4] text-[#16a34a]' :
+                           t.status === 'En intervention' ? 'bg-amber-50 text-amber-600' :
+                           'bg-gray-100 text-gray-500'
+                        }`}>
+                           {t.status}
+                        </span>
+                     </label>
+                  ))}
+               </div>
+               <div className="flex justify-end gap-3 pt-6 border-t border-[#f5f5f5]">
+                  <button type="button" onClick={() => setAssigningShowroom(null)} className="btn-sb-outline">ANNULER</button>
+                  <button type="submit" className="btn-sb-primary flex items-center gap-2">
+                     <Save size={16} /> ENREGISTRER
+                  </button>
                </div>
             </form>
          </Modal>

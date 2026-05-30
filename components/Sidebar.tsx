@@ -207,10 +207,14 @@ const Sidebar: React.FC = () => {
 
               const visibleItems = groupItems.filter(item => {
                 const role = currentUser.role;
+
+                // Restrictions communes à tous les rôles (y compris ADMIN)
+                if (item.path === '/finances' && role !== 'MANAGER') return false;
+                if (item.path === '/historique' && role !== 'TECHNICIAN') return false;
+
                 if (role === 'ADMIN') return true;
 
                 if (item.path === '/settings' && role !== 'MANAGER') return false;
-                if (item.path === '/finances' && role !== 'MANAGER') return false;
                 if (item.path === '/workshop-finances' && !['MANAGER', 'AGENT'].includes(role)) return false;
                 if (item.path === '/technicians' && !['AGENT', 'MANAGER'].includes(role)) return false;
                 if (item.path === '/logistics' && !['AGENT', 'MANAGER'].includes(role)) return false;
@@ -218,8 +222,6 @@ const Sidebar: React.FC = () => {
                 if (role === 'TECHNICIAN') {
                   if (['/customers', '/products', '/inbox', '/documentation', '/finances', '/workshop-finances', '/technicians', '/caisse'].includes(item.path)) return false;
                 }
-
-                if (item.path === '/historique' && role !== 'TECHNICIAN') return false;
 
                 if (role === 'AGENT') {
                   if (['/technicians', '/workshop-finances', '/finances', '/tickets', '/parts', '/customers', '/'].includes(item.path)) return true;

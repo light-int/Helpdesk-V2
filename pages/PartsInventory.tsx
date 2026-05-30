@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Package, Search, Plus, RefreshCw, Edit3, Trash2,
   Minus, Layers, Activity,
@@ -8,7 +8,7 @@ import {
   Zap, ArrowRight, Sparkles, Filter,
   History, BarChart2, TrendingUp, TrendingDown,
   ChevronLeft, ChevronRight, Download, ArrowUpRight, ArrowDownLeft,
-  Printer, Image, ScanLine, Star, Wrench, Link2, ShoppingCart, ClipboardList
+  Printer, Image, ScanLine, Star, Wrench, Link2, ShoppingCart, ClipboardList, Barcode, Save
 } from 'lucide-react';
 import {
   BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Legend
@@ -25,11 +25,27 @@ import { ModuleTips } from '../components/ModuleTips';
 import ConfirmModal from '../components/ConfirmModal';
 
 const PartsInventory: React.FC = () => {
+  // Print styles injection
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        .print-grid-cols-5 { grid-template-columns: repeat(5, 1fr) !important; }
+        body { font-size: 10px; }
+      }
+      .print-only { display: none; }
+    `;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
   const { parts, brands, stockMovements, isLoading, refreshAll, addStockMovement, isSyncing, deletePart, savePart } = (() => { try { return useData(); } catch { return { parts: [], brands: [], stockMovements: [], isLoading: false, refreshAll: () => { }, addStockMovement: () => { }, isSyncing: false, deletePart: () => { }, savePart: () => { } }; } })();
   const { currentUser } = (() => { try { return useUser(); } catch { return { currentUser: null }; } })();
   const { addNotification, showModalNotification } = (() => { try { return useNotifications(); } catch { return { addNotification: () => { }, showModalNotification: () => { } }; } })();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [stockStatus, setStockStatus] = useState<'all' | 'critical' | 'out'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
@@ -59,6 +75,11 @@ const PartsInventory: React.FC = () => {
   const [inventoryCounts, setInventoryCounts] = useState<Record<string, number>>({});
   const [inventoryProgress, setInventoryProgress] = useState(0);
   const [isInventoryMode, setIsInventoryMode] = useState(false);
+  const [pendingDifferences, setPendingDifferences] = useState<{ partId: string; name: string; expected: number; counted: number; diff: number }[]>([]);
+  const [isApplying, setIsApplying] = useState(false);
+  const [invFilter, setInvFilter] = useState<'all' | 'differences' | 'uncounted'>('all');
+  const [scanFocusPartId, setScanFocusPartId] = useState<string | null>(null);
+  const countInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // --- FEATURE 8: Kit Builder ---
   const [kitComponents, setKitComponents] = useState<{ partId: string; partName: string; quantity: number }[]>([]);
@@ -74,7 +95,7 @@ const PartsInventory: React.FC = () => {
   const [rawImportData, setRawImportData] = useState<any[]>([]);
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({
-    name: '', sku: '', currentStock: '', minStock: '', unitPrice: '', location: '', brand: '', category: ''
+    name: '', sku: '', currentStock: '', minStock: '', unitPrice: '', location: '', brand: '', category: '', condition: '', reference: ''
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; label: string; message: string } | null>(null);
@@ -82,6 +103,12 @@ const PartsInventory: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // --- FEATURE 1: Alertes Stock ---
   useEffect(() => {
@@ -112,15 +139,16 @@ const PartsInventory: React.FC = () => {
   }, [parts]);
 
   const filteredParts = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
     return (parts || []).filter((p: Part) => {
-      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !q || (p.name || '').toLowerCase().includes(q) ||
+        (p.sku || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q);
       let matchesStatus = true;
       if (stockStatus === 'critical') matchesStatus = p.currentStock <= p.minStock && p.currentStock > 0;
       if (stockStatus === 'out') matchesStatus = p.currentStock === 0;
       return matchesSearch && matchesStatus;
     }).sort((a: Part, b: Part) => (a.currentStock <= a.minStock ? -1 : 1));
-  }, [searchTerm, stockStatus, parts]);
+  }, [debouncedSearch, stockStatus, parts]);
 
   const stats = useMemo(() => {
     const totalParts = (parts || []).length;
@@ -152,6 +180,7 @@ const PartsInventory: React.FC = () => {
       id: editingPart?.id || `PT-${Date.now()}`,
       name: formData.get('name') as string,
       sku: formData.get('sku') as string,
+      reference: formData.get('reference') as string || undefined,
       category: formData.get('category') as any,
       brand: formData.get('brand') as string,
       currentStock: Number(formData.get('currentStock')),
@@ -177,11 +206,12 @@ const PartsInventory: React.FC = () => {
     }
   };
 
-  // --- FEATURE 2: Mouvements rapides +/- ---
+  // --- FEATURE 2: Mouvements rapides +/- (update optimiste) ---
   const handleQuickAdjust = async (part: Part, delta: number, reason: string) => {
     const newStock = Math.max(0, part.currentStock + delta);
-    await savePart({ ...part, currentStock: newStock });
-    // addStockMovement enregistre l'historique (sans toucher au stock car déjà fait ci-dessus)
+    // Update optimiste local
+    const optimisticPart = { ...part, currentStock: newStock };
+    savePart(optimisticPart); // fire-and-forget local
     await addStockMovement({
       id: `SM-${Date.now()}`,
       partId: part.id,
@@ -192,7 +222,13 @@ const PartsInventory: React.FC = () => {
       date: new Date().toISOString(),
       performedBy: currentUser?.name || 'Système'
     });
-    addNotification({ title: 'Stock ajusté', message: `${part.name}: ${delta > 0 ? '+' : ''}${delta}`, type: 'success' });
+    if (newStock === 0) {
+      addNotification({ title: '⚠️ Rupture', message: `${part.name} est maintenant en rupture de stock.`, type: 'warning' });
+    } else if (newStock <= part.minStock && newStock > 0) {
+      addNotification({ title: '⚠️ Stock critique', message: `${part.name} passe sous le seuil d'alerte (${newStock}/${part.minStock}).`, type: 'warning' });
+    } else {
+      addNotification({ title: 'Stock ajusté', message: `${part.name}: ${delta > 0 ? '+' : ''}${delta} → ${newStock}`, type: 'success' });
+    }
   };
 
   // --- FEATURE 3: Prévisions réappro (basé sur vélocité) ---
@@ -245,9 +281,49 @@ const PartsInventory: React.FC = () => {
       };
     });
     await ApiService.physicalInventoryCounts.saveAll(counts);
-    setIsInventoryMode(false);
-    setInventoryCounts({});
-    addNotification({ title: 'Inventaire', message: `${counts.length} articles comptabilisés`, type: 'success' });
+
+    // Stock differences for correction
+    const diffs = Object.entries(inventoryCounts)
+      .map(([partId, countedQty]) => {
+        const part = (parts || []).find((p: Part) => p.id === partId);
+        if (!part) return null;
+        const diff = countedQty - (part?.currentStock || 0);
+        return diff !== 0 ? { partId, name: part.name, expected: part.currentStock, counted: countedQty, diff } : null;
+      })
+      .filter(Boolean) as { partId: string; name: string; expected: number; counted: number; diff: number }[];
+    setPendingDifferences(diffs);
+
+    addNotification({ title: 'Inventaire', message: `${counts.length} articles comptabilisés${diffs.length > 0 ? `, ${diffs.length} écart(s) détecté(s)` : ''}`, type: 'success' });
+  };
+
+  const handleApplyCorrections = async () => {
+    setIsApplying(true);
+    try {
+      for (const d of pendingDifferences) {
+        const part = (parts || []).find((p: Part) => p.id === d.partId);
+        if (!part) continue;
+        await savePart({ ...part, currentStock: d.counted });
+        await addStockMovement({
+          id: `SM-INV-${Date.now()}-${d.partId}`,
+          partId: d.partId,
+          partName: d.name,
+          quantity: Math.abs(d.diff),
+          type: d.diff > 0 ? 'IN' : 'OUT',
+          reason: `Correction inventaire physique (${d.expected} → ${d.counted})`,
+          date: new Date().toISOString(),
+          performedBy: currentUser?.name || 'Inventaire'
+        });
+      }
+      setPendingDifferences([]);
+      setInventoryCounts({});
+      setIsInventoryMode(false);
+      refreshAll();
+      addNotification({ title: 'Corrections appliquées', message: `${pendingDifferences.length} écart(s) corrigé(s)`, type: 'success' });
+    } catch {
+      addNotification({ title: 'Erreur', message: 'Échec de la correction des écarts.', type: 'error' });
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   // --- FEATURE 8: Kit Builder ---
@@ -306,43 +382,55 @@ const PartsInventory: React.FC = () => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result as string;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        let wb;
+        if (isCSV) {
+          const text = evt.target?.result as string;
+          wb = XLSX.read(text, { type: 'string', raw: true });
+        } else {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          wb = XLSX.read(data, { type: 'array', raw: true });
+        }
+        if (!wb.SheetNames || wb.SheetNames.length === 0) throw new Error('Aucune feuille trouvée');
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
-
-        if (data.length > 0) {
-          const headers = (data[0] as string[]).map(h => String(h || ''));
-          setFileHeaders(headers);
-
-          const newMapping = { ...mapping };
-          headers.forEach(h => {
-            const low = h.toLowerCase();
-            if (low.includes('nom') || low.includes('name') || low.includes('désignation')) newMapping.name = h;
-            if (low.includes('sku') || low.includes('réf') || low.includes('ref')) newMapping.sku = h;
-            if (low.includes('stock') || low.includes('quantité') || low.includes('qty')) newMapping.currentStock = h;
-            if (low.includes('min') || low.includes('alerte')) newMapping.minStock = h;
-            if (low.includes('prix') || low.includes('price') || low.includes('pu')) newMapping.unitPrice = h;
-            if (low.includes('emplacement') || low.includes('loc') || low.includes('rayon')) newMapping.location = h;
-            if (low.includes('marque') || low.includes('brand')) newMapping.brand = h;
-            if (low.includes('cat')) newMapping.category = h;
-          });
-          setMapping(newMapping);
-
-          const rows = XLSX.utils.sheet_to_json(ws);
-          setRawImportData(rows);
-          setIsMappingModalOpen(true);
-        }
-      } catch (err) {
-        addNotification({ title: 'Erreur Fichier', message: 'Format invalide ou corrompu.', type: 'error' });
+        if (!ws) throw new Error('Feuille vide');
+        const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        if (rawData.length < 2) throw new Error('Fichier sans données');
+        const headers = (rawData[0] as string[]).map(h => String(h || '').trim());
+        const dataRows = rawData.slice(1).filter((r: any[]) => r.some((c: any) => String(c || '').trim()));
+        if (dataRows.length === 0) throw new Error('Aucune ligne de données valide');
+        setFileHeaders(headers);
+        const newMapping = { ...mapping };
+        headers.forEach(h => {
+          const low = h.toLowerCase();
+          if (low.includes('nom') || low.includes('name') || low.includes('désignation')) newMapping.name = h;
+          if (low.includes('sku') || low.includes('réf') || low.includes('ref') || low.includes('code')) newMapping.sku = h;
+          if (low.includes('stock') || low.includes('quantité') || low.includes('qty')) newMapping.currentStock = h;
+          if (low.includes('min') || low.includes('alerte')) newMapping.minStock = h;
+          if (low.includes('prix') || low.includes('price') || low.includes('pu')) newMapping.unitPrice = h;
+          if (low.includes('emplacement') || low.includes('loc') || low.includes('rayon')) newMapping.location = h;
+          if (low.includes('marque') || low.includes('brand')) newMapping.brand = h;
+          if (low.includes('cat')) newMapping.category = h;
+          if (low.includes('état') || low.includes('state') || low.includes('condition') || low.includes('neuf') || low.includes('occasion')) newMapping.condition = h;
+          if ((low.includes('réf') || low.includes('ref')) && (low.includes('fourn') || low.includes('fab') || low.includes('const')) || low.includes('oem') || low.includes('manufactur')) newMapping.reference = h;
+        });
+        setMapping(newMapping);
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        setRawImportData(dataRows.length > 0 && headers.length > 0
+          ? dataRows.map((r: any[]) => headers.reduce((obj: any, h, i) => { obj[h] = r[i]; return obj; }, {}))
+          : rows);
+        setIsMappingModalOpen(true);
+      } catch (err: any) {
+        console.error('Import error:', err);
+        addNotification({ title: 'Erreur Fichier', message: err?.message || 'Format invalide ou corrompu.', type: 'error' });
       }
     };
-    reader.readAsBinaryString(file);
+    if (isCSV) reader.readAsText(file);
+    else reader.readAsArrayBuffer(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -370,11 +458,12 @@ const PartsInventory: React.FC = () => {
             id: `PT-IMP-${Date.now()}-${i}`,
             name: String(row[mapping.name] || 'Article sans nom'),
             sku: sku,
+            reference: row[mapping.reference] ? String(row[mapping.reference]) : undefined,
             currentStock: addedQty,
             minStock: Number(row[mapping.minStock] || 5),
             unitPrice: Number(row[mapping.unitPrice] || 0),
             purchasePrice: Number(row[mapping.unitPrice] || 0) * 0.7, // Estimate if mapped purchase price not exist
-            condition: 'Neuf',
+            condition: ((row[mapping.condition] && ['Neuf', 'Occasion'].includes(String(row[mapping.condition]))) ? String(row[mapping.condition]) : 'Neuf') as 'Neuf' | 'Occasion',
             location: String(row[mapping.location] || 'Magasin'),
             brand: String(row[mapping.brand] || 'Royal Plaza'),
             category: (row[mapping.category] || 'Consommable') as any
@@ -433,16 +522,42 @@ const PartsInventory: React.FC = () => {
                 <AlertTriangle size={16} /> <span className="text-xs font-semibold">{alertBadge}</span>
               </button>
             )}
+            <div className="relative hidden md:block">
+              <ScanLine size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9ca3af]" />
+              <input
+                type="text"
+                placeholder="Scan code-barres..."
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const v = (e.target as HTMLInputElement).value.trim();
+                    (e.target as HTMLInputElement).value = '';
+                    if (!v) return;
+                    const match = (parts || []).find(p => p.sku.toLowerCase() === v.toLowerCase());
+                    if (match) {
+                      if (activeTab === 'inventaire') {
+                        setScanFocusPartId(match.id);
+                        if (!(match.id in inventoryCounts)) handleInventoryCount(match.id, match.currentStock);
+                        setTimeout(() => { countInputRefs.current[match.id]?.focus(); countInputRefs.current[match.id]?.select(); }, 100);
+                      } else {
+                        setSelectedPart(match);
+                      }
+                      addNotification({ title: 'Scan OK', message: `${match.name} trouvé`, type: 'success' });
+                    } else addNotification({ title: 'Introuvable', message: `SKU "${v}" inconnu`, type: 'warning' });
+                  }
+                }}
+                className="w-40 h-8 pl-8 pr-2 text-xs rounded-lg border border-[#e5e5e5] focus:border-[#3ecf8e] focus:ring-2 focus:ring-[#3ecf8e]/20 transition-all"
+              />
+            </div>
             <button onClick={refreshAll} className="btn-sb-outline h-8 px-3">
               <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
             </button>
-            <button onClick={() => setIsInventoryMode(!isInventoryMode)} className={`btn-sb-outline h-8 px-3 hidden md:flex items-center gap-2 ${isInventoryMode ? 'bg-[#3ecf8e] text-white border-[#3ecf8e]' : ''}`}>
+            <button onClick={() => { setIsInventoryMode(true); setActiveTab('inventaire'); }} className={`btn-sb-outline h-8 px-3 hidden md:flex items-center gap-2 ${isInventoryMode ? 'bg-[#3ecf8e] text-white border-[#3ecf8e]' : ''}`}>
               <ClipboardList size={16} /> <span>Inventaire</span>
             </button>
             <button onClick={() => fileInputRef.current?.click()} className="btn-sb-outline h-8 px-3 hidden md:flex items-center gap-2">
               <Upload size={16} /> <span>Import XLS</span>
             </button>
-            <input type="file" ref={fileInputRef} accept=".xlsx,.xls" hidden onChange={handleFileSelect} />
+            <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" hidden onChange={handleFileSelect} />
             {currentUser?.role !== 'MANAGER' && (
               <button onClick={() => { setEditingPart(null); setIsModalOpen(true); }} className="btn-sb-primary h-8 px-3 hidden md:flex">
                 <Plus size={16} /> <span>Nouvelle Réf.</span>
@@ -618,6 +733,7 @@ const PartsInventory: React.FC = () => {
                   >
                     <td className="px-2 py-2">
                       <span className="font-mono text-[11px] font-semibold text-[#686868]">{p.sku}</span>
+                      {p.reference && <span className="block text-[9px] text-[#9ca3af] font-mono mt-0.5">{p.reference}</span>}
                     </td>
                     <td className="px-2 py-2">
                       <p className="text-[13px] font-semibold text-[#1c1c1c] group-hover:text-[#3ecf8e] transition-colors">{p.name}</p>
@@ -948,11 +1064,15 @@ const PartsInventory: React.FC = () => {
               <input name="name" type="text" defaultValue={editingPart?.name} placeholder="ex: Compresseur Inverter 12k" required className="w-full h-11 px-4 rounded-lg border-[#e5e5e5]" />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide">Code SKU Cluster</label>
+              <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide">Code Pièce / SKU <span className="text-red-500">*</span></label>
               <input name="sku" type="text" defaultValue={editingPart?.sku} placeholder="ex: PART-LG-INV-01" required className="w-full h-11 px-4 rounded-lg border-[#e5e5e5]" />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide">Marque Certifiée</label>
+              <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide">Réf. Constructeur / OEM</label>
+              <input name="reference" type="text" defaultValue={editingPart?.reference} placeholder="ex: MFS-12345-ABC" className="w-full h-11 px-4 rounded-lg border-[#e5e5e5]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide">Marque</label>
               <select name="brand" defaultValue={editingPart?.brand || 'LG'} className="w-full h-11 px-4 rounded-lg border-[#e5e5e5]">
                 {(brands || []).map((b: string) => <option key={b} value={b}>{b}</option>)}
               </select>
@@ -1019,13 +1139,15 @@ const PartsInventory: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
             {[
               { key: 'name', label: 'Désignation', req: true },
-              { key: 'sku', label: 'Identifiant SKU', req: true },
+              { key: 'sku', label: 'Code Pièce / Référence SKU', req: true },
               { key: 'currentStock', label: 'Quantité Live', req: false },
               { key: 'unitPrice', label: 'P.U. Cession', req: false },
               { key: 'location', label: 'Emplacement', req: false },
               { key: 'brand', label: 'Marque', req: false },
               { key: 'category', label: 'Catégorie', req: false },
               { key: 'minStock', label: 'Seuil Alerte', req: false },
+              { key: 'condition', label: 'État (Neuf/Occasion)', req: false },
+              { key: 'reference', label: 'Réf. Constructeur / OEM', req: false },
             ].map((field: any) => (
               <div key={field.key} className="space-y-1.5">
                 <label className="text-[9px] font-semibold text-[#686868] uppercase tracking-wide flex items-center justify-between">
@@ -1059,45 +1181,105 @@ const PartsInventory: React.FC = () => {
       {/* ======= TAB: INVENTAIRE PHYSIQUE ======= */}
       {activeTab === 'inventaire' && (
         <div className="space-y-4 animate-sb-entry">
-          <div className="p-4 bg-[#3ecf8e]/10 border border-[#3ecf8e]/20 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="p-4 bg-[#3ecf8e]/10 border border-[#3ecf8e]/20 rounded-lg flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3 w-full md:w-auto">
               <ClipboardList className="text-[#3ecf8e]" size={18} />
               <div>
                 <p className="text-sm font-semibold text-[#1c1c1c]">Mode Comptage Physique</p>
                 <p className="text-xs text-[#686868]">Progression: {inventoryProgress}% ({Object.keys(inventoryCounts).length} / {(parts || []).length} articles)</p>
               </div>
             </div>
-            <div className="w-48 h-2 bg-white rounded-full overflow-hidden">
+            <div className="w-full md:w-48 h-2 bg-white rounded-full overflow-hidden">
               <div className="h-full bg-[#3ecf8e] transition-all" style={{ width: `${inventoryProgress}%` }} />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(parts || []).map((p: Part) => (
-              <div key={p.id} className="p-4 bg-white border border-[#e5e5e5] rounded-lg">
-                <p className="text-sm font-semibold text-[#1c1c1c]">{p.name}</p>
-                <p className="text-xs text-[#686868] font-mono">{p.sku}</p>
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs text-[#686868]">Stock théorique: {p.currentStock}</span>
-                  <input
-                    type="number"
-                    placeholder="Compté"
-                    className="w-20 h-9 text-center border rounded"
-                    value={inventoryCounts[p.id] || ''}
-                    onChange={e => handleInventoryCount(p.id, Number(e.target.value))}
-                  />
-                  {inventoryCounts[p.id] !== undefined && (
-                    <span className={`text-xs font-semibold ${inventoryCounts[p.id] === p.currentStock ? 'text-green-500' : 'text-red-500'}`}>
-                      {inventoryCounts[p.id] === p.currentStock ? '✓' : `Écart: ${inventoryCounts[p.id] - p.currentStock}`}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+
+          {/* Filter + actions */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex gap-1 bg-white p-1 rounded-lg border border-[#e5e5e5]">
+              {[
+                { id: 'all' as const, label: 'Tous' },
+                { id: 'uncounted' as const, label: 'Non comptés' },
+                { id: 'differences' as const, label: 'Écarts' },
+              ].map(f => (
+                <button key={f.id} onClick={() => setInvFilter(f.id)}
+                  className={`px-4 py-1.5 text-[11px] font-semibold uppercase rounded-lg transition-all ${invFilter === f.id ? 'bg-[#1c1c1c] text-white' : 'text-[#686868] hover:bg-[#f8f9fa]'}`}
+                >{f.label}</button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => window.print()} className="btn-sb-outline h-9 px-4 text-[11px] font-semibold uppercase tracking-widest">
+                <Printer size={14} /> Imprimer
+              </button>
+              {pendingDifferences.length > 0 && (
+                <button onClick={handleApplyCorrections} disabled={isApplying}
+                  className="flex items-center gap-2 px-4 h-9 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                >
+                  {isApplying ? <RefreshCw className="animate-spin" size={14} /> : <Save size={14} />}
+                  Appliquer les {pendingDifferences.filter(d => d.diff !== 0).length} écarts
+                </button>
+              )}
+              <button onClick={submitInventoryCounts} disabled={Object.keys(inventoryCounts).length === 0} className="btn-sb-primary h-9 px-4 text-[11px] font-semibold uppercase tracking-widest">
+                <CheckCircle2 size={14} /> Finaliser
+              </button>
+            </div>
           </div>
-          <div className="flex justify-end">
-            <button onClick={submitInventoryCounts} className="btn-sb-primary">
-              <CheckCircle2 size={16} /> Finaliser l'inventaire
-            </button>
+
+          {/* Diff summary banner */}
+          {pendingDifferences.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-amber-800">
+                <AlertTriangle size={16} />
+                <span className="font-semibold">{pendingDifferences.length} écart(s)</span> détecté(s) —{' '}
+                <span className="text-green-600 font-semibold">{pendingDifferences.filter(d => d.diff > 0).reduce((s, d) => s + d.diff, 0)} excédent(s)</span>
+                {' / '}
+                <span className="text-red-600 font-semibold">{Math.abs(pendingDifferences.filter(d => d.diff < 0).reduce((s, d) => s + d.diff, 0))} manquant(s)</span>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print-grid-cols-5">
+            {(parts || [])
+              .filter(p => {
+                if (invFilter === 'uncounted') return !(p.id in inventoryCounts);
+                if (invFilter === 'differences') {
+                  const counted = inventoryCounts[p.id];
+                  return counted !== undefined && counted !== p.currentStock;
+                }
+                return true;
+              })
+              .map((p: Part) => {
+                const counted = inventoryCounts[p.id];
+                const diff = counted !== undefined ? counted - p.currentStock : null;
+                const isScannedFocus = scanFocusPartId === p.id;
+                return (
+                  <div key={p.id} id={`inv-${p.id}`} className={`p-4 bg-white border rounded-lg transition-all ${isScannedFocus ? 'border-[#3ecf8e] ring-2 ring-[#3ecf8e]/20' : 'border-[#e5e5e5]'}`}>
+                    <p className="text-sm font-semibold text-[#1c1c1c]">{p.name}</p>
+                    <p className="text-xs text-[#686868] font-mono">{p.sku} {p.reference && <span className="text-[#9ca3af]">• {p.reference}</span>}</p>
+                    <p className="text-[10px] text-[#9ca3af] mt-0.5">{p.location}</p>
+                    <div className="flex items-center gap-2 mt-3 print-only">
+                      <span className="text-xs text-[#686868]">Théorique: {p.currentStock}</span>
+                      <span className="text-xs text-[#686868]">| Compté: ________</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3 no-print">
+                      <span className="text-xs text-[#686868]">Stock: {p.currentStock}</span>
+                      <input
+                        ref={el => { countInputRefs.current[p.id] = el; }}
+                        type="number"
+                        placeholder="Compté"
+                        className="w-20 h-9 text-center border rounded"
+                        value={counted !== undefined ? counted : ''}
+                        onChange={e => handleInventoryCount(p.id, Number(e.target.value))}
+                      />
+                      {diff !== null && (
+                        <span className={`text-xs font-semibold ${diff === 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {diff === 0 ? '✓' : `${diff > 0 ? '+' : ''}${diff}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -1117,6 +1299,7 @@ const PartsInventory: React.FC = () => {
               )}
               <h3 className="text-2xl font-semibold text-[#1c1c1c] tracking-tight relative z-10">{selectedPart.name}</h3>
               <p className="text-[12px] text-[#686868] font-semibold uppercase tracking-[0.3em] mt-2 relative z-10">SKU: {selectedPart.sku}</p>
+              {selectedPart.reference && <p className="text-[11px] text-[#9ca3af] font-semibold mt-1 relative z-10">Réf. OEM: {selectedPart.reference}</p>}
               <div className="mt-6 flex gap-3 relative z-10">
                 <span className="px-4 py-1.5 bg-white border border-[#e5e5e5] text-[11px] font-semibold uppercase rounded-lg shadow-sm text-[#1c1c1c]">{selectedPart.brand}</span>
                 <span className="px-4 py-1.5 bg-white border border-[#e5e5e5] text-[11px] font-semibold uppercase rounded-lg shadow-sm text-[#1c1c1c]">{selectedPart.category}</span>

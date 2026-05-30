@@ -24,6 +24,7 @@ export const NAVIGATION = [
   { name: 'Clients', path: '/customers', icon: <Users size={20} /> },
   { name: 'Tickets SAV', path: '/tickets', icon: <TicketIcon size={20} /> },
   { name: 'Historique', path: '/historique', icon: <ClipboardCheck size={20} /> },
+  { name: 'Logistique', path: '/logistics', icon: <Truck size={20} /> },
   { name: 'Finances', path: '/finances', icon: <Wallet size={20} /> },
   { name: 'Caisse', path: '/caisse', icon: <Calculator size={20} /> },
   { name: 'Produits', path: '/products', icon: <Package size={20} /> },
