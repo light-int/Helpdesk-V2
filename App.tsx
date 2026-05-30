@@ -222,7 +222,7 @@ const App: React.FC = () => {
   const refreshAll = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const [t, p, te, pa, w, c, b, s, cf, u, pr, templatesData, cashSessions, cashEntries] = await Promise.all([
+      const dataPromise = Promise.all([
         ApiService.tickets.getAll(),
         ApiService.products.getAll(),
         ApiService.technicians.getAll(),
@@ -238,6 +238,12 @@ const App: React.FC = () => {
         ApiService.caisse.getAllSessions(),
         ApiService.caisse.getAllEntries()
       ]);
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout chargement données')), 30000)
+      );
+
+      const [t, p, te, pa, w, c, b, s, cf, u, pr, templatesData, cashSessions, cashEntries] = await Promise.race([dataPromise, timeout]);
 
       // Si logged in, fetch personal persistent notifications
       let pNotifs: InAppNotification[] = [];
