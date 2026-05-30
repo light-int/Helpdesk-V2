@@ -1,0 +1,21 @@
+{
+  "name": "Royal Plaza - Horizon Pro",
+  "short_name": "Horizon Pro",
+  "description": "SAV & Helpdesk Management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#3ecf8e",
+  "icons": [
+    {
+      "src": "https://ui-avatars.com/api/?name=RP&background=3ecf8e&color=ffffff&size=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://ui-avatars.com/api/?name=RP&background=3ecf8e&color=ffffff&size=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
