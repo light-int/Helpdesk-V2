@@ -769,7 +769,7 @@ export interface PushSubscriptionDB {
   createdAt: string;
 }
 
-export const VAPID_PUBLIC_KEY = 'BDehWoN2PXaSrsMRTRiGoH3_LaOFe8mgPS1o0_JZLKxpBLzPvm5ZEyhxMrDdgO2Z3E6z5kt3WrFTsFQSo-5vwbo';
+export const VAPID_PUBLIC_KEY = 'BJauyQ5umo1aVqnMcAe8cPGE9uo6yFg07xwhvIRJJfn6_gSi_Igwknavou8jrkPS02Wx9fYKbkp_aiJeM9kpueQ';
 
 export interface DataContextValue {
   tickets: Ticket[];
